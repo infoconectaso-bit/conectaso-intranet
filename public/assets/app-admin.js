@@ -941,7 +941,7 @@ on(/^#\/tyc-firma\/(\d+)$/, async m => {
     : `<div class="pdf-notice">Esta boda <b>todavía no ha firmado</b> los términos y condiciones del servicio.</div>`;
   shell(`${pageHead('Contrato · ' + u.name, s ? 'Firmado' : 'No firmado')}
     <div class="pdf-toolbar"><a class="btn" href="#/usuarios">← Usuarios</a>${s ? '<button class="btn btn--primary" onclick="window.print()">Descargar / Imprimir PDF</button>' : ''}</div>
-    <div class="pdf-page">${head}<h2>${esc(r.tyc.title)}</h2>
+    <div class="pdf-page">${head}<h2>${esc(CS.tycTitleYear(r.tyc.title, a.fecha))}</h2>
       ${u.role === 'user' ? `<div class="pdf-grid" style="margin-bottom:12px">
         <div>Contratantes: <b>${esc(a.novios || '—')}</b></div><div>DNI: <b>${esc(a.dnis || '—')}</b></div>
         <div>Lugar de celebración: <b>${esc(a.finca || '—')}</b></div><div>Fecha del evento: <b>${esc(fecha || '—')}</b></div>
@@ -967,7 +967,7 @@ on(/^#\/mi-contrato$/, async () => {
     : `<div class="pdf-notice">Todavía no has firmado el contrato.</div>`;
   shell(`${pageHead('Mi contrato', s ? 'Contrato firmado' : 'Pendiente de firma')}
     <div class="pdf-toolbar">${s ? '<button class="btn btn--primary" onclick="window.print()">Descargar / Imprimir PDF</button>' : ''}</div>
-    <div class="pdf-page">${head}<h2>${esc(r.tyc.title)}</h2>
+    <div class="pdf-page">${head}<h2>${esc(CS.tycTitleYear(r.tyc.title, a.fecha))}</h2>
       <div class="pdf-grid" style="margin-bottom:12px">
         <div>Contratantes: <b>${esc(a.novios || '—')}</b></div><div>DNI: <b>${esc(a.dnis || '—')}</b></div>
         <div>Lugar de celebración: <b>${esc(a.finca || '—')}</b></div><div>Fecha del evento: <b>${esc(fecha || '—')}</b></div></div>

@@ -257,7 +257,7 @@ async function renderTyc() {
     : `<div class="field"><label>DNI</label><input class="control" id="tDni" placeholder="DNI"></div>`;
   app.innerHTML = `<div class="tyc-screen"><div class="tyc-card">
     <div class="tyc-head"><img src="/assets/brand/logo-principal-azul.svg" alt="Conecta So" style="height:40px"><span class="tyc-tag">Contrato interno</span></div>
-    <h1>${esc(r.tyc.title)}</h1>
+    <h1>${esc(tycTitleYear(r.tyc.title, a.fecha))}</h1>
     <p class="tyc-sub">Antes de entrar por primera vez, lee y firma el contrato. Solo tienes que hacerlo una vez.</p>
     ${isClient && (a.novios || a.finca || fecha) ? `<div class="tyc-datos"><div><span>Novios</span><b>${esc(a.novios || '—')}</b></div><div><span>Finca</span><b>${esc(a.finca || '—')}</b></div><div><span>Fecha</span><b>${esc(fecha || '—')}</b></div></div>` : ''}
     <div class="tyc-body">${text}</div>
@@ -438,6 +438,12 @@ function shell(bodyHtml, crumbs) {
   applyLang(app);
 }
 const roleLabel = r => ({ admin: 'Administración', dj: 'DJ / Técnico', planner: 'Wedding planner', user: 'Cliente' }[r] || r);
+// Título del contrato con el AÑO DE LA BODA (se actualiza según la fecha del evento).
+const tycTitleYear = (baseTitle, fechaBoda) => {
+  const y = (fechaBoda && /^\d{4}/.test(String(fechaBoda))) ? String(fechaBoda).slice(0, 4) : String(new Date().getFullYear());
+  const base = String(baseTitle || 'Términos y condiciones de servicio').replace(/\s*\b(19|20)\d{2}\b\s*$/, '').trim();
+  return base + ' ' + y;
+};
 function markActive() {
   const h = location.hash || '#/';
   $$('.nav a[data-nav]').forEach(a => {
@@ -712,7 +718,7 @@ function eventMiniList(list) {
 
 /* El resto de páginas se cargan desde módulos añadidos abajo */
 window.__CS = { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
-  estado, locName, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$ };
+  estado, locName, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, tycTitleYear, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$ };
 
 boot();
 })();
