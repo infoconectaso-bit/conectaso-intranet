@@ -626,7 +626,13 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
   table.dt th, table.dt--dense th{padding:6px 8px}
   table.dt .svc-list{font-size:11.5px;line-height:1.25}
   table.dt .svc-list > div{padding:1px 0}
-  table.dt .row-actions{gap:4px}
+  /* filas de listado mucho más compactas en móvil: acciones en una sola línea e iconos/etiquetas pequeños */
+  table.dt td, table.dt--dense td{padding:4px 7px;line-height:1.25}
+  table.dt .row-actions{gap:3px;flex-wrap:nowrap}
+  table.dt .btn--icon{padding:4px;box-shadow:1px 1px 0 var(--onyx)}
+  table.dt .btn--icon svg{width:15px;height:15px}
+  table.dt .btn--sm{padding:4px 8px;box-shadow:1px 1px 0 var(--onyx);font-size:12px}
+  table.dt .tag, table.dt .tyc-status{padding:2px 7px;font-size:11px;border-width:1.5px}
 }
 /* panel de aviso crítico (DJ/técnico duplicado) */
 .va-panel--alert{border-color:#D50000}
