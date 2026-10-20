@@ -16,6 +16,17 @@ const CLIENT_EDITABLE = ['music', 'optionals', 'disco', 'extras', 'spouses', 'gu
 // Campos que el DJ puede modificar en sus eventos
 const DJ_EDITABLE = ['obsDj'];
 
+// Días hasta la boda (0 = hoy). La edición del cliente se cierra 7 días antes,
+// salvo que administración la reabra con el toggle (editUser/editUnlock).
+function daysUntilEvent(ev) {
+  if (!ev || !ev.fecha) return 9999;
+  const p = String(ev.fecha).slice(0, 10).split('-'); if (p.length < 3) return 9999;
+  const ed = new Date(+p[0], +p[1] - 1, +p[2]); ed.setHours(0, 0, 0, 0);
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  return Math.round((ed - t) / 86400000);
+}
+function clientEditOpen(ev) { return daysUntilEvent(ev) > 7 ? true : (!!ev && (ev.editUser === true || ev.editUnlock === true)); }
+
 function canSeeEvent(user, ev) {
   if (!ev) return false;
   if (user.role === 'admin') return true;
@@ -39,6 +50,7 @@ const EVENT_SUMMARY = ['id', 'tipo', 'conyuges', 'fecha', 'hora', 'lugar', 'luga
 function summarizeEvent(user, ev) {
   const s = {};
   EVENT_SUMMARY.forEach(k => { if (ev[k] !== undefined) s[k] = ev[k]; });
+  s.canEdit = clientEditOpen(ev);
   return user.role === 'admin' ? s : sanitizeEvent(user, s);
 }
 
@@ -47,7 +59,7 @@ function mergeEventUpdate(user, current, incoming) {
   if (user.role === 'admin') return Object.assign({}, current, incoming, { id: current.id });
   let allowed = [];
   if (user.role === 'user') {
-    if (!current.editUser) throw httpError(403, 'La edición de este evento no está habilitada. Contacta con Conecta So.');
+    if (!clientEditOpen(current)) throw httpError(403, 'La edición de este evento no está habilitada. Contacta con Conecta So.');
     allowed = CLIENT_EDITABLE;
   } else if (user.role === 'dj') allowed = DJ_EDITABLE;
   else throw httpError(403, 'Tu perfil solo puede consultar este evento.');
@@ -82,4 +94,4 @@ const POLICY = {
   extraRequests: { read: 'admin', write: ['admin'] },
 };
 
-module.exports = { canSeeEvent, sanitizeEvent, summarizeEvent, mergeEventUpdate, httpError, POLICY };
+module.exports = { canSeeEvent, sanitizeEvent, summarizeEvent, mergeEventUpdate, httpError, POLICY, clientEditOpen, daysUntilEvent };

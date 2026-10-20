@@ -54,6 +54,8 @@ const ev = {
   pagoCliente: 0,
   pagado: 0,
   userId: cli.id,
+  editUser: true,      // edición del cliente habilitada (es de hoy, si no estaría cerrada)
+  editUnlock: true,
   djId: DJ_JUANMA,
   spouses: [
     { name: 'Laia Soler Puig', dni: '12345678Z', phone: '600111222' },

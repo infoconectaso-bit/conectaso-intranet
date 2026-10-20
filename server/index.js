@@ -421,6 +421,17 @@ function listEventsFor(user) {
   if (user.role === 'dj') return store.byStaff('events', user.id);
   return [];
 }
+// Añade al evento saneado los campos que calcula el servidor: si el cliente puede
+// editar (canEdit), días hasta la boda, personas con acceso y, para el cliente, su pago.
+function enrichEvent(out, ev, user) {
+  if (!out) return out;
+  out.canEdit = perm.clientEditOpen(ev);
+  out.daysToEvent = perm.daysUntilEvent(ev);
+  const ids = [ev.userId].concat(ev.coUsers || []).filter(Boolean);
+  out.accessUsers = ids.map(id => { const au = users.get(id) || {}; return { id: +id, name: au.name || '', email: au.email || '', owner: id == ev.userId }; });
+  if (user.role === 'user') { const tot = +ev.pagoCliente || 0, pg = +ev.pagado || 0; out.pago = { total: tot, pagado: pg, pendiente: tot - pg, metodo: ev.metodo || '' }; }
+  return out;
+}
 async function events(req, res, user, seg, method, url) {
   // /api/events  (listado)
   if (seg.length === 1 && method === 'GET') {
@@ -437,6 +448,7 @@ async function events(req, res, user, seg, method, url) {
 
   if (method === 'GET') {
     const out = perm.sanitizeEvent(user, ev);
+    enrichEvent(out, ev, user);
     // El coste de personal y el beneficio se calculan al vuelo (solo admin).
     if (user.role === 'admin') { out.factRows = fact.computeFact(ev); out.revRows = fact.computeRevenue(ev); }
     return ok(res, { event: out });
@@ -450,6 +462,7 @@ async function events(req, res, user, seg, method, url) {
     store.audit(user.id, 'event-update', 'events', id);
     const saved = store.get('events', id);
     const out = perm.sanitizeEvent(user, saved);
+    enrichEvent(out, saved, user);
     if (user.role === 'admin') { out.factRows = fact.computeFact(saved); out.revRows = fact.computeRevenue(saved); }
     return ok(res, { event: out });
   }
