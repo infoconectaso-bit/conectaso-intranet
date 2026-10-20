@@ -12,6 +12,7 @@ const auth = require('./auth');
 const mail = require('./mail');
 const perm = require('./permissions');
 const fact = require('./facturacion');
+const { evFinished } = require('./time');
 
 const PORT = +(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -127,6 +128,9 @@ async function api(req, res, url) {
   // --- facturación / beneficios ---
   if (seg[0] === 'finance') return finance(req, res, user, seg, method);
 
+  // --- contrato TyC (firma del cliente) ---
+  if (seg[0] === 'tyc') return tycApi(req, res, user, seg, method);
+
   // --- control horario (resúmenes) ---
   if (seg[0] === 'attendance-summary') return attendanceSummary(req, res, user, seg);
 
@@ -156,7 +160,75 @@ async function login(req, res) {
 function meView(u) {
   const out = { id: u.id, name: u.name, email: u.email, role: u.role };
   if (u.role === 'dj' || u.role === 'admin') out.color = u.color;
+  out.tycSigned = tycSignedBy(u);
   return out;
+}
+
+/* ---------- contrato TyC ---------- */
+const DEFAULT_TYC = '<p><strong>Términos y condiciones de servicio</strong></p>'
+  + '<p>El presente documento regula la prestación de servicios de Conecta So (DJ, sonorización, iluminación y animación) para el evento indicado.</p>';
+function tycRec(t) { t = t || {}; return { id: t.id || 1, version: String(t.date || t.version || '1'), title: t.title || ('Términos y condiciones de servicio ' + (t.date || '')).trim(), text: t.text || DEFAULT_TYC }; }
+function tycCurrent() { const list = store.all('tacs'); return tycRec(list[list.length - 1] || {}); }
+function tycByVersion(v) { const t = store.all('tacs').find(x => String(x.date || x.version) === String(v)); return tycRec(t || store.all('tacs').slice(-1)[0] || {}); }
+function eventOfUser(u) {
+  if (!u || u.role !== 'user') return null;
+  return store.all('events').find(e => e.userId == u.id || (e.coUsers || []).map(String).indexOf(String(u.id)) >= 0) || null;
+}
+function tycSignedBy(u) {
+  if (!u || u.role !== 'user') return false;
+  if (u.tycSign && u.tycSign.date) return true;           // firma hecha en la intranet nueva
+  const ev = eventOfUser(u); return !!(ev && ev.tycSigned); // firma ya registrada en los datos reales
+}
+function tycAutofill(u) {
+  if (!u || u.role !== 'user') return { novios: '', finca: '', fecha: '', dnis: '', evId: null };
+  const ev = eventOfUser(u) || {};
+  const bad = s => !s || ['no indicado', 'no indicada', '-'].includes(String(s).trim().toLowerCase());
+  const sp = ev.spouses || [];
+  const names = sp.map(s => s.name).filter(s => !bad(s)).join(' y ');
+  const dnis = sp.map(s => s.dni).filter(Boolean).join(' · ');
+  const loc = (store.get('locations', ev.lugar) || {}).name || ev.lugarOtro || '';
+  const novios = names || (!bad(u.name) ? u.name : '') || (!bad(ev.conyuges) ? ev.conyuges : '') || ev.tycSigner || '';
+  return { novios, finca: loc, fecha: ev.fecha || '', dnis, evId: ev.id || null };
+}
+function tycSignatureFor(u) {
+  if (u.tycSign && u.tycSign.date) return u.tycSign;
+  const ev = eventOfUser(u);
+  if (ev && ev.tycSigned) { const a = tycAutofill(u); return { name: ev.tycSigner || a.novios || '', dni: a.dnis || '', date: ev.tycSignedAt || '', version: String(ev.tycVersion || '2027') }; }
+  return null;
+}
+async function tycApi(req, res, user, seg, method) {
+  if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
+  const c = tycCurrent();
+  if (seg[1] === 'current' && method === 'GET') {
+    return ok(res, { tyc: c, signed: tycSignedBy(user), signature: tycSignatureFor(user), autofill: tycAutofill(user) });
+  }
+  if (seg[1] === 'sign' && method === 'POST') {
+    if (user.role !== 'user') return fail(res, 403, 'Solo los clientes firman el contrato.');
+    const body = await readBody(req);
+    const sign = { version: c.version, name: body.name || user.name, dni: body.dni || '', dni2: body.dni2 || '', date: new Date().toISOString() };
+    users.update(user.id, { data: { tycSign: sign } });
+    store.audit(user.id, 'tyc-sign');
+    return ok(res, { ok: true, user: meView(users.get(user.id)) });
+  }
+  if (seg[1] === 'signature' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    const u = users.get(+seg[2]); if (!u) return fail(res, 404, 'Usuario no encontrado');
+    const sig = tycSignatureFor(u); const rec = tycByVersion(sig ? sig.version : c.version);
+    return ok(res, { tyc: rec, signature: sig, autofill: tycAutofill(u), user: { id: u.id, name: u.name, role: u.role, email: u.email } });
+  }
+  if (method === 'PUT') {
+    if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    const body = await readBody(req);
+    const list = store.all('tacs');
+    const ver = String(body.date || body.version || c.version);
+    let rec = list.find(x => String(x.date || x.version) === ver);
+    if (rec) { rec.title = body.title || rec.title; rec.text = body.text != null ? body.text : rec.text; rec.date = ver; }
+    else { rec = { id: store.nextId('tacs'), date: ver, title: body.title || ('Términos y condiciones de servicio ' + ver).trim(), text: body.text || DEFAULT_TYC }; }
+    store.put('tacs', rec);
+    store.audit(user.id, 'tyc-edit', 'tacs', rec.id);
+    return ok(res, { ok: true, tyc: tycRec(rec) });
+  }
+  return fail(res, 404, 'Ruta TyC no encontrada');
 }
 async function inviteInfo(req, res, url) {
   const t = auth.checkToken(url.searchParams.get('token'));
@@ -243,8 +315,8 @@ async function events(req, res, user, seg, method, url) {
   // /api/events  (listado)
   if (seg.length === 1 && method === 'GET') {
     const done = url.searchParams.get('status') === 'done';
-    const today = new Date().toISOString().slice(0, 10);
-    let list = listEventsFor(user).filter(e => (done ? (e.fecha && e.fecha < today) : !(e.fecha && e.fecha < today)));
+    // Un evento pasa a "realizadas" a las 05:00 del día siguiente (hora de Madrid).
+    let list = listEventsFor(user).filter(e => (done ? evFinished(e) : !evFinished(e)));
     return ok(res, { events: list.map(e => perm.summarizeEvent(user, e)) });
   }
   // /api/events/:id
@@ -286,7 +358,7 @@ async function usersApi(req, res, user, seg, method) {
     if (seg[1] === 'me' && method === 'GET') return ok(res, { user: users.get(user.id) });
     return fail(res, 403, 'No tienes acceso a la gestión de usuarios.');
   }
-  if (seg.length === 1 && method === 'GET') return ok(res, { users: users.all() });
+  if (seg.length === 1 && method === 'GET') return ok(res, { users: users.all().map(u => Object.assign({}, u, { tycSigned: tycSignedBy(u) })) });
   if (seg.length === 1 && method === 'POST') {
     const body = await readBody(req);
     if (!body.email) return fail(res, 400, 'El email es obligatorio.');

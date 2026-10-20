@@ -12,6 +12,7 @@
  * Depende de las tarifas por DJ/finca (setting 'djRates') y del histórico (colección 'history').
  */
 const { store, users } = require('./db');
+const { evRealized, bizToday } = require('./time');
 
 const money = n => (Math.round((+n || 0) * 100) / 100).toFixed(2) + ' €';
 const OVERTIME = { 'Media Hora': 0.5, '1 Hora': 1, '1 hora y media': 1.5, '2 Horas': 2, '2 hora y media': 2.5, '3 Horas': 3, '3 hora y media': 3.5, '4 Horas': 4 };
@@ -87,8 +88,7 @@ function workerEarning(ev, wid) {
 }
 function computeFact(ev) {
   refresh();
-  const realized = ev.fecha && (new Date() >= evStartTime(ev));
-  if (!realized) return [['PENDIENTE', 'La facturación del equipo se genera cuando llega la hora de la boda (' + (ev.hora || '') + ').', 'note']];
+  if (!evRealized(ev)) return [['PENDIENTE', 'La facturación del equipo se genera cuando llega la hora de la boda (' + (ev.hora || '') + ').', 'note']];
   const rows = [['Usuario', 'Costes', 'h']];
   let grand = 0;
   const ws = assignedWorkers(ev);
@@ -142,13 +142,13 @@ function withFacturacion(ev) {
 /** Facturación agregada por trabajador: histórico + eventos realizados de hoy en adelante. */
 function aggregateFor(uid) {
   refresh();
-  const TODAY = new Date().toISOString().slice(0, 10);
+  const TODAY = bizToday();
   const histById = {}; store.all('history').forEach(h => { histById[h.id] = h; });
   const snap = histById[uid] || { cobrar: 0, cobrado: 0, rest: 0, items: [] };
-  const extraItems = []; let extra = 0; const now = new Date();
+  const extraItems = []; let extra = 0;
   store.all('events').forEach(ev => {
     if (!(ev.fecha && ev.fecha >= TODAY)) return;
-    if (!(now >= evStartTime(ev))) return;
+    if (!evRealized(ev)) return;
     if (assignedWorkers(ev).indexOf(String(uid)) < 0) return;
     const e = workerEarning(ev, uid);
     extraItems.push({ type: 'ev', evId: ev.id, title: 'Evento ' + ev.id + ' · ' + (ev.tipo || ''), date: ev.fecha, amount: e.amount,

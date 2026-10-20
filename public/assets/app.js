@@ -164,7 +164,51 @@ async function boot() {
   window.addEventListener('hashchange', route);
   if (!S.user) return renderAuth();
   await loadContext();
+  if (await tycGate()) return;
   route();
+}
+/* Contrato TyC: el cliente debe firmarlo la primera vez antes de entrar. */
+async function tycGate() {
+  if (!S.user || S.user.role !== 'user' || S.user.tycSigned) return false;
+  try { await renderTyc(); return true; } catch (e) { return false; }
+}
+async function renderTyc() {
+  const r = await api('tyc/current');
+  const a = r.autofill || {}; const isClient = S.user.role === 'user';
+  const fecha = a.fecha ? dmy(a.fecha) : '';
+  const text = (r.tyc.text || '')
+    .replace(/\{novios\}/g, `<b>${esc(a.novios || '—')}</b>`)
+    .replace(/\{finca\}/g, `<b>${esc(a.finca || '—')}</b>`)
+    .replace(/\{fecha\}/g, `<b>${esc(fecha || '—')}</b>`);
+  const dniFields = isClient
+    ? `<div class="grid-2"><div class="field"><label>DNI ${esc((a.novios || '').split(' y ')[0] || 'primer cónyuge')}</label><input class="control" id="tDni" placeholder="DNI"></div>
+       <div class="field"><label>DNI ${esc((a.novios || '').split(' y ')[1] || 'segundo cónyuge')}</label><input class="control" id="tDni2" placeholder="DNI"></div></div>`
+    : `<div class="field"><label>DNI</label><input class="control" id="tDni" placeholder="DNI"></div>`;
+  app.innerHTML = `<div class="tyc-screen"><div class="tyc-card">
+    <div class="tyc-head"><img src="/assets/brand/logo-principal-azul.svg" alt="Conecta So" style="height:40px"><span class="tyc-tag">Contrato interno</span></div>
+    <h1>${esc(r.tyc.title)}</h1>
+    <p class="tyc-sub">Antes de entrar por primera vez, lee y firma el contrato. Solo tienes que hacerlo una vez.</p>
+    ${isClient && (a.novios || a.finca || fecha) ? `<div class="tyc-datos"><div><span>Novios</span><b>${esc(a.novios || '—')}</b></div><div><span>Finca</span><b>${esc(a.finca || '—')}</b></div><div><span>Fecha</span><b>${esc(fecha || '—')}</b></div></div>` : ''}
+    <div class="tyc-body">${text}</div>
+    <form id="tycForm" class="tyc-form">
+      ${dniFields}
+      <div class="field"><label>Firma (escribe tu nombre completo)</label><input class="control" id="tName" value="${esc(S.user.name || '')}" placeholder="Nombre y apellidos"></div>
+      <label class="tyc-accept"><input type="checkbox" id="tAccept"> He leído y acepto el contrato.</label>
+      <div class="tyc-actions"><button type="button" class="btn btn--ghost" id="tLogout">Salir</button><button type="submit" class="btn btn--primary">Firmar y entrar</button></div>
+    </form></div></div>`;
+  const form = el('tycForm');
+  el('tLogout').onclick = async () => { await api('auth/logout', { method: 'POST' }); S.user = null; location.hash = '#/'; renderAuth(); };
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const name = el('tName').value.trim();
+    const dni = el('tDni').value.trim();
+    const dni2 = (el('tDni2') || {}).value || '';
+    if (!el('tAccept').checked) return toast('Debes marcar que aceptas el contrato', 'err');
+    if (!name) return toast('Escribe tu nombre para firmar', 'err');
+    if (!dni) return toast('Indica tu DNI', 'err');
+    try { const res = await api('tyc/sign', { method: 'POST', body: { name, dni, dni2 } }); S.user = res.user || Object.assign(S.user, { tycSigned: true }); toast('Contrato firmado', 'ok'); location.hash = '#/'; route(); }
+    catch (err) { toast(err.message, 'err'); }
+  };
 }
 async function loadContext() {
   const [meta, brand] = await Promise.all([api('meta'), api('brand').catch(() => ({}))]);
@@ -208,7 +252,7 @@ function renderAuth() {
 }
 async function afterLogin() {
   const me = await api('auth/me'); S.user = me.user; S.mailEnabled = me.mailEnabled;
-  await loadContext(); if (!location.hash || location.hash === '#/recuperar') location.hash = '#/'; route();
+  await loadContext(); if (await tycGate()) return; if (!location.hash || location.hash === '#/recuperar') location.hash = '#/'; route();
 }
 function renderForgot() {
   app.innerHTML = authShell(`
