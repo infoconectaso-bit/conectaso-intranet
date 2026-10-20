@@ -460,12 +460,22 @@ on(/^#\/$/, async () => {
   return dashboardSimple();
 });
 async function dashboardAdmin() {
-  const pend = await api('events');
+  const [pend, alerts, vac, itv, dup] = await Promise.all([
+    api('events'),
+    api('price-alerts').catch(() => ({ groups: [], totalCombos: 0 })),
+    api('vacation-conflicts').catch(() => ({ conflicts: [], total: 0 })),
+    api('itv-alerts').catch(() => ({ vehicles: [], total: 0 })),
+    api('staff-conflicts').catch(() => ({ conflicts: [], total: 0 })),
+  ]);
   const upcoming = pend.events.filter(e => e.fecha >= ymd(TODAY)).sort((a, b) => a.fecha.localeCompare(b.fecha));
   const next = upcoming.slice(0, 8);
   const in7 = upcoming.filter(e => e.fecha <= ymd(addDays(TODAY, 7))).length;
   const sinDj = pend.events.filter(e => !djOf(e)).length;
   shell(`${pageHead('Hola, ' + (S.user.name || '').split(' ')[0], 'Tus próximas bodas de un vistazo.')}
+    ${dupPanel(dup)}
+    ${vacationPanel(vac)}
+    ${itvPanel(itv)}
+    ${priceAlertPanel(alerts)}
     <div class="grid-3">
       <div class="stat stat--pink"><div class="k">Bodas pendientes</div><div class="v">${pend.events.length}</div></div>
       <div class="stat stat--blue"><div class="k">En los próximos 7 días</div><div class="v">${in7}</div></div>
@@ -473,6 +483,68 @@ async function dashboardAdmin() {
     </div>
     <div class="panel"><div class="panel__head"><h2>Próximas bodas</h2><a class="btn btn--sm" href="#/eventos">Ver todas</a></div>
       <div class="panel__body" style="padding:0">${eventMiniList(next)}</div></div>`, ['Inicio']);
+  wirePriceAlerts();
+}
+/* Aviso: DJ/técnico asignado a 2+ bodas el mismo día (excepto quienes sí pueden). */
+function dupPanel(d) {
+  if (!d || !d.total) return '';
+  const rows = d.conflicts.map(c => `<div class="va-row">
+      <span><b>${esc(c.workerName)}</b> en ${c.events.length} bodas el mismo día</span>
+      <span class="va-when">· ${dmy(c.date)} · ${c.events.map(e => `<a href="#/eventos/${e.id}">#${e.id}${e.conyuges ? ' (' + esc(e.conyuges) + ')' : ''}</a>`).join(' · ')}</span></div>`).join('');
+  return `<div class="panel va-panel va-panel--alert"><div class="panel__head"><h2>🚨 DJ/técnico duplicado el mismo día</h2><span class="pa-sum">${d.total} aviso${d.total > 1 ? 's' : ''}</span></div>
+    <div class="panel__body"><p class="hint" style="margin-bottom:10px">Un mismo DJ o técnico está asignado a <b>más de una boda el mismo día</b>. Revisa las asignaciones.</p>${rows}</div></div>`;
+}
+/* Aviso: boda próxima con alguien asignado que está de vacaciones ese día. */
+function vacationPanel(v) {
+  if (!v || !v.total) return '';
+  const rows = v.conflicts.map(c => `<div class="va-row">
+      <span><b>${esc(c.workerName)}</b> está de vacaciones</span>
+      <span class="va-when">· boda #${c.evId}${c.conyuges ? ' · ' + esc(c.conyuges) : ''} el ${dmy(c.fecha)}</span>
+      <a class="va-badge" href="#/eventos/${c.evId}">Ver boda</a></div>`).join('');
+  return `<div class="panel va-panel"><div class="panel__head"><h2>🏖️ DJ/técnico asignado de vacaciones</h2><span class="pa-sum">${v.total} aviso${v.total > 1 ? 's' : ''}</span></div>
+    <div class="panel__body"><p class="hint" style="margin-bottom:10px">Estas bodas tienen asignado a alguien que está de vacaciones ese día. Revisa la asignación.</p>${rows}</div></div>`;
+}
+/* Aviso: vehículos con ITV caducada o a punto de caducar (15 días o menos). */
+function itvPanel(v) {
+  if (!v || !v.total) return '';
+  const rows = v.vehicles.map(x => {
+    const cad = x.days < 0;
+    const estado = cad ? `<span class="tag tag--red">ITV caducada hace ${-x.days} día${x.days === -1 ? '' : 's'}</span>` : `<span class="tag tag--yellow">Caduca en ${x.days} día${x.days === 1 ? '' : 's'}</span>`;
+    return `<div class="va-row"><span><b>${esc(x.plate)}</b> · ${esc(x.brand)} ${esc(x.model)}</span><span class="va-when">· ITV ${dmy(x.itvDate)}</span>${estado}</div>`;
+  }).join('');
+  return `<div class="panel va-panel"><div class="panel__head"><h2>🚗 ITV por caducar</h2><span class="pa-sum">${v.total} vehículo${v.total > 1 ? 's' : ''}</span></div>
+    <div class="panel__body"><p class="hint" style="margin-bottom:10px">Estos vehículos tienen la ITV caducada o a punto de caducar (15 días o menos). <a href="#/vehiculos">Ver vehículos</a></p>${rows}</div></div>`;
+}
+/* Aviso: técnicos/DJs con servicios asignados sin precio configurado. */
+function priceAlertPanel(a) {
+  if (!a || !a.totalCombos) return '';
+  const rows = a.groups.map(g => `<div class="pa-worker">
+      <div class="pa-worker__h">${esc(g.name)} <span class="pa-badge">${g.services.length} sin precio</span></div>
+      ${g.services.map(s => `<div class="pa-row">
+        <span class="pa-svc">${esc(s.name)}</span>
+        <span class="pa-ev">${s.count} boda${s.count > 1 ? 's' : ''}</span>
+        <button class="btn btn--sm btn--primary" data-pfix data-w="${g.workerId}" data-s="${s.serviceId}" data-wn="${esc(g.name)}" data-sn="${esc(s.name)}" data-c="${s.count}">Añadir precio</button>
+      </div>`).join('')}
+    </div>`).join('');
+  return `<div class="panel pa-panel"><div class="panel__head"><h2>⚠ Precios por revisar</h2><span class="pa-sum">${a.totalCombos} servicios · ${a.totalWorkers} trabajadores</span></div>
+    <div class="panel__body"><p class="hint" style="margin-bottom:10px">Estos técnicos y DJs están asignados a servicios en bodas <b>de hoy en adelante</b> para los que <b>no tienen precio asignado</b>. Añade su precio para que se sume a su facturación cuando se realice el evento.</p>
+    <div class="pa-list">${rows}</div></div></div>`;
+}
+function wirePriceAlerts() {
+  $$('[data-pfix]').forEach(b => b.onclick = () => {
+    const d0 = b.dataset;
+    modal('Añadir precio · ' + d0.wn, `<form id="pfixForm">
+      <p class="hint">Servicio: <b>${esc(d0.sn)}</b><br>Bodas afectadas (de hoy en adelante): <b>${esc(d0.c)}</b></p>
+      <div class="field"><label>Precio por servicio (€)</label><input class="control" id="pfAmount" type="number" placeholder="Ej: 60"></div>
+      <p class="hint">Se guarda como precio estándar de este servicio para ${esc(d0.wn)} y se aplicará a su facturación cuando se realicen esas bodas.</p></form>`,
+      { okText: 'Guardar', onOk: () => {
+        const raw = String((($('#pfAmount') || {}).value || '')).trim();
+        if (raw === '' || isNaN(+raw) || +raw < 0) { toast('Indica un importe válido (0 o más)', 'err'); return true; }
+        api('price-fix', { method: 'POST', body: { workerId: +d0.w, serviceId: +d0.s, amount: +raw } })
+          .then(() => { toast('Precio guardado', 'ok'); route(); })
+          .catch(() => toast('No se pudo guardar', 'err'));
+      } });
+  });
 }
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 async function dashboardDj() {

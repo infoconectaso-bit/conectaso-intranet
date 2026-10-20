@@ -131,6 +131,9 @@ async function api(req, res, url) {
   // --- contrato TyC (firma del cliente) ---
   if (seg[0] === 'tyc') return tycApi(req, res, user, seg, method);
 
+  // --- avisos del panel de inicio (admin) ---
+  if (['price-alerts', 'vacation-conflicts', 'itv-alerts', 'staff-conflicts', 'price-fix'].includes(seg[0])) return dashboardAlerts(req, res, user, seg, method);
+
   // --- control horario (resúmenes) ---
   if (seg[0] === 'attendance-summary') return attendanceSummary(req, res, user, seg);
 
@@ -275,6 +278,97 @@ async function changePassword(req, res, user) {
   users.setPassword(user.id, auth.hashPassword(password));
   store.audit(user.id, 'change-password');
   return ok(res, { ok: true });
+}
+
+/* ---------- avisos del panel de inicio (solo admin) ---------- */
+// Trabajadores que SÍ pueden hacer 2 bodas el mismo día (no se marcan como duplicado).
+// Nandez (713), Sergi Corcoy (276), DJ Gallego (850). (Ampliable.)
+const MULTI_SAMEDAY_OK = { '713': 1, '276': 1, '850': 1 };
+// Trabajadores que no se revisan en "precios por revisar" (gerencia / por horas / etc.).
+const PRICE_ALERT_SKIP = [227, 1095, 234, 292, 1813, 276, 713];
+const uName = id => (users.get(id) || {}).name || ('#' + id);
+function onVacation(workerId, date) {
+  if (!workerId || !date) return null;
+  return store.all('vacations').find(v => v.userId == workerId && v.status !== 'Denegado' && v.start && v.end && date >= v.start && date <= v.end) || null;
+}
+function staffConflicts() {
+  const TODAY = bizToday(); const byDay = {};
+  store.all('events').forEach(e => {
+    if (!(e.fecha && e.fecha >= TODAY)) return;
+    const ws = new Set(); if (e.djId) ws.add(+e.djId);
+    (e.services || []).forEach(s => { if (s.resp) ws.add(+s.resp); if (s.resp2) ws.add(+s.resp2); });
+    ws.forEach(w => { (byDay[e.fecha] = byDay[e.fecha] || {}); (byDay[e.fecha][w] = byDay[e.fecha][w] || []).push({ id: e.id, conyuges: e.conyuges || '' }); });
+  });
+  const out = [];
+  Object.keys(byDay).forEach(date => Object.keys(byDay[date]).forEach(w => {
+    if (MULTI_SAMEDAY_OK[String(w)]) return;
+    const evs = byDay[date][w]; if (evs.length >= 2) out.push({ date, workerId: +w, workerName: uName(+w), events: evs });
+  }));
+  out.sort((a, b) => a.date.localeCompare(b.date));
+  return { conflicts: out, total: out.length };
+}
+function vacationConflicts() {
+  const TODAY = bizToday(); const out = [];
+  store.all('events').forEach(e => {
+    if (!(e.fecha && e.fecha >= TODAY)) return;
+    const assigned = new Set();
+    if (e.djId) assigned.add(+e.djId);
+    (e.services || []).forEach(s => { if (s.resp) assigned.add(+s.resp); if (s.resp2) assigned.add(+s.resp2); });
+    assigned.forEach(wid => { const v = onVacation(wid, e.fecha); if (v) out.push({ evId: e.id, fecha: e.fecha, conyuges: e.conyuges || '', workerId: wid, workerName: uName(wid), vacStart: v.start, vacEnd: v.end, status: v.status }); });
+  });
+  out.sort((a, b) => a.fecha.localeCompare(b.fecha));
+  return { conflicts: out, total: out.length };
+}
+function itvAlerts() {
+  const TODAY = bizToday();
+  const addDaysStr = (ds, n) => { const d = new Date(ds + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const limit = addDaysStr(TODAY, 15), now = new Date(TODAY + 'T00:00:00');
+  const list = store.all('vehicles').filter(v => v.itvDate && v.itvDate <= limit).map(v => ({
+    id: v.id, plate: v.license_plate, brand: v.brand, model: v.model, itvDate: v.itvDate,
+    days: Math.round((new Date(v.itvDate + 'T00:00:00') - now) / 86400000)
+  })).sort((a, b) => a.itvDate.localeCompare(b.itvDate));
+  return { vehicles: list, total: list.length, email: 'facturacion@conectaso.es' };
+}
+// Técnicos/DJs asignados a servicios (de hoy en adelante) sin precio configurado en sus tarifas.
+function priceAlerts() {
+  const TODAY = bizToday(); const rates = store.setting('djRates') || {}; const groups = {};
+  store.all('events').forEach(e => {
+    if (!(e.fecha && e.fecha >= TODAY)) return;
+    (e.services || []).forEach(s => {
+      [s.resp, s.resp2].forEach(r => {
+        if (!r || PRICE_ALERT_SKIP.includes(+r)) return;
+        const svc = (rates[String(r)] || {}).services || {};
+        if (svc[s.servicio] != null) return;                 // ya tiene precio (aunque sea 0)
+        const g = groups[r] || (groups[r] = { workerId: +r, name: uName(r), services: {} });
+        const sv = g.services[s.servicio] || (g.services[s.servicio] = { serviceId: +s.servicio, name: extraNameOf(s.servicio), count: 0 });
+        sv.count++;
+      });
+    });
+  });
+  const tot = g => g.services.reduce((t, s) => t + s.count, 0);
+  const list = Object.values(groups).map(g => ({ workerId: g.workerId, name: g.name, services: Object.values(g.services).sort((a, b) => b.count - a.count) })).sort((a, b) => tot(b) - tot(a));
+  return { groups: list, totalCombos: list.reduce((t, g) => t + g.services.length, 0), totalWorkers: list.length };
+}
+function extraNameOf(id) { const e = store.get('extras', id); return (e && e.name) || ('Servicio ' + id); }
+async function dashboardAlerts(req, res, user, seg, method) {
+  if (!user || user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+  if (seg[0] === 'staff-conflicts') return ok(res, staffConflicts());
+  if (seg[0] === 'vacation-conflicts') return ok(res, vacationConflicts());
+  if (seg[0] === 'itv-alerts') return ok(res, itvAlerts());
+  if (seg[0] === 'price-alerts') return ok(res, priceAlerts());
+  if (seg[0] === 'price-fix' && method === 'POST') {
+    const body = await readBody(req);
+    const wid = +body.workerId, sid = +body.serviceId, amt = Math.round(+body.amount || 0);
+    if (!wid || !sid) return fail(res, 400, 'Faltan datos');
+    const rates = store.setting('djRates') || {};
+    const r = rates[String(wid)] || (rates[String(wid)] = { packs: {}, fincas: {}, services: {} });
+    r.services = r.services || {};
+    r.services[sid] = amt;
+    store.setSetting('djRates', rates);
+    store.audit(user.id, 'price-fix');
+    return ok(res, { ok: true });
+  }
+  return fail(res, 404, 'No encontrado');
 }
 
 /* ---------- metadatos para la interfaz ---------- */
