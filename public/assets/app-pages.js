@@ -232,9 +232,19 @@ function eventViewRole(ev) {
   const canEditMusic = (role === 'user' && ev.canEdit) || isPlanner;
   const locOpts = [[0, 'Selecciona un lugar']].concat((S.meta.locations || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'es')).map(l => [l.id, l.name])).concat([['otro', 'Otro']]);
   let intro = '';
-  if (role === 'user') intro = ev.canEdit
-    ? `<div class="alert alert--info">Rellena aquí la música y los detalles de tu boda. Recuerda <b>Guardar</b> al terminar.</div>`
-    : `<div class="alert alert--warn"><b>La edición de tu boda está cerrada.</b> A partir de 7 días antes de la celebración ya no es posible modificar los datos. Si necesitas cambiar algo, <b>ponte en contacto con nosotros</b> y te la habilitamos de nuevo.</div>`;
+  if (role === 'user') {
+    if (ev.canEdit) {
+      // días hasta el cierre de edición (7 días antes de la boda)
+      const p = String(ev.fecha || '').slice(0, 10).split('-');
+      const dCierre = p.length === 3 ? (new Date(+p[0], +p[1] - 1, +p[2]) - new Date()) / 86400000 - 7 : null;
+      const cierreTxt = p.length === 3 ? dmy(new Date(new Date(+p[0], +p[1] - 1, +p[2]).getTime() - 7 * 86400000).toISOString().slice(0, 10)) : '';
+      intro = (dCierre != null && dCierre <= 14 && dCierre >= 0)
+        ? `<p class="hint cli-hint cli-hint--warn">✏️ La edición se cierra el <b>${cierreTxt}</b> · quedan <b>${Math.ceil(dCierre)} día${Math.ceil(dCierre) === 1 ? '' : 's'}</b>. Recuerda guardar.</p>`
+        : `<p class="hint cli-hint">Rellena aquí la música y los detalles de tu boda. Recuerda <b>guardar</b> al terminar.</p>`;
+    } else {
+      intro = `<p class="hint cli-hint cli-hint--closed"><b>Edición cerrada</b> (desde 7 días antes de la boda). Para cambiar algo, <b>contacta con nosotros</b> y te la reabrimos.</p>`;
+    }
+  }
   if (role === 'dj') intro = `<div class="alert alert--info">Ficha del evento. Puedes añadir tus observaciones como DJ al final.</div>`;
   if (role === 'planner') intro = `<div class="alert alert--info">Como <b>wedding planner</b> puedes editar la <b>música</b>, los <b>extras</b> y los <b>horarios</b> de la boda. La <b>finca</b> y la <b>fecha</b> solo las cambia administración. Recuerda <b>Guardar</b> al terminar.</div>`;
 
@@ -263,10 +273,13 @@ function eventViewRole(ev) {
   const canSave = canEditMusic || role === 'dj';
   // porcentaje de música completada (también visible para los novios)
   const prog = eventProgress(ev);
-  const progHtml = (!simple && (role === 'user' || role === 'planner')) ? `<div class="panel cli-prog"><div class="panel__body">
-      <div class="cli-prog__row"><span>Música de tu boda completada</span><b>${prog}%</b></div>
-      <div class="progress progress--green"><div id="progBar" style="width:${prog}%">${prog}%</div></div></div></div>` : '';
-  shell(`${pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''))}
+  const progHtml = (!simple && (role === 'user' || role === 'planner')) ? `<div class="cli-prog cli-prog--mini">
+      <div class="cli-prog__row"><span>Música completada</span><b>${prog}%</b></div>
+      <div class="progress progress--green progress--mini"><div id="progBar" style="width:${prog}%"></div></div></div>` : '';
+  const headHtml = (role === 'user')
+    ? `<div class="ev-cli-head"><h1>${esc(ev.conyuges || ev.tipo || 'Mi boda')}</h1><div class="ev-cli-sub">${dmy(ev.fecha)}${ev.hora ? ' · ' + ev.hora : ''}</div></div>`
+    : pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''));
+  shell(`${headHtml}
     ${intro}${progHtml}<form id="evForm" data-id="${ev.id}">${tabs}${panes}
     ${canSave ? `<div class="floatbar"><button type="submit" class="btn btn--primary">Guardar</button></div>` : ''}</form>`, ['Eventos', '#' + ev.id]);
   wireEventForm(ev, { full: false, role, canEditMusic, canSave });

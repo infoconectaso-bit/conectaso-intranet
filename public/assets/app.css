@@ -650,6 +650,20 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .cli-prog{margin-bottom:14px}
 .cli-prog__row{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin-bottom:8px;font-size:14px}
 .cli-prog__row b{font-size:18px;color:#0B8043}
+/* versión compacta de la barra de progreso (vista cliente) */
+.cli-prog--mini{margin-bottom:12px}
+.cli-prog--mini .cli-prog__row{font-size:12px;margin-bottom:3px;color:var(--muted)}
+.cli-prog--mini .cli-prog__row b{font-size:13px}
+.progress--mini{height:7px;border-radius:5px;overflow:hidden}
+.progress--mini > div{height:7px;font-size:0;text-indent:-999px}
+/* cabecera compacta de la boda (vista cliente) */
+.ev-cli-head{margin-bottom:14px}
+.ev-cli-head h1{font-size:19px;line-height:1.15;margin:0;letter-spacing:-.01em}
+.ev-cli-sub{color:var(--muted);font-size:13px;margin-top:2px}
+/* avisos del cliente, discretos */
+.cli-hint{font-size:12.5px;margin:0 0 12px;padding:7px 11px;border-radius:9px;background:var(--cream,#f6f2ea);border:1px solid var(--line)}
+.cli-hint--warn{background:rgba(199,119,0,.10);border-color:rgba(199,119,0,.35);color:#8a5a00}
+.cli-hint--closed{background:rgba(213,0,0,.07);border-color:rgba(213,0,0,.3)}
 
 /* recomendaciones: playlists de propuestas por momento */
 .recs-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
