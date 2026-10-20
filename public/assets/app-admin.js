@@ -777,9 +777,11 @@ async function historyView(uid, admin) {
   // fusionar eventos del histórico (snapshot) + pagos locales nuevos
   const locals = pays.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(p => ({ type: 'pay', date: p.date, amount: +p.amount, description: p.description, bal: 0 }));
   { let run = H.rest; locals.slice().reverse().forEach(it => { run -= it.amount; it.bal = run; }); }
-  const card = i => i.type === 'ev'
-    ? `<li class="tl"><span class="ind"></span><div class="card"><h5>${i.evId && admin ? `<a href="#/eventos/${i.evId}">${esc(i.title)}</a>` : esc(i.title)}</h5><div class="b">${(i.body || []).map((b, k) => { const mt = b.match(/^([^:]+):\s*(.*)$/); return (k === 2 ? '<hr style="border:0;border-top:1px solid #eee">' : '') + (mt ? `<p><b>${esc(mt[1])}:</b> ${esc(mt[2])}</p>` : `<p>${esc(b)}</p>`); }).join('')}</div><div class="when">${dmy(i.date)} · ${fmtEur(i.bal)}</div></div></li>`
-    : `<li class="tl r"><span class="ind"></span><div class="card"><h5>Pago realizado</h5><div class="b"><p><b>Fecha:</b> ${dmy(i.date)}</p><p><b>Cantidad:</b> ${e2(i.amount)}</p><p><b>Descripción:</b> ${esc(i.description || '-')}</p></div><div class="when">${dmy(i.date)} · ${fmtEur(i.bal)}</div></div></li>`;
+  const card = i => {
+    if (i.type === 'adj') return `<li class="tl${i.amount < 0 ? ' r' : ''}"><span class="ind"></span><div class="card"><h5>${esc(i.title)}${admin ? ` <button class="btn btn--icon" data-del-adj="${i.adjId}" title="Quitar ajuste" style="float:right">🗑</button>` : ''}</h5><div class="b">${(i.body || []).map(b => `<p>${esc(b)}</p>`).join('')}</div><div class="when">${dmy(i.date)} · <b style="color:${i.amount < 0 ? '#D50000' : '#0B8043'}">${i.amount > 0 ? '+' : ''}${e2(i.amount)}</b></div></div></li>`;
+    if (i.type === 'ev') return `<li class="tl"><span class="ind"></span><div class="card"><h5>${i.evId && admin ? `<a href="#/eventos/${i.evId}">${esc(i.title)}</a>` : esc(i.title)}</h5><div class="b">${(i.body || []).map((b, k) => { const mt = b.match(/^([^:]+):\s*(.*)$/); return (k === 2 ? '<hr style="border:0;border-top:1px solid #eee">' : '') + (mt ? `<p><b>${esc(mt[1])}:</b> ${esc(mt[2])}</p>` : `<p>${esc(b)}</p>`); }).join('')}</div><div class="when">${dmy(i.date)}</div></div></li>`;
+    return `<li class="tl r"><span class="ind"></span><div class="card"><h5>Pago realizado</h5><div class="b"><p><b>Fecha:</b> ${dmy(i.date)}</p><p><b>Cantidad:</b> ${e2(i.amount)}</p><p><b>Descripción:</b> ${esc(i.description || '-')}</p></div><div class="when">${dmy(i.date)} · ${fmtEur(i.bal)}</div></div></li>`;
+  };
   const timelineAll = locals.map(card).concat((H.items || []).map(card)).join('');
   const genItems = (H.items || []).filter(i => i.type === 'ev');
   const payItems = locals.concat((H.items || []).filter(i => i.type === 'pay'));
@@ -801,9 +803,20 @@ async function historyView(uid, admin) {
       <div class="field" style="margin:0"><label>Cantidad (€)</label><input class="control" type="number" step="0.01" name="amount" required></div>
       <div class="field" style="margin:0"><label>Fecha</label><input class="control" type="date" name="date" value="${ymd(TODAY)}"></div>
       <div class="field" style="margin:0;flex:1;min-width:180px"><label>Descripción</label><input class="control" name="description"></div>
-      <button class="btn btn--primary" type="submit">Registrar pago</button></form></div></div>` : ''}
+      <button class="btn btn--primary" type="submit">Registrar pago</button></form></div></div>
+    <div class="panel"><div class="panel__head"><h3>Añadir ajuste / plus</h3></div><div class="panel__body">
+      <p class="hint" style="margin-bottom:10px">Suma o resta un importe al saldo de este trabajador (gasolina, comidas, dietas…). Usa un importe <b>negativo</b> para descontar.</p>
+      <form id="adjForm" class="btn-row" style="align-items:flex-end">
+        <div class="field" style="margin:0"><label>Importe (€)</label><input class="control" type="number" step="0.01" name="amount" placeholder="p. ej. 25 o -10" required></div>
+        <div class="field" style="margin:0"><label>Fecha</label><input class="control" type="date" name="date" value="${ymd(TODAY)}"></div>
+        <div class="field" style="margin:0;flex:1;min-width:180px"><label>Concepto</label><input class="control" name="concept" placeholder="Gasolina, comida…"></div>
+        <button class="btn btn--blue" type="submit">Añadir ajuste</button></form></div></div>` : ''}
     ${bodyLists}`, ['Facturación']);
-  if (admin) el('payForm').onsubmit = async e => { e.preventDefault(); const d = collectForm(e.target); await api('finance/pay', { method: 'POST', body: { userId: uid, amount: d.amount, date: d.date, description: d.description } }); toast('Pago registrado', 'ok'); historyView(uid, admin); };
+  if (admin) {
+    el('payForm').onsubmit = async e => { e.preventDefault(); const d = collectForm(e.target); await api('finance/pay', { method: 'POST', body: { userId: uid, amount: d.amount, date: d.date, description: d.description } }); toast('Pago registrado', 'ok'); historyView(uid, admin); };
+    el('adjForm').onsubmit = async e => { e.preventDefault(); const d = collectForm(e.target); try { await api('finance/adjust', { method: 'POST', body: { userId: uid, amount: d.amount, date: d.date, concept: d.concept } }); toast('Ajuste añadido', 'ok'); historyView(uid, admin); } catch (x) { toast(x.message || 'Error', 'err'); } };
+    $$('[data-del-adj]').forEach(b => b.onclick = () => modal('Quitar ajuste', '¿Eliminar este ajuste del saldo?', { okText: 'Eliminar', danger: true, onOk: async () => { await api('finance/adjust/' + b.dataset.delAdj, { method: 'DELETE' }); toast('Ajuste eliminado', 'ok'); historyView(uid, admin); } }));
+  }
 }
 
 /* beneficios (admin) — protegida con contraseña fija, solo administración */

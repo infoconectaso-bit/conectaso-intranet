@@ -727,6 +727,8 @@ function finance(req, res, user, seg, method) {
       if (method === 'GET') return ok(res, { history: h, payments: store.byOwner('payments', id) });
     }
     if (seg[1] === 'pay' && method === 'POST') return addPayment(req, res, user);
+    if (seg[1] === 'adjust' && method === 'POST') return addAdjust(req, res, user);
+    if (seg[1] === 'adjust' && method === 'DELETE') { const aid = +seg[2]; store.del('adjustments', aid); store.audit(user.id, 'adjust-del', 'adjustments', aid); return ok(res, { ok: true }); }
     return fail(res, 404, 'Ruta no encontrada');
   }
   // DJ: solo su propio balance (histórico + eventos realizados)
@@ -736,6 +738,16 @@ function finance(req, res, user, seg, method) {
     }
   }
   return fail(res, 403, 'Sin acceso');
+}
+async function addAdjust(req, res, user) {
+  const body = await readBody(req);
+  const uid = +body.userId, amt = Math.round((+body.amount || 0) * 100) / 100;
+  if (!uid) return fail(res, 400, 'Falta el trabajador.');
+  if (!amt) return fail(res, 400, 'Indica un importe distinto de cero (positivo o negativo).');
+  const rec = { id: store.nextId('adjustments'), userId: uid, amount: amt, concept: String(body.concept || '').slice(0, 120), date: body.date || new Date().toISOString().slice(0, 10) };
+  store.put('adjustments', rec);
+  store.audit(user.id, 'adjust-add', 'adjustments', rec.id);
+  return ok(res, { ok: true, adjustment: rec });
 }
 async function addPayment(req, res, user) {
   const body = await readBody(req);

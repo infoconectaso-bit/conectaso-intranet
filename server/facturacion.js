@@ -177,8 +177,19 @@ function aggregateFor(uid) {
       body: ['Fecha del evento: ' + (ev.fecha || '')].concat(e.lines.map(l => l[0] + ': ' + l[1])) });
     extra += e.amount;
   });
-  if (!extraItems.length) return snap;
-  return { cobrar: (snap.cobrar || 0) + extra, cobrado: (snap.cobrado || 0), rest: (snap.rest || 0) + extra, items: extraItems.concat(snap.items || []) };
+  // Ajustes manuales del trabajador (gasolina, comidas…): positivos o negativos, no ligados a un evento.
+  const adjItems = []; let adj = 0;
+  store.all('adjustments').forEach(a => {
+    if (+a.userId !== +uid) return;
+    const amt = parseFloat(a.amount) || 0;
+    adjItems.push({ type: 'adj', adjId: a.id, title: 'Ajuste · ' + (a.concept || 'Plus'), date: a.date || '', amount: amt,
+      body: ['Ajuste manual de administración', a.concept ? ('Concepto: ' + a.concept) : '', 'Importe: ' + (amt > 0 ? '+' : '') + amt + ' €'].filter(Boolean) });
+    adj += amt;
+  });
+  const bonus = extra + adj;
+  if (!extraItems.length && !adjItems.length) return snap;
+  const items = adjItems.sort((a, b) => String(b.date).localeCompare(String(a.date))).concat(extraItems, snap.items || []);
+  return { cobrar: (snap.cobrar || 0) + bonus, cobrado: (snap.cobrado || 0), rest: (snap.rest || 0) + bonus, items };
 }
 
 module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, HOURLY_RATE, OVERTIME };
