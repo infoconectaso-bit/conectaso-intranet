@@ -11,6 +11,7 @@ const { store, users, DATA_DIR } = require('./db');
 const auth = require('./auth');
 const mail = require('./mail');
 const perm = require('./permissions');
+const fact = require('./facturacion');
 
 const PORT = +(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -252,7 +253,12 @@ async function events(req, res, user, seg, method, url) {
   const ev = store.get('events', id);
   if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 404, 'Evento no encontrado');
 
-  if (method === 'GET') return ok(res, { event: perm.sanitizeEvent(user, ev) });
+  if (method === 'GET') {
+    const out = perm.sanitizeEvent(user, ev);
+    // El coste de personal y el beneficio se calculan al vuelo (solo admin).
+    if (user.role === 'admin') { out.factRows = fact.computeFact(ev); out.revRows = fact.computeRevenue(ev); }
+    return ok(res, { event: out });
+  }
   if (method === 'PUT') {
     const body = await readBody(req);
     let next;
@@ -260,7 +266,10 @@ async function events(req, res, user, seg, method, url) {
     catch (e) { return fail(res, e.status || 400, e.message); }
     store.put('events', next);
     store.audit(user.id, 'event-update', 'events', id);
-    return ok(res, { event: perm.sanitizeEvent(user, store.get('events', id)) });
+    const saved = store.get('events', id);
+    const out = perm.sanitizeEvent(user, saved);
+    if (user.role === 'admin') { out.factRows = fact.computeFact(saved); out.revRows = fact.computeRevenue(saved); }
+    return ok(res, { event: out });
   }
   if (method === 'DELETE') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración puede borrar eventos.');

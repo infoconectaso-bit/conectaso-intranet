@@ -225,4 +225,17 @@ function migrateFincasTravel() {
 }
 try { migrateFincasTravel(); } catch (e) { console.error('[migración] fincas-travel:', e.message); }
 
+/* ---------- migración: tarifas de DJ por finca (djRates) ----------
+ * El motor de facturación necesita las tarifas base/hora-extra/servicios por DJ.
+ * Se guardan como setting 'djRates' si aún no existe.
+ */
+function migrateDjRates() {
+  if (stmts.setting.get('djRates')) return; // ya está
+  let data;
+  try { data = require('./djRates.json'); } catch (e) { return; }
+  store.setSetting('djRates', data);
+  console.log('[migración] Tarifas de DJ (djRates) cargadas:', Object.keys(data).length, 'DJs.');
+}
+try { migrateDjRates(); } catch (e) { console.error('[migración] djRates:', e.message); }
+
 module.exports = { db, store, users, transaction, COLLECTIONS, DATA_DIR, DB_PATH };

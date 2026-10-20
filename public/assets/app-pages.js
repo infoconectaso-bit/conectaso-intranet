@@ -667,7 +667,9 @@ function svcRow(s, svcOpts, staffOpts) {
   return `<div class="svc-row" data-svc><div>${sel('', svcOpts, s.servicio, 'data-s="servicio" data-search')}</div><div>${sel('', staffOpts, s.resp, 'data-s="resp" data-search')}</div><div>${sel('', staffOpts, s.resp2, 'data-s="resp2" data-search')}</div><button type="button" class="btn btn--icon" data-del-svc>✕</button></div>`;
 }
 function paneFacturacion(ev) {
-  const rows = (ev.factRows || []).map(r => { const mk = r[2] || ''; const cls = mk === 'h' ? 'fact-h' : mk === 's' ? 'fact-s' : mk === 't' ? 'fact-t' : ''; return `<tr class="${cls}"><td>${esc(r[0])}</td><td style="text-align:right">${esc(r[1] || '')}</td></tr>`; }).join('');
+  const rowsOf = src => (src || []).map(r => { const mk = r[2] || ''; const cls = mk === 'h' ? 'fact-h' : mk === 's' ? 'fact-s' : mk === 't' ? 'fact-t' : mk === 'note' ? 'fact-note' : ''; return `<tr class="${cls}"><td>${esc(r[0])}</td><td style="text-align:right">${esc(r[1] || '')}</td></tr>`; }).join('');
+  const rows = rowsOf(ev.factRows);
+  const revRows = isAdmin() ? rowsOf(ev.revRows) : '';
   const plusList = (ev.plus || []).length ? `<ul class="plus-list">${ev.plus.map(p => `<li><span class="plus-amt ${(+p.amount) < 0 ? 'neg' : 'pos'}">${(+p.amount) > 0 ? '+' : ''}${esc(p.amount)} €</span> ${p.userId ? '<b>' + esc(userName(p.userId)) + '</b> · ' : ''}${esc(p.concept || 'Plus')}</li>`).join('')}</ul>` : '';
   const staffOpts = [['', 'General (sin trabajador)']].concat((S.meta.staff || []).map(s => [s.id, s.name]));
   const plusAdd = isAdmin() ? (eventFinished(ev)
@@ -680,7 +682,9 @@ function paneFacturacion(ev) {
         </div><p class="hint">El importe puede ser positivo o negativo. Si eliges un trabajador, se suma a su facturación.</p></div>`
     : `<p class="hint" style="margin-top:14px">Los pluses solo pueden añadirse <b>una vez finalizada la boda</b>.</p>`) : '';
   return `<div class="panel"><div class="panel__head"><h3>Facturación del evento</h3></div><div class="panel__body">
+    <h4 class="form-sub">Coste de personal</h4>
     ${rows ? `<div class="table-wrap"><table class="dt"><tbody>${rows}</tbody></table></div>` : '<div class="empty">Sin datos de facturación.</div>'}
+    ${revRows ? `<h4 class="form-sub" style="margin-top:18px">Ingresos y beneficio</h4><div class="table-wrap"><table class="dt"><tbody>${revRows}</tbody></table></div>` : ''}
     ${(ev.plus || []).length ? `<h4 class="form-sub">Pluses</h4>${plusList}` : ''}${plusAdd}
     ${eventFinished(ev) ? `<div class="form-grid" style="margin-top:18px">${fg('Pedir opinión', sel('ask_for_opinion', [['', '—'], 'Si', 'No'], ev.opinion))}${fg('Observaciones del DJ', ta('dj_observations', ev.obsDj))}</div>` : '<p class="hint" style="margin-top:14px">El albarán del DJ (horas extra, opinión y observaciones) se rellena cuando finaliza la boda.</p>'}</div></div>`;
 }
