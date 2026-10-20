@@ -98,8 +98,10 @@ const EXTRAS_I18N = {
   extra_humo_bajo: { ca: ['Fum baix', 'Boira a prop del terra per al ball nupcial: un efecte núvol espectacular.'], en: ['Low smoke', 'Fog close to the floor for the first dance: a spectacular cloud effect.'], fr: ['Fumée basse', 'Brouillard au ras du sol pour la danse nuptiale : un effet nuage spectaculaire.'] },
   extra_lanzadores_humo_aereo: { ca: ['Llançadors de fum aeri', "Fums aeris de colors que s'eleven per l'aire. Un toc de màgia per a l'esdeveniment."], en: ['Aerial smoke launchers', 'Coloured aerial smoke that rises into the air. A touch of magic for the event.'], fr: ['Lanceurs de fumée aérienne', "Fumées aériennes colorées qui s'élèvent dans les airs. Une touche de magie pour l'événement."] },
 };
-const exName = x => { const l = _tLang(); const t = l !== 'es' && EXTRAS_I18N[x[0]] && EXTRAS_I18N[x[0]][l]; return t ? t[0] : x[1]; };
-const exDesc = x => { const l = _tLang(); const t = l !== 'es' && EXTRAS_I18N[x[0]] && EXTRAS_I18N[x[0]][l]; return t ? t[1] : (x[2] || ''); };
+// Acepta tanto la fila completa del extra [clave,nombre,desc,icono] como solo la clave (string).
+const _exRow = x => Array.isArray(x) ? x : (EXTRAS_CLIENTE.find(e => e[0] === x) || [x, x, '', '']);
+const exName = x => { const r = _exRow(x); const l = _tLang(); const t = l !== 'es' && EXTRAS_I18N[r[0]] && EXTRAS_I18N[r[0]][l]; return t ? t[0] : r[1]; };
+const exDesc = x => { const r = _exRow(x); const l = _tLang(); const t = l !== 'es' && EXTRAS_I18N[r[0]] && EXTRAS_I18N[r[0]][l]; return t ? t[1] : (r[2] || ''); };
 // --- auto-detección de extras a partir de los servicios asignados al evento ---
 const EXTRA_STOP = new Set(['de', 'con', 'y', 'en', 'la', 'el', 'los', 'las', 'x', 'por', 'un', 'una', 'del', 'al', 'a', 'o', 'led', 'servicio', 'servicios', 'maquina', 'maquinas', 'grados', 'su', 'interior', 'ambiental', 'color', 'colores', 'consultar', 'permiso', 'lugar']);
 const normX = s => (s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();

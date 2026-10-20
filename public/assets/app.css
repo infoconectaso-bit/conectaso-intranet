@@ -17,7 +17,7 @@
   --green:#0B8043; --red:#D50000; --orange:#FF7800; --purple:#8E24AA;
   --radius:10px; --shadow-sticker:3px 3px 0 var(--onyx);
   --body:'Evolve Sans',-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-  --display:'Outer Sans',var(--body);
+  --display:'Archivo Black','Outer Sans',var(--body);
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
