@@ -606,8 +606,9 @@ function paneExtras(ev, { readonly = false } = {}) {
   const role = S.user.role;
   const auto = autoExtraKeys(ev);
   const status = ev.extraStatus || {};
-  // en Can Oliver, los novios no pueden ver fuego frío ni tarima
-  const hideForClient = (role === 'user' && isOliver(ev)) ? OLIVER_HIDE_EXTRAS : [];
+  // En Can Oliver estos servicios (fuego frío, tarima, confeti) no se pueden prestar,
+  // así que NO los ve nadie: ni novios, ni admin, ni DJ.
+  const hideForClient = isOliver(ev) ? OLIVER_HIDE_EXTRAS : [];
   const tiles = EXTRAS_CLIENTE.filter(x => !hideForClient.includes(x[0])).map(x => {
     const manual = ev.extras && ev.extras[x[0]];
     const isAuto = !manual && auto[x[0]];
