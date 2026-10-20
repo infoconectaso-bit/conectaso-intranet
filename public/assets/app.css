@@ -532,10 +532,11 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 @media(max-width:560px){.pay-actions{flex-direction:column}.pay-actions .btn{width:100%}}
 
 /* botón y lista de playlist de Spotify */
-.spoti-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border:2px solid #1DB954;border-radius:12px;background:rgba(29,185,84,.07)}
-.spoti-bar .hint{margin:0}
-.btn--spoti{background:#1DB954;color:#fff;border-color:#179443;font-weight:800}
+.spoti-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:7px 10px;border:1.5px solid #1DB954;border-radius:10px;background:rgba(29,185,84,.07)}
+.spoti-bar .hint{margin:0;font-size:12px}
+.btn--spoti{background:#1DB954;color:#fff;border-color:#179443;font-weight:700;font-size:13px;padding:7px 13px;box-shadow:1px 1px 0 var(--onyx)}
 .btn--spoti:hover{filter:brightness(.96)}
+@media(max-width:640px){.spoti-bar{padding:6px 9px;gap:8px}.spoti-bar .hint{display:none}.btn--spoti{font-size:12.5px;padding:6px 11px}}
 .spoti-list{margin:8px 0 0;padding-left:0;list-style:none;max-height:300px;overflow:auto}
 .spoti-list li{padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
 .spoti-n{color:#1DB954;font-weight:800;margin-right:4px}
