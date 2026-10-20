@@ -661,6 +661,21 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .cli-prog--mini .cli-prog__row b{font-size:13px}
 .progress--mini{height:7px;border-radius:5px;overflow:hidden}
 .progress--mini > div{height:7px;font-size:0;text-indent:-999px}
+/* pantalla de bienvenida del cliente (Inicio) */
+.cli-welcome{max-width:720px;margin:0 auto}
+.cli-welcome__hero{text-align:center;padding:14px 10px 6px}
+.cli-welcome__logo{height:54px;width:auto;margin-bottom:16px}
+.cli-welcome__hero h1{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:clamp(30px,6vw,44px);line-height:1.05;letter-spacing:.01em;text-transform:none;color:var(--ink)}
+.cli-welcome__lead{color:var(--muted);font-size:15px;line-height:1.6;max-width:560px;margin:12px auto 22px}
+.cli-welcome__cta{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:10px}
+.btn--lg{font-size:15px;padding:13px 22px;border-radius:12px}
+.cli-welcome__contact{margin-top:28px;border-top:1px solid var(--line);padding-top:20px}
+.cli-welcome__contact h3{font-family:var(--display);text-align:center;font-size:16px;margin-bottom:16px;color:var(--ink)}
+.cli-contact-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.cli-contact{display:flex;align-items:center;gap:11px;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);text-decoration:none;font-size:13px;transition:.12s}
+.cli-contact:hover{border-color:var(--pink);transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.06)}
+.cli-contact__ic{font-size:22px;flex:none}
+.cli-contact b{font-size:13.5px}
 /* cabecera compacta de la boda (vista cliente) */
 .ev-cli-head{margin-bottom:14px}
 .ev-cli-head h1{font-family:'Cormorant Garamond',Georgia,'Times New Roman',serif;font-size:30px;font-weight:600;line-height:1.1;margin:0;letter-spacing:.01em;text-transform:none;color:var(--ink)}

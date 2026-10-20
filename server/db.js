@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS audit (
 `);
 
 const COLLECTIONS = ['events', 'locations', 'extras', 'attendances', 'vacations', 'payments', 'vehicles',
-  'usages', 'tacs', 'workers', 'history', 'extraRequests'];
+  'usages', 'tacs', 'workers', 'history', 'extraRequests', 'events_trash'];
 
 /** Columnas indexadas derivadas del registro, según la colección. */
 function indexCols(collection, rec) {

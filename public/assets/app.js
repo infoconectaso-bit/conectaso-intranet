@@ -201,6 +201,7 @@ const ICON = {
   loc: 'M12 21s-7-5.5-7-11a7 7 0 0114 0c0 5.5-7 11-7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z', clock: 'M12 7v5l3 2M12 22a10 10 0 100-20 10 10 0 000 20z',
   plane: 'M2 12l20-8-8 20-2.5-9L2 12z', euro: 'M18 6a7 7 0 100 12M4 10h9M4 14h8', car: 'M5 13l2-6h10l2 6M5 13h14v5H5v-5zm2 5v2m10-2v2M7 16h.01M17 16h.01',
   doc: 'M14 3v5h5M8 13h8M8 17h8M8 9h3M7 3h8l5 5v11a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z',
+  edit: 'M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z',
   logout: 'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9', key: 'M15 7a4 4 0 11-5.6 3.6L3 17v4h4l1-1h2v-2h2l1.4-1.4A4 4 0 0015 7z',
 };
 const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON[k]}"/></svg>`;
@@ -461,8 +462,12 @@ function refreshTable(id, focus) {
   const sel = act && (act.dataset.q !== undefined ? '[data-q]' : act.dataset.cf !== undefined ? `[data-cf="${act.dataset.cf}"]` : null);
   const pos = act && act.selectionStart;
   $('.dt-mount', w).innerHTML = renderTable(id);
+  const st = TBL[id]; if (st && typeof st.onRender === 'function') { try { st.onRender(); } catch (x) {} }  // re-enganchar acciones de fila
   if (focus && sel) { const e2 = $(sel, w); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (x) {} } }
 }
+// Engancha las acciones de fila de una tabla (botones editar/borrar, etc.) y las vuelve
+// a enganchar tras cada refresco (orden, filtro, paginación). Portado de la demo.
+function bindTable(id, cb) { const st = TBL[id]; if (st) st.onRender = cb; if (typeof cb === 'function') { try { cb(); } catch (x) {} } }
 document.addEventListener('input', e => {
   const w = e.target.closest('.dt'); if (!w || !TBL[w.id]) return; const st = TBL[w.id];
   if (e.target.dataset.q !== undefined) { st.q = e.target.value; st.page = 0; refreshTable(w.id, true); }
@@ -629,12 +634,44 @@ async function dashboardDj() {
     <div class="panel"><div class="panel__head"><h2>Tus próximos eventos</h2></div><div class="panel__body" style="padding:0">${eventMiniList(next)}</div></div>`, ['Inicio']);
   api('attendance-summary').then(s => { const r = (s.rows || [])[0]; if (r && el('hMes')) el('hMes').textContent = hm(r.m0) + ' h'; }).catch(() => {});
 }
+// Datos de contacto de Conecta So (visibles para el cliente en su Inicio).
+const CS_CONTACT = { phone: '674 758 989', wa: '34674758989', email: 'comercial@conectaso.es', web: 'https://www.conectaso.es', ig: 'https://www.instagram.com/conectaso/' };
 async function dashboardSimple() {
   const ev = await api('events');
   const list = ev.events;
-  if (S.user.role === 'user' && list.length === 1) { location.hash = '#/eventos/' + list[0].id; return; }
-  shell(`${pageHead('Hola, ' + (S.user.name || '').split(' ')[0], S.user.role === 'planner' ? 'Las bodas en las que estás asignado/a.' : 'Tu evento con Conecta So.')}
-    <div class="panel"><div class="panel__head"><h2>${S.user.role === 'planner' ? 'Mis bodas' : 'Mi evento'}</h2></div><div class="panel__body" style="padding:0">${eventMiniList(list)}</div></div>`, ['Inicio']);
+  if (S.user.role === 'planner') {
+    shell(`${pageHead('Hola, ' + (S.user.name || '').split(' ')[0], 'Las bodas en las que estás asignado/a.')}
+      <div class="panel"><div class="panel__head"><h2>Mis bodas</h2></div><div class="panel__body" style="padding:0">${eventMiniList(list)}</div></div>`, ['Inicio']);
+    return;
+  }
+  // Cliente (novios): pantalla de bienvenida con información y contacto antes de entrar a su boda.
+  const T = (es, ca, en, fr) => (typeof tt === 'function' ? tt(es, ca, en, fr) : es);
+  const first = (S.user.name || '').split(' ')[0];
+  const enterBtns = list.length
+    ? list.map(e => `<a class="btn btn--primary btn--lg" href="#/eventos/${e.id}">${T('Entrar en mi boda', 'Entrar a la meva boda', 'Enter my wedding', 'Entrer dans mon mariage')}${list.length > 1 ? ' · ' + esc(e.conyuges || dmy(e.fecha)) : ''}</a>`).join(' ')
+    : `<span class="muted">${T('Todavía no tienes ninguna boda asignada.', 'Encara no tens cap boda assignada.', "You don't have any wedding assigned yet.", "Vous n'avez encore aucun mariage attribué.")}</span>`;
+  shell(`<div class="cli-welcome">
+      <div class="cli-welcome__hero">
+        <img class="cli-welcome__logo" src="assets/brand/logo-principal-azul.svg" alt="Conecta So">
+        <h1>${T('¡Hola, ' + first + '!', 'Hola, ' + first + '!', 'Hi ' + first + '!', 'Bonjour ' + first + ' !')}</h1>
+        <p class="cli-welcome__lead">${T(
+          'Bienvenido/a a vuestro espacio de Conecta So. Aquí preparáis toda la música y los detalles de vuestra boda: ceremonia, aperitivo, banquete y fiesta. Rellenadlo con calma, se guarda automáticamente y podéis volver siempre que queráis.',
+          'Benvingut/da al vostre espai de Conecta So. Aquí prepareu tota la música i els detalls de la vostra boda: cerimònia, aperitiu, banquet i festa. Ompliu-ho amb calma, es desa automàticament i podeu tornar sempre que vulgueu.',
+          'Welcome to your Conecta So space. Here you prepare all the music and details of your wedding: ceremony, aperitif, banquet and party. Fill it in calmly — it saves automatically and you can come back whenever you like.',
+          'Bienvenue dans votre espace Conecta So. Vous y préparez toute la musique et les détails de votre mariage : cérémonie, apéritif, banquet et fête. Remplissez-le tranquillement, tout est enregistré automatiquement et vous pouvez revenir quand vous voulez.')}</p>
+        <div class="cli-welcome__cta">${enterBtns}</div>
+      </div>
+      <div class="cli-welcome__contact">
+        <h3>${T('¿Alguna duda? Hablamos', 'Algun dubte? En parlem', 'Any questions? Let us talk', 'Une question ? Parlons-en')}</h3>
+        <div class="cli-contact-grid">
+          <a class="cli-contact" href="https://wa.me/${CS_CONTACT.wa}" target="_blank" rel="noopener"><span class="cli-contact__ic">💬</span><span><b>WhatsApp</b><br>${CS_CONTACT.phone}</span></a>
+          <a class="cli-contact" href="tel:+${CS_CONTACT.wa}"><span class="cli-contact__ic">📞</span><span><b>${T('Teléfono', 'Telèfon', 'Phone', 'Téléphone')}</b><br>${CS_CONTACT.phone}</span></a>
+          <a class="cli-contact" href="mailto:${CS_CONTACT.email}"><span class="cli-contact__ic">✉️</span><span><b>Email</b><br>${CS_CONTACT.email}</span></a>
+          <a class="cli-contact" href="${CS_CONTACT.ig}" target="_blank" rel="noopener"><span class="cli-contact__ic">📸</span><span><b>Instagram</b><br>${T('Ver publicaciones', 'Veure publicacions', 'See posts', 'Voir les publications')}</span></a>
+          <a class="cli-contact" href="${CS_CONTACT.web}" target="_blank" rel="noopener"><span class="cli-contact__ic">🌐</span><span><b>${T('Nuestra web', 'El nostre web', 'Our website', 'Notre site')}</b><br>www.conectaso.es</span></a>
+        </div>
+      </div>
+    </div>`, ['Inicio']);
 }
 function eventMiniList(list) {
   if (!list.length) return `<div class="empty"><span class="script">Nada aún</span>No hay eventos para mostrar.</div>`;
@@ -648,7 +685,7 @@ function eventMiniList(list) {
 }
 
 /* El resto de páginas se cargan desde módulos añadidos abajo */
-window.__CS = { S, api, shell, pageHead, table, refreshTable, toast, modal, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
+window.__CS = { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
   estado, locName, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$ };
 
 boot();

@@ -472,6 +472,33 @@ async function events(req, res, user, seg, method, url) {
     store.audit(user.id, 'event-create', 'events', rec.id);
     return ok(res, { event: rec });
   }
+  // /api/events/trash  (papelera de eventos borrados; solo admin)
+  if (seg[1] === 'trash') {
+    if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    // GET /api/events/trash → listado de la papelera
+    if (seg.length === 2 && method === 'GET') {
+      const list = store.all('events_trash').sort((a, b) => String(b._deletedAt || '').localeCompare(String(a._deletedAt || '')))
+        .map(e => ({ id: e.id, tipo: e.tipo, conyuges: e.conyuges || '', fecha: e.fecha || '', lugar: (store.get('locations', e.lugar) || {}).name || e.lugarOtro || '', deletedAt: e._deletedAt || '', deletedBy: e._deletedByName || '' }));
+      return ok(res, { events: list, total: list.length });
+    }
+    // POST /api/events/trash/:id/restore → devuelve el evento a la lista
+    const tid = +seg[2];
+    if (tid && seg[3] === 'restore' && method === 'POST') {
+      const t = store.get('events_trash', tid);
+      if (!t) return fail(res, 404, 'No está en la papelera');
+      if (store.get('events', tid)) return fail(res, 409, 'Ya existe un evento con ese número; no se puede restaurar.');
+      const ev2 = Object.assign({}, t); delete ev2._deletedAt; delete ev2._deletedBy; delete ev2._deletedByName;
+      store.put('events', ev2); store.del('events_trash', tid);
+      store.audit(user.id, 'event-restore', 'events', tid);
+      return ok(res, { ok: true, event: perm.sanitizeEvent(user, ev2) });
+    }
+    // DELETE /api/events/trash/:id → purga definitiva (borra de la papelera)
+    if (tid && seg.length === 3 && method === 'DELETE') {
+      store.del('events_trash', tid); store.audit(user.id, 'event-purge', 'events', tid);
+      return ok(res, { ok: true, purged: true });
+    }
+    return fail(res, 404, 'Ruta de papelera no válida');
+  }
   // /api/events/:id
   const id = +seg[1];
   if (!id) return fail(res, 404, 'Evento no encontrado');
@@ -565,8 +592,13 @@ async function events(req, res, user, seg, method, url) {
   }
   if (method === 'DELETE') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración puede borrar eventos.');
-    store.del('events', id); store.audit(user.id, 'event-delete', 'events', id);
-    return ok(res, { ok: true });
+    // Borrado reversible: el evento se mueve a la papelera (events_trash) en vez de eliminarse.
+    // Los archivos subidos NO se tocan, así que al restaurar vuelven con el evento.
+    const trashed = Object.assign({}, ev, { _deletedAt: new Date().toISOString(), _deletedBy: user.id, _deletedByName: (users.get(user.id) || {}).name || '' });
+    store.put('events_trash', trashed);
+    store.del('events', id);
+    store.audit(user.id, 'event-delete', 'events', id);
+    return ok(res, { ok: true, trashed: true });
   }
   return fail(res, 405, 'Método no permitido');
 }
