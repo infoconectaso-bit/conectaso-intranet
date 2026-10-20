@@ -140,6 +140,9 @@ async function api(req, res, url) {
   // --- archivos ---
   if (seg[0] === 'files') return filesApi(req, res, user, seg, method, url);
 
+  // --- planos de montaje (imagen en disco + símbolos) ---
+  if (seg[0] === 'planos') return planosApi(req, res, user, seg, method);
+
   // --- colecciones genéricas ---
   if (seg[0] === 'collections') return collection(req, res, user, seg, method);
 
@@ -559,6 +562,57 @@ const userName = id => (users.get(id) || {}).name || '';
 // Nombre seguro para disco y ruta organizada por boda: uploads/boda-<id>/<fileid>-<nombre>
 const safeName = n => String(n || 'archivo').normalize('NFKD').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120) || 'archivo';
 const fileFull = f => path.join(UPLOADS, 'boda-' + f.record_id, f.id + '-' + safeName(f.name));
+/* ---------- planos de montaje ----------
+ * Imagen (vista aérea) guardada en disco; símbolos ("marks") en un setting.
+ * Clave = keyBase: plantilla de finca "<locId>_<pack>" o copia de evento "ev_<id>".
+ * Solo admin y DJ/técnico.
+ */
+const PLANO_DIR = path.join(UPLOADS, 'planos');
+fs.mkdirSync(PLANO_DIR, { recursive: true });
+const planoSafe = k => String(k || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+async function planosApi(req, res, user, seg, method) {
+  if (!user || !(user.role === 'admin' || user.role === 'dj')) return fail(res, 403, 'Sin acceso');
+  const key = planoSafe(seg[1]);
+  if (!key) return fail(res, 400, 'Falta la clave del plano');
+  const full = path.join(PLANO_DIR, key);
+  if (seg[2] === 'img' && method === 'GET') {
+    const mimes = store.setting('planoImgMime') || {};
+    if (!mimes[key] || !fs.existsSync(full)) return fail(res, 404, 'Sin imagen');
+    res.writeHead(200, { 'Content-Type': mimes[key], 'Cache-Control': 'no-cache' });
+    return fs.createReadStream(full).pipe(res);
+  }
+  if (seg[2] === 'img' && method === 'POST') {
+    const parts = await parseMultipart(req);
+    const p = parts.find(x => x.filename && x.content.length);
+    if (!p) return fail(res, 400, 'Sin imagen');
+    if (p.content.length > MAX_UPLOAD) return fail(res, 413, 'Imagen demasiado grande');
+    fs.writeFileSync(full, p.content);
+    const mimes = store.setting('planoImgMime') || {}; mimes[key] = p.type || 'image/png'; store.setSetting('planoImgMime', mimes);
+    store.audit(user.id, 'plano-img');
+    return ok(res, { ok: true });
+  }
+  if (seg[2] === 'img' && method === 'DELETE') {
+    try { fs.unlinkSync(full); } catch (e) {}
+    const mimes = store.setting('planoImgMime') || {}; delete mimes[key]; store.setSetting('planoImgMime', mimes);
+    return ok(res, { ok: true });
+  }
+  if (seg[2] === 'marks' && method === 'PUT') {
+    const body = await readBody(req);
+    const all = store.setting('planoMarks') || {}; all[key] = body.marks || []; store.setSetting('planoMarks', all);
+    return ok(res, { ok: true });
+  }
+  if (!seg[2] && method === 'GET') {
+    const all = store.setting('planoMarks') || {}; const mimes = store.setting('planoImgMime') || {};
+    return ok(res, { marks: all[key] || [], hasImg: !!mimes[key] });
+  }
+  if (!seg[2] && method === 'DELETE') {
+    try { fs.unlinkSync(full); } catch (e) {}
+    const all = store.setting('planoMarks') || {}; delete all[key]; store.setSetting('planoMarks', all);
+    const mimes = store.setting('planoImgMime') || {}; delete mimes[key]; store.setSetting('planoImgMime', mimes);
+    return ok(res, { ok: true });
+  }
+  return fail(res, 404, 'No encontrado');
+}
 async function filesApi(req, res, user, seg, method, url) {
   if (method === 'POST') {
     const col = seg[1], rid = +seg[2];

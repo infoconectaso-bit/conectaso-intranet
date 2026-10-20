@@ -339,11 +339,18 @@ const PLAN_LINES = {
   cableLight: { lab: 'Cable iluminación', col: '#19a44b' },
 };
 let PLAN = null, DRAGP = null;
-const fileIDB = CS.fileIDB; // almacén compartido (lo expone app-pages.js)
+// Almacén de planos EN EL SERVIDOR (imagen en disco + símbolos). Se comparte entre
+// todos los usuarios y persiste. keyBase: "<locId>_<pack>" o "ev_<eventId>".
+const planoSrv = {
+  async get(keyBase) { try { return await api('planos/' + encodeURIComponent(keyBase)); } catch (e) { return { marks: [], hasImg: false }; } },
+  async putMarks(keyBase, marks) { try { await api('planos/' + encodeURIComponent(keyBase) + '/marks', { method: 'PUT', body: { marks } }); } catch (e) {} },
+  imgUrl: (keyBase, bust) => '/api/planos/' + encodeURIComponent(keyBase) + '/img' + (bust ? ('?t=' + Date.now()) : ''),
+  async uploadImg(keyBase, file) { const fd = new FormData(); fd.append('file', file, file.name); await api('planos/' + encodeURIComponent(keyBase) + '/img', { method: 'POST', form: fd }); },
+  async delImg(keyBase) { try { await api('planos/' + encodeURIComponent(keyBase) + '/img', { method: 'DELETE' }); } catch (e) {} },
+  async delAll(keyBase) { try { await api('planos/' + encodeURIComponent(keyBase), { method: 'DELETE' }); } catch (e) {} },
+};
 const uidp = () => 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const clampp = v => Math.max(0, Math.min(100, v));
-// keyBase: plantilla de finca = "<locId>_<pack>" · copia de evento = "ev_<eventId>"
-const planoKey = kind => 'plan_' + kind + '_' + PLAN.keyBase;
 
 on(/^#\/plano\/(\d+)(?:\/([a-z]+))?$/, m => planoPage(+m[1], m[2]));
 async function planoPage(locId, zona) {
@@ -368,12 +375,11 @@ async function planoPageEvent(eventId) {
   if (!ev.lugar || !pack) { shell('<div class="empty">Este evento necesita una finca y un pack (tipo) con plano de montaje.</div>', ['Plano']); return; }
   const loc = (S.meta.locations || []).find(l => l.id == ev.lugar) || { id: ev.lugar, name: 'Finca' };
   try {
-    const evMk = await fileIDB.getRaw('plan_mk_ev_' + eventId);
-    if (evMk == null) { // primera vez: se parte de la plantilla de la finca
-      const tMk = (await fileIDB.getRaw('plan_mk_' + ev.lugar + '_' + pack)) || [];
-      const tImg = await fileIDB.getRaw('plan_img_' + ev.lugar + '_' + pack);
-      await fileIDB.putRaw('plan_mk_ev_' + eventId, tMk.map(m => Object.assign({}, m)));
-      if (tImg) await fileIDB.putRaw('plan_img_ev_' + eventId, tImg);
+    const d0 = await planoSrv.get('ev_' + eventId);
+    if (!d0.marks.length && !d0.hasImg) { // primera vez: se parte de la plantilla de la finca
+      const t = await planoSrv.get(ev.lugar + '_' + pack);
+      if (t.marks && t.marks.length) await planoSrv.putMarks('ev_' + eventId, t.marks.map(m => Object.assign({}, m)));
+      // la imagen de fondo: si la copia no tiene propia, se usa la de la plantilla al mostrarla
     }
   } catch (e) {}
   PLAN = { locId: ev.lugar, eventId, zona: pack, mode: 'event', sel: null, img: null, marks: [], readOnly: false, loc };
@@ -427,12 +433,17 @@ function planoShell(loc) {
 async function planoLoadZona() {
   PLAN.sel = null;
   PLAN.keyBase = PLAN.mode === 'event' ? ('ev_' + PLAN.eventId) : (PLAN.locId + '_' + PLAN.zona);
-  try { PLAN.img = await fileIDB.getRaw(planoKey('img')); } catch (e) { PLAN.img = null; }
-  try { PLAN.marks = (await fileIDB.getRaw(planoKey('mk'))) || []; } catch (e) { PLAN.marks = []; }
+  const d = await planoSrv.get(PLAN.keyBase);
+  PLAN.marks = d.marks || [];
+  if (d.hasImg) PLAN.img = planoSrv.imgUrl(PLAN.keyBase, true);
+  else if (PLAN.mode === 'event') { // la copia del evento usa la imagen de la plantilla si no tiene propia
+    const t = await planoSrv.get(PLAN.locId + '_' + PLAN.zona);
+    PLAN.img = t.hasImg ? planoSrv.imgUrl(PLAN.locId + '_' + PLAN.zona, true) : null;
+  } else PLAN.img = null;
   $$('.plan-tab').forEach(b => b.classList.toggle('on', b.dataset.z === PLAN.zona));
   planoRenderStage();
 }
-async function planoSaveMarks() { try { await fileIDB.putRaw(planoKey('mk'), PLAN.marks.map(m => Object.assign({}, m))); } catch (e) {} }
+async function planoSaveMarks() { await planoSrv.putMarks(PLAN.keyBase, PLAN.marks.map(m => Object.assign({}, m))); }
 function planoMarkHTML(m) {
   const s = PLAN_SYMS[m.t] || { cls: '' };
   const sel = m.id === PLAN.sel ? ' sel' : '';
@@ -464,14 +475,14 @@ function planoBindStatic() {
     $$('.pal-item').forEach(b => b.onclick = () => { const n = PLAN.marks.filter(x => x.t !== 'line').length; const m = { id: uidp(), t: b.dataset.t, x: 44 + (n % 6) * 3, y: 40 + (n % 6) * 4, rot: 0 }; PLAN.marks.push(m); PLAN.sel = m.id; planoRenderStage(); planoSaveMarks(); });
     $$('.pal-line').forEach(b => b.onclick = () => { const m = { id: uidp(), t: 'line', sub: b.dataset.l, x1: 38, y1: 50, x2: 62, y2: 50 }; PLAN.marks.push(m); PLAN.sel = m.id; planoRenderStage(); planoSaveMarks(); });
     el('planImgBtn').onclick = () => el('planUp').click();
-    el('planUp').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = async () => { PLAN.img = r.result; try { await fileIDB.putRaw(planoKey('img'), r.result); } catch (err) {} planoRenderStage(); toast('Imagen guardada', 'ok'); }; r.readAsDataURL(f); e.target.value = ''; };
-    el('planImgDel').onclick = () => { if (!PLAN.img) return toast('No hay imagen', 'warn'); modal('Quitar imagen', '¿Quitar la imagen de esta zona? Los símbolos se mantienen.', { okText: 'Quitar', danger: true, onOk: async () => { try { await fileIDB.delRaw(planoKey('img')); } catch (e) {} PLAN.img = null; planoRenderStage(); } }); };
+    el('planUp').onchange = async e => { const f = e.target.files[0]; if (!f) return; if (f.size > 60 * 1048576) { toast('La imagen supera 60 MB', 'err'); e.target.value = ''; return; } toast('Subiendo imagen…'); try { await planoSrv.uploadImg(PLAN.keyBase, f); PLAN.img = planoSrv.imgUrl(PLAN.keyBase, true); planoRenderStage(); toast('Imagen guardada', 'ok'); } catch (err) { toast('No se pudo subir la imagen', 'err'); } e.target.value = ''; };
+    el('planImgDel').onclick = () => { if (!PLAN.img) return toast('No hay imagen', 'warn'); modal('Quitar imagen', '¿Quitar la imagen de esta zona? Los símbolos se mantienen.', { okText: 'Quitar', danger: true, onOk: async () => { await planoSrv.delImg(PLAN.keyBase); PLAN.img = null; planoRenderStage(); } }); };
     el('planRotL').onclick = () => planoRotate(-15);
     el('planRotR').onclick = () => planoRotate(15);
     el('planLbl').onclick = () => { if (!PLAN.sel) return toast('Selecciona un símbolo', 'warn'); const m = PLAN.marks.find(x => x.id === PLAN.sel); if (!m || m.t === 'line') return toast('Los cables no llevan etiqueta', 'warn'); modal('Etiqueta', `<div class="field"><label>Texto (p. ej. "Control en el suelo")</label><input class="control" id="lblIn" value="${esc(m.label || '')}"></div>`, { okText: 'Guardar', onOk: () => { m.label = (el('lblIn').value || '').trim(); planoRenderStage(); planoSaveMarks(); } }); };
     el('planDelSel').onclick = () => { if (!PLAN.sel) return; PLAN.marks = PLAN.marks.filter(m => m.id !== PLAN.sel); PLAN.sel = null; planoRenderStage(); planoSaveMarks(); };
     el('planClear').onclick = () => modal('Vaciar', '¿Quitar todos los símbolos?', { okText: 'Vaciar', danger: true, onOk: () => { PLAN.marks = []; PLAN.sel = null; planoRenderStage(); planoSaveMarks(); } });
-    const ut = el('planUseTemplate'); if (ut) ut.onclick = () => modal('Usar la plantilla de la finca', '¿Descartar esta copia del evento y volver a usar la plantilla de la finca? Se perderán los cambios de la copia.', { okText: 'Descartar copia', danger: true, onOk: async () => { try { await fileIDB.delRaw('plan_mk_ev_' + PLAN.eventId); await fileIDB.delRaw('plan_img_ev_' + PLAN.eventId); } catch (e) {} location.hash = '#/eventos/' + PLAN.eventId; } });
+    const ut = el('planUseTemplate'); if (ut) ut.onclick = () => modal('Usar la plantilla de la finca', '¿Descartar esta copia del evento y volver a usar la plantilla de la finca? Se perderán los cambios de la copia.', { okText: 'Descartar copia', danger: true, onOk: async () => { await planoSrv.delAll('ev_' + PLAN.eventId); location.hash = '#/eventos/' + PLAN.eventId; } });
     const st = el('planStage');
     st.addEventListener('click', e => { if (e.target.closest('#planDropBtn')) el('planUp').click(); });
     st.addEventListener('pointerdown', planoDown);
@@ -506,9 +517,9 @@ function planoMarkHTML2(m) {
 }
 async function planoPreviewHTML(locId, zona) { return planoPreviewByKey(locId + '_' + zona); }
 async function planoPreviewByKey(keyBase) {
-  let img = null, marks = [];
-  try { img = await fileIDB.getRaw('plan_img_' + keyBase); } catch (e) {}
-  try { marks = (await fileIDB.getRaw('plan_mk_' + keyBase)) || []; } catch (e) {}
+  const d = await planoSrv.get(keyBase);
+  const marks = d.marks || [];
+  const img = d.hasImg ? planoSrv.imgUrl(keyBase) : null;
   if (!img && !marks.length) return '';
   const lines = marks.filter(m => m.t === 'line');
   let h = `<div class="plan-view">`;
@@ -527,8 +538,8 @@ async function loadRutaPlano(ev) {
   const pack = tipoToPack(ev.tipo);
   if (!pack) { box.innerHTML = `<div class="panel ruta-plano-empty"><div class="panel__body"><p class="hint">El tipo "<b>${esc(ev.tipo || '—')}</b>" no tiene pack de montaje predefinido. <a href="#/plano/${ev.lugar}">Ver planos de la finca →</a></p></div></div>`; return; }
   const packLabel = (PLAN_ZONAS.find(z => z[0] === pack) || [, '—'])[1];
-  let evMk = null; try { evMk = await fileIDB.getRaw('plan_mk_ev_' + ev.id); } catch (e) {}
-  const isCopy = evMk != null;
+  const evD = await planoSrv.get('ev_' + ev.id);
+  const isCopy = (evD.marks && evD.marks.length) || evD.hasImg;
   const h = isCopy ? await planoPreviewByKey('ev_' + ev.id) : await planoPreviewHTML(ev.lugar, pack);
   const editBtn = `<a class="btn btn--sm btn--primary" href="#/plano-ev/${ev.id}">${isCopy ? 'Editar copia del evento' : 'Editar una copia para este evento'}</a>`;
   const src = isCopy ? `${esc(packLabel)} · <span class="plan-src plan-src--copy">copia de este evento</span>` : `${esc(packLabel)} · <span class="plan-src">plantilla de la finca</span>`;
