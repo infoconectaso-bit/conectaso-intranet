@@ -876,7 +876,8 @@ on(/^#\/vehiculos$/, async () => {
   const [vehicles, usages] = await Promise.all([coll.list('vehicles'), coll.list('usages')]);
   const admin = isAdmin();
   const openUse = vid => usages.find(u => u.vehicleId == vid && !u.end);
-  shell(`${pageHead('Vehículos', admin ? 'Flota y su historial de uso.' : 'Flota disponible y tu historial de uso.', admin ? `<button class="btn btn--primary" id="newVeh">+ Añadir vehículo</button>` : '')}
+  const openUsages = usages.filter(u => !u.end);
+  shell(`${pageHead('Vehículos', admin ? 'Flota y su historial de uso.' : 'Flota disponible y tu historial de uso.', admin ? `${openUsages.length ? `<button class="btn btn--blue" id="endAllUse">Terminar usos activos (${openUsages.length})</button> ` : ''}<button class="btn btn--primary" id="newVeh">+ Añadir vehículo</button>` : '')}
     <div class="panel"><div class="panel__head"><h3>Vehículos</h3></div><div class="panel__body"><div class="table-wrap"><table class="dt"><thead><tr><th>Matrícula</th><th>Marca</th><th>Modelo</th><th>Color</th><th>Disponible</th><th>ITV</th><th>Seguro</th><th></th></tr></thead><tbody>
       ${vehicles.map(v => { const u = openUse(v.id); return `<tr><td><b>${esc(v.license_plate)}</b></td><td>${esc(v.brand)}</td><td>${esc(v.model)}</td><td>${esc(v.color)}</td><td>${u ? dot('#D50000', 'En uso') : dot('#0B8043', 'Disponible')}</td><td>${slash(v.itvDate)}</td><td>${slash(v.insuranceRenewal)}</td>
         <td class="row-actions">${u ? `<button class="btn btn--sm" data-end="${u.id}">Terminar uso</button>` : `<button class="btn btn--sm btn--blue" data-start="${v.id}">Iniciar uso</button>`}${admin ? `<button class="btn btn--sm" data-edit="${v.id}">Editar</button>` : ''}</td></tr>`; }).join('')}
@@ -886,7 +887,8 @@ on(/^#\/vehiculos$/, async () => {
       { t: 'Trabajador', get: u => userName(u.userId) },
       { t: 'Inicio', get: u => u.start || '', html: u => fmtDT(u.start) }, { t: 'Fin', get: u => u.end || '', html: u => u.end ? fmtDT(u.end) : '<span class="tag tag--yellow">En uso</span>' },
     ] })}</div></div>`, ['Vehículos']);
-  if (admin) { el('newVeh').onclick = () => vehForm({}); $$('[data-edit]').forEach(b => b.onclick = () => vehForm(vehicles.find(v => v.id == b.dataset.edit))); }
+  if (admin) { el('newVeh').onclick = () => vehForm({}); $$('[data-edit]').forEach(b => b.onclick = () => vehForm(vehicles.find(v => v.id == b.dataset.edit)));
+    const endAll = el('endAllUse'); if (endAll) endAll.onclick = () => modal('Terminar usos activos', `¿Terminar los <b>${openUsages.length}</b> usos de furgoneta que siguen abiertos? Se cerrarán con la fecha y hora actuales.`, { okText: 'Terminar todos', onOk: async () => { const now = new Date().toISOString(); for (const u of openUsages) { try { await coll.save('usages', Object.assign({}, u, { end: now })); } catch (e) {} } toast('Usos terminados', 'ok'); location.reload(); } }); }
   $$('[data-start]').forEach(b => b.onclick = async () => { await coll.save('usages', { vehicleId: +b.dataset.start, userId: S.user.id, start: new Date().toISOString(), end: null }); toast('Uso iniciado', 'ok'); location.reload(); });
   $$('[data-end]').forEach(b => b.onclick = async () => { const u = usages.find(x => x.id == b.dataset.end); await coll.save('usages', Object.assign({}, u, { end: new Date().toISOString() })); toast('Uso terminado', 'ok'); location.reload(); });
 });

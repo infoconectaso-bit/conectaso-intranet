@@ -156,14 +156,30 @@ function eventTotals(ev, skipRefresh) {
   const ingresos = fincaTot + cliTot, coste = factTotal(ev);
   return { ingresos, coste, beneficio: ingresos - coste };
 }
+/** Saldo pendiente de TODOS los trabajadores en UNA sola pasada (para la lista de facturación equipo).
+ * Devuelve { id: { rest, last } }. Mucho más rápido que llamar aggregateFor por cada trabajador. */
+function allBalances() {
+  refresh();
+  const TODAY = bizToday();
+  const out = {};
+  const get = id => out[id] || (out[id] = { rest: 0, last: '' });
+  store.all('history').forEach(h => { const b = get(h.id); b.rest += (h.rest || 0); (h.items || []).forEach(i => { if (i.date && i.date > b.last) b.last = i.date; }); });
+  store.all('events').forEach(ev => {
+    if (!(ev.fecha && ev.fecha >= TODAY) || !evRealized(ev)) return;
+    assignedWorkers(ev).forEach(wid => { const b = get(wid); b.rest += workerEarning(ev, wid).amount; if (ev.fecha > b.last) b.last = ev.fecha; });
+  });
+  store.all('adjustments').forEach(a => { const b = get(a.userId); b.rest += (parseFloat(a.amount) || 0); if (a.date && a.date > b.last) b.last = a.date; });
+  return out;
+}
 /** Rellena ev.factRows y ev.revRows (solo para vista de admin). No persiste. */
 function withFacturacion(ev) {
   try { ev.factRows = computeFact(ev); ev.revRows = computeRevenue(ev); } catch (e) { /* no romper la ficha */ }
   return ev;
 }
-/** Facturación agregada por trabajador: histórico + eventos realizados de hoy en adelante. */
-function aggregateFor(uid) {
-  refresh();
+/** Facturación agregada por trabajador: histórico + eventos realizados de hoy en adelante.
+ * skipRefresh=true cuando ya se llamó a prime() en un bucle grande (p. ej. facturación equipo). */
+function aggregateFor(uid, skipRefresh) {
+  if (!skipRefresh) refresh();
   const TODAY = bizToday();
   const histById = {}; store.all('history').forEach(h => { histById[h.id] = h; });
   const snap = histById[uid] || { cobrar: 0, cobrado: 0, rest: 0, items: [] };
@@ -192,4 +208,4 @@ function aggregateFor(uid) {
   return { cobrar: (snap.cobrar || 0) + bonus, cobrado: (snap.cobrado || 0), rest: (snap.rest || 0) + bonus, items };
 }
 
-module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, HOURLY_RATE, OVERTIME };
+module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, allBalances, HOURLY_RATE, OVERTIME };

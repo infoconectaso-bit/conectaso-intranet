@@ -349,7 +349,8 @@ const PRICE_ALERT_SKIP = [227, 1095, 234, 292, 1813, 276, 713];
 const uName = id => (users.get(id) || {}).name || ('#' + id);
 function onVacation(workerId, date) {
   if (!workerId || !date) return null;
-  return store.all('vacations').find(v => v.userId == workerId && v.status !== 'Denegado' && v.start && v.end && date >= v.start && date <= v.end) || null;
+  // Solo cuentan las vacaciones APROBADAS para los avisos de conflicto (las pendientes no).
+  return store.all('vacations').find(v => v.userId == workerId && v.status === 'Aprobado' && v.start && v.end && date >= v.start && date <= v.end) || null;
 }
 const dupAckKey = (w, date) => String(w) + '@' + date;
 function staffConflicts() {
@@ -761,7 +762,19 @@ function computeBeneficios() {
 }
 function finance(req, res, user, seg, method) {
   if (user.role === 'admin') {
-    if (seg[1] === 'workers' && method === 'GET') return ok(res, { workers: store.all('workers') });
+    if (seg[1] === 'workers' && method === 'GET') {
+      // Saldo pendiente REAL de cada trabajador (histórico + eventos realizados + ajustes − pagos),
+      // en vivo y en una sola pasada. Antes dependía de la colección 'workers' (podía estar vacía).
+      const bals = fact.allBalances();
+      const workers = Object.keys(bals).filter(id => +id).map(id => {
+        const b = bals[id]; const pays = store.byOwner('payments', +id);
+        const paid = pays.reduce((t, p) => t + (+p.amount || 0), 0);
+        let last = b.last; pays.forEach(p => { if (p.date && p.date > last) last = p.date; });
+        return { id: +id, name: userName(+id), pend: Math.round((b.rest - paid) * 100) / 100, last };
+      }).filter(w => w.pend !== 0 || w.last);
+      workers.sort((a, b) => b.pend - a.pend);
+      return ok(res, { workers });
+    }
     if (seg[1] === 'beneficios' && method === 'GET') return ok(res, computeBeneficios());
     if (seg[1] === 'history') {
       const id = +seg[2];
