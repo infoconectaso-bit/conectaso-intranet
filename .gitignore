@@ -1,0 +1,8 @@
+# NUNCA subir datos ni secretos al repositorio público
+node_modules/
+.env
+data/
+*.db
+*.db-*
+*.sqlite
+*.log

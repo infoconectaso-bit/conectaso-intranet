@@ -1,0 +1,12 @@
+services:
+  gestor:
+    build: .
+    container_name: conectaso-gestor
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      # Base de datos y archivos subidos (persisten aunque se reconstruya el contenedor).
+      - ./data:/data

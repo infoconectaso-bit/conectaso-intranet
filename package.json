@@ -1,0 +1,17 @@
+{
+  "name": "conectaso-intranet",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gestor de eventos de Conecta So",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning server/index.js",
+    "import": "node --no-warnings=ExperimentalWarning scripts/import.js",
+    "create-admin": "node --no-warnings=ExperimentalWarning scripts/create-admin.js",
+    "test": "node --no-warnings=ExperimentalWarning scripts/smoke-test.js"
+  }
+}

@@ -1,0 +1,872 @@
+'use strict';
+/* ============================================================================
+   Páginas de administración y de equipo (usuarios, localizaciones, control
+   horario, vacaciones, facturación, vehículos, TYC) y la cuenta del usuario.
+   ============================================================================ */
+(function () {
+const CS = window.__CS;
+const { S, api, shell, pageHead, table, bindTable, toast, modal, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
+  userName, dot, svg, on, loading, $, $$ } = CS;
+const { fg, inp, sel, ta, collectForm } = CS.momentHelpers;
+const isAdmin = () => S.user.role === 'admin';
+const requireAdmin = () => { if (!isAdmin()) { shell('<div class="empty">Sin acceso.</div>', ['Sin acceso']); return false; } return true; };
+
+/* helpers de colección */
+const coll = {
+  list: c => api('collections/' + c).then(r => r.items),
+  save: (c, item) => api('collections/' + c + (item.id ? '/' + item.id : ''), { method: item.id ? 'PUT' : 'POST', body: { item } }),
+  del: (c, id) => api('collections/' + c + '/' + id, { method: 'DELETE' }),
+};
+
+/* =========================================================================
+   SERVICIOS EXTRAS (admin)
+   ========================================================================= */
+// === SOLICITUD DE EXTRAS: solicitudes de los novios, con aceptar / declinar ===
+const RESERVA_EUR = 50 * 1.21; // 60,50 €
+const exName = k => ((CS.momentHelpers.EXTRAS_CLIENTE || []).find(e => e[0] === k) || [])[1] || k;
+const EX_STATE = { solicitado: ['⏳ Pendiente de confirmación', 'tag--yellow'], pendiente_pago: ['💳 Pendiente de pago', 'tag--blue'], reservado: ['✓ Reservado', 'tag--green'] };
+on(/^#\/extras$/, () => solicitudesExtras());
+on(/^#\/extras-catalogo$/, () => extrasCatalogo());
+async function solicitudesExtras() {
+  if (!requireAdmin()) return; loading(['Solicitud de extras']);
+  const { requests, pending } = await api('extra-requests');
+  const waText = r => `Hola! 👋 Tenemos disponibilidad para *${exName(r.extraKey)}* en vuestra boda del ${dmy(r.fecha)} en ${r.lugar || ''}.\n\nPara reservarlo, abonad la reserva de *${fmtEur(RESERVA_EUR)}* (50 € + IVA) en este enlace de pago:\n👉 [enlace de pago Holded]\n\nEn cuanto recibamos el pago quedará *reservado*. ¡Gracias! — Conecta So`;
+  window.__WA = r => waText(r);
+  shell(`${pageHead('Solicitud de extras', 'Servicios que los novios quieren reservar. Acepta (envía WhatsApp con enlace de pago) o declina.', `<button class="btn" id="catBtn">Ver catálogo de servicios</button>`)}
+    <div class="panel"><div class="panel__body">
+      <p class="hint" style="margin-bottom:12px">${pending} pendiente${pending === 1 ? '' : 's'} de confirmar. Al <b>aceptar</b>, se envía al cliente un WhatsApp con el enlace de pago de la reserva (${fmtEur(RESERVA_EUR)}).</p>
+      ${table('dtReq', { rows: requests.map((r, i) => Object.assign({ _i: i }, r)), order: [2, 'asc'], filters: true, cols: [
+        { t: 'Evento', get: r => r.evId, html: r => `<a href="#/eventos/${r.evId}">#${r.evId}</a>${r.conyuges ? ' · ' + esc(r.conyuges) : ''}` },
+        { t: 'Servicio', get: r => exName(r.extraKey), html: r => `<b>${esc(exName(r.extraKey))}</b>` },
+        { t: 'Fecha', get: r => r.fecha || '', html: r => r.fecha ? dmy(r.fecha) : '—' },
+        { t: 'Lugar', get: r => r.lugar || '' },
+        { t: 'Estado', get: r => r.estado, html: r => { const s = EX_STATE[r.estado] || [r.estado, 'tag--grey']; return `<span class="tag ${s[1]}">${s[0]}</span>`; } },
+        { t: '', nosort: true, nofilter: true, html: r => {
+          if (r.estado === 'solicitado') return `<div class="row-actions"><button class="btn btn--sm btn--primary" data-acc="${r.evId}:${r.extraKey}">Aceptar</button><button class="btn btn--sm btn--red" data-dec="${r.evId}:${r.extraKey}">Declinar</button></div>`;
+          if (r.estado === 'pendiente_pago') return `<div class="row-actions"><button class="btn btn--sm" data-paid="${r.evId}:${r.extraKey}">Marcar pagado</button></div>`;
+          return '<span class="muted">—</span>';
+        } },
+      ] })}
+    </div></div>`, ['Solicitud de extras']);
+  el('catBtn').onclick = () => location.hash = '#/extras-catalogo';
+  const splitD = v => { const i = v.indexOf(':'); return [v.slice(0, i), v.slice(i + 1)]; };
+  bindTable('dtReq', () => {
+    $$('[data-acc]').forEach(b => b.onclick = () => { const [ev, k] = splitD(b.dataset.acc); const r = requests.find(x => x.evId == ev && x.extraKey === k);
+      modal('Aceptar y enviar WhatsApp', `<p>Al aceptar <b>${esc(exName(k))}</b> (boda #${ev}) se enviará este WhatsApp al cliente con el enlace de pago:</p><pre class="msg-preview">${esc(window.__WA(r))}</pre>`,
+        { okText: 'Aceptar y enviar', onOk: async () => { await api('events/' + ev + '/extra-confirm', { method: 'POST', body: { key: k } }); toast('Aceptado · WhatsApp enviado', 'ok'); solicitudesExtras(); } }); });
+    $$('[data-dec]').forEach(b => b.onclick = () => { const [ev, k] = splitD(b.dataset.dec);
+      modal('Declinar solicitud', `¿Declinar <b>${esc(exName(k))}</b> de la boda #${ev}? Se quitará de su evento.`, { okText: 'Declinar', danger: true, onOk: async () => { await api('events/' + ev + '/extra-decline', { method: 'POST', body: { key: k } }); toast('Solicitud declinada', 'ok'); solicitudesExtras(); } }); });
+    $$('[data-paid]').forEach(b => b.onclick = async () => { const [ev, k] = splitD(b.dataset.paid); await api('events/' + ev + '/extra-pay', { method: 'POST', body: { key: k } }); toast('Marcado como pagado · reservado', 'ok'); solicitudesExtras(); });
+  });
+}
+async function extrasCatalogo() {
+  if (!requireAdmin()) return; loading(['Catálogo de servicios']);
+  const items = await coll.list('extras');
+  shell(`${pageHead('Catálogo de servicios', 'Servicios extra que se asignan a los eventos.', `<button class="btn btn--primary" id="newExtra">+ Crear servicio</button> <button class="btn" id="reqBtn">Ver solicitudes</button>`)}
+    <div class="panel"><div class="panel__body">${table('dtExtras', { rows: items, order: [1, 'asc'], cols: [
+      { t: 'Id', get: x => x.id },
+      { t: 'Nombre', get: x => x.name },
+      { t: 'Admite horas extra', get: x => x.allows_overtime ? 'Sí' : 'No' },
+      { t: '', nosort: true, html: x => `<div class="row-actions"><button class="btn btn--sm" data-edit="${x.id}">Editar</button><button class="btn btn--icon" data-del="${x.id}">🗑</button></div>` },
+    ] })}</div></div>`, ['Catálogo de servicios']);
+  el('newExtra').onclick = () => extraForm({});
+  el('reqBtn').onclick = () => location.hash = '#/extras';
+  bindTable('dtExtras', () => {
+    $$('[data-edit]').forEach(b => b.onclick = () => extraForm(items.find(x => x.id == b.dataset.edit)));
+    $$('[data-del]').forEach(b => b.onclick = () => modal('Borrar', '¿Eliminar este servicio extra?', { okText: 'Eliminar', danger: true, onOk: async () => { await coll.del('extras', b.dataset.del); toast('Eliminado', 'ok'); location.reload(); } }));
+  });
+}
+function extraForm(x) {
+  const bg = modal(x.id ? 'Editar servicio extra' : 'Nuevo servicio extra', `<form id="exForm"><div class="field"><label>Nombre del servicio extra</label>${inp('name', x.name)}</div>
+    <label class="switch"><input type="checkbox" name="allows_overtime" ${x.allows_overtime ? 'checked' : ''}><span class="track"></span> Admite horas extras</label></form>`,
+    { okText: 'Guardar Extra', onOk: async () => { const d = collectForm($('#exForm')); if (!d.name) { toast('Pon un nombre', 'err'); return true; } await coll.save('extras', { id: x.id, name: d.name, allows_overtime: d.allows_overtime }); toast('Guardado', 'ok'); CS.loadContext().then(() => location.hash = '#/extras-catalogo'); } });
+}
+const el = id => document.getElementById(id);
+
+/* =========================================================================
+   USUARIOS (admin)
+   ========================================================================= */
+on(/^#\/usuarios$/, () => usuariosPage());
+on(/^#\/usuario\/(\d+)$/, m => usuariosPage(+m[1]));  // ficha directa de un cliente (desde el listado de bodas)
+on(/^#\/trabajadores$/, () => trabajadoresPage());
+on(/^#\/desplazamientos$/, () => desplazamientosPage());
+// Extrae coordenadas de un enlace de Google Maps (largo) o de "lat,lng".
+function parseLatLng(s) {
+  s = decodeURIComponent(s || '');
+  let m = s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/); if (m) return [+m[1], +m[2]];
+  m = s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/); if (m) return [+m[1], +m[2]];
+  m = s.match(/[?&](?:q|query|ll|sll|daddr)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/); if (m) return [+m[1], +m[2]];
+  m = s.match(/coordinate=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)/); if (m) return [+m[1], +m[2]];
+  m = s.match(/^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/); if (m) return [+m[1], +m[2]];
+  return null;
+}
+async function desplazamientosPage() {
+  if (!requireAdmin()) return; loading(['Desplazamientos']);
+  const { items } = await api('collections/locations');
+  const locs = items.slice().sort((a, b) => (a.travelMin ? 1 : 0) - (b.travelMin ? 1 : 0) || a.name.localeCompare(b.name, 'es'));
+  const pend = locs.filter(l => !l.travelMin).length;
+  const row = l => `<tr data-loc="${l.id}">
+    <td><span class="color-dot" style="background:${l.colorHex || colorOf(l.id)}"></span> <b>${esc(l.name)}</b></td>
+    <td class="dw-time">${l.travelMin ? `🚗 ${l.travelApprox ? '~' : ''}${l.travelMin} min · ${l.travelKm || '?'} km${l.travelApprox ? ' <span class="muted">(aprox.)</span>' : ''}` : '<span class="tag tag--yellow">Pendiente</span>'}</td>
+    <td><input class="control dw-link" placeholder="Pega el enlace de Google Maps (o: lat,long)" value="${esc(l.directionLink || '')}"></td>
+    <td><button class="btn btn--sm btn--primary" data-calc="${l.id}">Calcular</button> ${l.lat ? `<a class="btn btn--sm" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('Carrer del Comerç, Martorelles')}&destination=${l.lat},${l.lng}&travelmode=driving">Ver ruta</a>` : ''}</td></tr>`;
+  shell(`${pageHead('Desplazamientos', 'Tiempo desde Martorelles (C/ Comerç) a cada finca. Pega el enlace de Google Maps de las que faltan y se calcula solo.')}
+    <div class="panel"><div class="panel__body">
+      <p class="hint" style="margin-bottom:12px">${pend} finca${pend === 1 ? '' : 's'} por ubicar. Pega el <b>enlace largo de Google Maps</b> (el que contiene las coordenadas) o escribe <code>latitud,longitud</code>, y pulsa <b>Calcular</b>.</p>
+      <div class="table-wrap"><table class="dt"><thead><tr><th>Finca</th><th>Desplazamiento</th><th>Enlace Google Maps</th><th></th></tr></thead>
+      <tbody>${locs.map(row).join('')}</tbody></table></div>
+    </div></div>`, ['Desplazamientos']);
+  $$('[data-calc]').forEach(btn => btn.onclick = async () => {
+    const id = +btn.dataset.calc; const tr = btn.closest('tr'); const link = tr.querySelector('.dw-link').value.trim();
+    const name = (locs.find(l => l.id == id) || {}).name || '';
+    const ll = parseLatLng(link);
+    if (!ll) {
+      if (/maps\.app\.goo\.gl|g\.co\/|goo\.gl\//.test(link)) { modal('Enlace corto de Google Maps', `<p>Ese es un <b>enlace corto</b> y no lleva las coordenadas dentro, así que el navegador no puede leerlas.</p>
+        <p><b>Cómo obtener el enlace bueno:</b></p>
+        <ol style="margin:6px 0 0;padding-left:18px"><li>Abre el enlace en Google Maps.</li><li>Cuando cargue, copia la dirección de la barra del navegador (la que empieza por <code>https://www.google.com/maps/place/…@41.5,2.3…</code>).</li><li>Pégala aquí.</li></ol>
+        <p class="hint" style="margin-top:8px">También puedes escribir directamente <code>latitud,longitud</code> (por ejemplo <code>41.50025,2.252335</code>).</p>`, { okText: 'Entendido' }); return; }
+      toast('No encuentro coordenadas. Pega el enlace largo de Google Maps (con @lat,long) o escribe "lat,long".', 'err'); return;
+    }
+    btn.disabled = true; tr.querySelector('.dw-time').innerHTML = 'Calculando…';
+    let min, km, approx = false;
+    try {
+      const r = await fetch(`https://router.project-osrm.org/route/v1/driving/2.2440,41.5293;${ll[1]},${ll[0]}?overview=false`);
+      const j = await r.json(); const rt = j.routes && j.routes[0];
+      if (!rt) throw new Error('sin ruta');
+      min = Math.round(rt.duration / 60); km = Math.round(rt.distance / 100) / 10;
+    } catch (e) {
+      // sin servicio de rutas: estimación por distancia en línea recta (×1.3) a ~50 km/h
+      const toRad = d => d * Math.PI / 180, R = 6371;
+      const dLat = toRad(ll[0] - 41.5293), dLng = toRad(ll[1] - 2.2440);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(41.5293)) * Math.cos(toRad(ll[0])) * Math.sin(dLng / 2) ** 2;
+      km = Math.round(2 * R * Math.asin(Math.sqrt(a)) * 1.3 * 10) / 10; min = Math.round(km / 50 * 60); approx = true;
+    }
+    try {
+      await coll.save('locations', { id, lat: ll[0], lng: ll[1], travelMin: min, travelKm: km, directionLink: link, travelApprox: approx });
+      await CS.loadContext();
+      tr.querySelector('.dw-time').innerHTML = `🚗 ${approx ? '~' : ''}${min} min · ${km} km${approx ? ' <span class="muted">(aprox.)</span>' : ''}`;
+      toast(`${name}: ${approx ? '≈ ' : ''}${min} min · ${km} km`, 'ok');
+    } catch (e) { tr.querySelector('.dw-time').innerHTML = '<span class="tag tag--red">Error al guardar</span>'; }
+    finally { btn.disabled = false; }
+  });
+}
+// Directorio del equipo (DJs, técnicos, wedding planners): más ordenado que mezclarlo con los clientes.
+async function trabajadoresPage() {
+  if (!requireAdmin()) return; loading(['Trabajadores']);
+  const { users } = await api('users');
+  const staff = users.filter(u => u.role && u.role !== 'user');
+  const WT = { 0: '—', 1: 'Trabajador', 2: 'Autónomo', 3: 'Otros' };
+  shell(`${pageHead('Trabajadores', 'Directorio del equipo: DJs, técnicos y wedding planners.', `<button class="btn btn--primary" id="newWorker">+ Crear trabajador</button>`)}
+    <div class="panel"><div class="panel__body">${table('dtWorkers', { rows: staff, order: [1, 'asc'], filters: true, cols: [
+      { t: '', nosort: true, nofilter: true, html: u => `<span class="color-dot" style="background:${u.color || colorOf(u.id)}"></span>` },
+      { t: 'Nombre', get: u => u.name, html: u => `<a data-edit="${u.id}">${esc(u.name || '—')}</a>` },
+      { t: 'Rol', get: u => CS.roleLabel(u.role) },
+      { t: 'Tipo', get: u => WT[u.worker_type || 0] || '—' },
+      { t: 'Email', get: u => u.email, html: u => esc(u.email || '') },
+      { t: 'Vehículo', get: u => u.vehicle_allowed ? 'Sí' : 'No', html: u => u.vehicle_allowed ? '<span class="tag tag--green">Puede</span>' : '<span class="muted">No</span>' },
+      { t: 'Acceso', get: u => u.hasPassword ? 'Activo' : 'Sin activar', html: u => u.hasPassword ? '<span class="tag tag--green">Activo</span>' : '<span class="tag tag--grey">Sin activar</span>' },
+      { t: '', nosort: true, nofilter: true, html: u => `<div class="row-actions"><button class="btn btn--sm" data-edit="${u.id}">Editar</button></div>` },
+    ] })}</div></div>`, ['Trabajadores']);
+  el('newWorker').onclick = () => userForm({ role: 'dj' }, users);
+  bindTable('dtWorkers', () => { $$('[data-edit]').forEach(b => b.onclick = () => userForm(staff.find(u => u.id == b.dataset.edit) || users.find(u => u.id == b.dataset.edit), users)); });
+}
+async function usuariosPage(openId) {
+  if (!requireAdmin()) return; loading(['Usuarios']);
+  const { users } = await api('users');
+  shell(`${pageHead('Usuarios', 'Cuentas con acceso al gestor. Invita, edita o da de baja.', `<button class="btn btn--primary" id="newUser">+ Crear usuario</button>`)}
+    <div class="panel"><div class="panel__body">${table('dtUsers', { rows: users, order: [0, 'desc'], filters: true, cols: [
+      { t: 'Id', get: u => u.id },
+      { t: 'Rol', get: u => CS.roleLabel(u.role) },
+      { t: 'Nombre', get: u => u.name, html: u => `<a data-edit="${u.id}">${esc(u.name || '—')}</a>` },
+      { t: 'Email', get: u => u.email, html: u => esc((u.emailDuplicado ? u.emailOriginal : u.email) || '') },
+      { t: 'Acceso', get: u => u.hasPassword ? 'Activo' : 'Sin activar', html: u => u.hasPassword ? '<span class="tag tag--green">Activo</span>' : '<span class="tag tag--grey">Sin activar</span>' },
+      { t: 'TYC', get: u => u.role !== 'user' ? '—' : (u.tycSigned ? 'Firmado' : 'No firmado'), html: u => u.role !== 'user' ? '<span class="muted">—</span>' : (u.tycSigned ? `<a class="tyc-status tyc-status--ok" href="#/tyc-firma/${u.id}" title="Ver / descargar PDF firmado">✓ Firmado</a>` : '<span class="tyc-status tyc-status--no">✕ No firmado</span>') },
+      { t: '', nosort: true, nofilter: true, html: u => `<div class="row-actions">${u.role === 'user' ? `<button class="btn btn--icon" data-cal="${u.id}" title="${u.eventId ? 'Ver su boda' : 'Crear boda para este cliente'}">📅</button>` : ''}<button class="btn btn--sm" data-edit="${u.id}">Editar</button><button class="btn btn--sm btn--blue" data-invite="${u.id}" title="Reenviar mensaje de bienvenida">Reenviar</button><button class="btn btn--icon" data-del="${u.id}">🗑</button></div>` },
+    ] })}</div></div>`, ['Usuarios']);
+  el('newUser').onclick = () => userForm({}, users);
+  bindTable('dtUsers', () => {
+    $$('[data-edit]').forEach(b => b.onclick = () => userForm(users.find(u => u.id == b.dataset.edit), users));
+    $$('[data-invite]').forEach(b => b.onclick = async () => { const r = await api('users/' + b.dataset.invite + '/invite', { method: 'POST' }); showInvite(r.invite); });
+    $$('[data-cal]').forEach(b => b.onclick = () => calForUser(users.find(u => u.id == b.dataset.cal)));
+    $$('[data-del]').forEach(b => b.onclick = () => modal('Dar de baja', '¿Eliminar esta cuenta? El usuario perderá el acceso.', { okText: 'Eliminar', danger: true, onOk: async () => { await api('users/' + b.dataset.del, { method: 'DELETE' }); toast('Usuario eliminado', 'ok'); location.hash = '#/usuarios'; CS.route ? CS.route() : location.reload(); } }));
+  });
+  if (openId) { const u = users.find(x => x.id == openId); if (u) userForm(u, users); }
+}
+// botón calendario: ver la boda del cliente, o crearla y entrar directamente al evento
+// (la fecha, lugar, tipo, horario y demás se rellenan dentro del propio evento y se guardan)
+function calForUser(u) {
+  if (!u) return;
+  if (u.eventId) { location.hash = '#/eventos/' + u.eventId; return; }
+  api('events', { method: 'POST', body: { userId: u.id } })
+    .then(async r => { await CS.loadContext(); toast('Boda creada · completa los datos y guarda', 'ok'); location.hash = '#/eventos/' + r.event.id; })
+    .catch(e => toast(e.message || 'No se pudo crear la boda', 'err'));
+}
+function showInvite(invite) {
+  modal('Enlace de acceso', invite.sent
+    ? `<p>Hemos enviado un correo con el enlace de acceso.</p>`
+    : `<p>Comparte este enlace con la persona para que cree su contraseña (caduca en 14 días):</p><input class="control" readonly value="${esc(invite.link)}" onclick="this.select()">`);
+}
+function userForm(u, all) {
+  const creating = !u.id;
+  const roles = [['user', 'Cliente'], ['dj', 'DJ / Técnico'], ['planner', 'Wedding planner'], ['admin', 'Administración']];
+  const p = (u.prices) || {};
+  const locs = (S.meta.locations || []);
+  const extras = (S.meta.extras || []);
+  const locOpts = [['', 'Selecciona finca…']].concat(locs.map(l => [l.id, l.name]));
+  const extraOpts = [['', 'Selecciona servicio…']].concat(extras.map(x => [x.id, x.name]));
+  const fincas = u.djFincas || [];
+  const svcs = u.djServices || [];
+  // fila de condiciones por finca: finca + precio boda/evento/h.extra/discomóvil/ceremonia
+  const fincaRow = (c = {}) => `<div class="pr-row" data-finca>
+    ${sel('', locOpts, c.l, 'data-f="l" data-search')}
+    <input class="control" data-f="b" type="number" placeholder="Boda" value="${c.b != null ? c.b : ''}">
+    <input class="control" data-f="e" type="number" placeholder="Evento" value="${c.e != null ? c.e : ''}">
+    <input class="control" data-f="h" type="number" placeholder="H.extra" value="${c.h != null ? c.h : ''}">
+    <input class="control" data-f="d" type="number" placeholder="Discomóvil" value="${c.d != null ? c.d : ''}">
+    <input class="control" data-f="c" type="number" placeholder="Ceremonia" value="${c.c != null ? c.c : ''}">
+    <button type="button" class="btn btn--icon" data-del-row>✕</button></div>`;
+  // fila de precio de servicio extra: servicio + precio + precio hora extra
+  const svcRow = (s = {}) => `<div class="pr-row pr-row--svc" data-svc>
+    ${sel('', extraOpts, s.s, 'data-s="s" data-search')}
+    <input class="control" data-s="p" type="number" placeholder="Precio €" value="${s.p != null ? s.p : ''}">
+    <input class="control" data-s="h" type="number" placeholder="H.extra €" value="${s.h != null ? s.h : ''}">
+    <button type="button" class="btn btn--icon" data-del-row>✕</button></div>`;
+  const bg = modal(creating ? 'Nuevo usuario' : 'Editar usuario', `<form id="uForm">
+    <div class="field"><label>Nombre</label>${inp('name', u.name)}</div>
+    <div class="field"><label>Email</label>${inp('mail', u.emailDuplicado ? u.emailOriginal : u.email, { type: 'email' })}</div>
+    ${!creating ? `<div class="field"><button type="button" class="btn btn--blue btn--sm" id="resendWelcome">✉ Reenviar mensaje de bienvenida</button> <span class="hint">El cliente recibe el enlace para crear su contraseña y entrar al gestor.</span></div>` : ''}
+    <div class="grid-2"><div class="field"><label>Rol</label>${sel('role', roles, u.role || 'user', 'id="uRole"')}</div>
+      <div class="field"><label>Color (agenda)</label>${inp('color', u.color, { ph: '#E82C88' })}</div></div>
+    <div id="workerBox" style="display:${['dj', 'admin'].includes(u.role) ? 'block' : 'none'}">
+      <div class="grid-2"><div class="field"><label>Tipo de trabajador</label>${sel('worker_type', [[0, 'Selecciona'], [1, 'Trabajador'], [2, 'Autónomo'], [3, 'Otros']], u.worker_type || 0)}</div>
+      <div class="field"><label><input type="checkbox" name="vehicle_allowed" ${u.vehicle_allowed ? 'checked' : ''}> Puede coger vehículo</label></div></div>
+      <h4 class="form-sub">Tarifas base por tipo de evento</h4>
+      <div class="grid-2"><div class="field"><label>Recomendado</label>${inp('recomendado', p.recomendado, { ph: '€' })}</div>
+      <div class="field"><label>Fiesta</label>${inp('fiesta', p.fiesta, { ph: '€' })}</div></div>
+      <div class="grid-2"><div class="field"><label>Bodorrio</label>${inp('bodorrio', p.bodorrio, { ph: '€' })}</div>
+      <div class="field"><label>Tinglado</label>${inp('tinglado', p.tinglado, { ph: '€' })}</div></div>
+      <div class="grid-3"><div class="field"><label>Hora extra Fiesta</label>${inp('fiesta_precio_extra', p.fiesta_precio_extra, { ph: '€' })}</div>
+      <div class="field"><label>Hora extra Bodorrio</label>${inp('bodorrio_precio_extra', p.bodorrio_precio_extra, { ph: '€' })}</div>
+      <div class="field"><label>Hora extra Tinglado</label>${inp('tinglado_precio_extra', p.tinglado_precio_extra, { ph: '€' })}</div></div>
+      <h4 class="form-sub">Precios de servicios extra <span class="hint">(lo que cobra este técnico por cada servicio)</span></h4>
+      <div class="pr-head pr-head--svc"><span>Servicio</span><span>Precio</span><span>Precio h.extra</span><span></span></div>
+      <div id="svcBox">${svcs.map(svcRow).join('')}</div>
+      <button type="button" class="btn btn--sm" id="addSvc">+ Añadir servicio</button>
+      <h4 class="form-sub">Condiciones por finca <span class="hint">(precio según la finca de la boda)</span></h4>
+      <div class="pr-head"><span>Finca</span><span>Boda</span><span>Evento</span><span>H.extra</span><span>Discomóvil</span><span>Ceremonia</span><span></span></div>
+      <div id="fincaBox">${fincas.map(fincaRow).join('')}</div>
+      <button type="button" class="btn btn--sm" id="addFinca">+ Añadir finca</button>
+    </div></form>`,
+    { okText: creating ? 'Crear e invitar' : 'Guardar', onOk: async () => {
+      const d = collectForm($('#uForm'));
+      if (!d.mail) { toast('El email es obligatorio', 'err'); return true; }
+      const prices = {}; Object.keys(p).forEach(k => { if (!/^loc\d+_/.test(k)) prices[k] = p[k]; });
+      ['recomendado', 'fiesta', 'bodorrio', 'tinglado', 'fiesta_precio_extra', 'bodorrio_precio_extra', 'tinglado_precio_extra'].forEach(k => { if (d[k] !== undefined && d[k] !== '') prices[k] = d[k]; else delete prices[k]; });
+      const djFincas = []; $$('[data-finca]', bg).forEach(r => { const g = k => r.querySelector('[data-f="' + k + '"]').value; const l = g('l'); if (!l) return; djFincas.push({ l: +l, b: g('b'), e: g('e'), h: g('h'), d: g('d'), c: g('c') }); });
+      const djServices = []; $$('[data-svc]', bg).forEach(r => { const g = k => r.querySelector('[data-s="' + k + '"]').value; const s = g('s'), pp = g('p'); if (!s || pp === '') return; djServices.push({ s: +s, p: pp, h: g('h') || undefined }); });
+      const data = { color: d.color, worker_type: +d.worker_type || 0, vehicle_allowed: d.vehicle_allowed, prices, djFincas, djServices };
+      try {
+        if (creating) { const r = await api('users', { method: 'POST', body: { email: d.mail, name: d.name, role: d.role, data } }); await CS.loadContext(); showInvite(r.invite); }
+        else { await api('users/' + u.id, { method: 'PUT', body: { email: d.mail, name: d.name, role: d.role, data } }); await CS.loadContext(); toast('Guardado', 'ok'); }
+        location.hash = '#/usuarios';
+      } catch (e) { toast(e.message, 'err'); return true; }
+    } });
+  const rw = $('#resendWelcome', bg); if (rw) rw.onclick = async () => { try { const r = await api('users/' + u.id + '/invite', { method: 'POST' }); toast('Mensaje de bienvenida reenviado', 'ok'); showInvite(r.invite); } catch (e) { toast(e.message || 'No se pudo reenviar', 'err'); } };
+  const roleSel = $('#uRole', bg); roleSel.onchange = () => { $('#workerBox', bg).style.display = ['dj', 'admin'].includes(roleSel.value) ? 'block' : 'none'; };
+  CS.momentHelpers.enhanceSearchSelects(bg);
+  $('#addFinca', bg).onclick = () => { const box = $('#fincaBox', bg); box.insertAdjacentHTML('beforeend', fincaRow()); CS.momentHelpers.enhanceSearchSelects(box); };
+  $('#addSvc', bg).onclick = () => { const box = $('#svcBox', bg); box.insertAdjacentHTML('beforeend', svcRow()); CS.momentHelpers.enhanceSearchSelects(box); };
+  bg.addEventListener('click', e => { if (e.target.closest('[data-del-row]')) e.target.closest('[data-finca],[data-svc]').remove(); });
+}
+
+/* =========================================================================
+   LOCALIZACIONES (admin)
+   ========================================================================= */
+on(/^#\/localizaciones$/, async () => {
+  if (!requireAdmin()) return; loading(['Localizaciones']);
+  const items = await coll.list('locations');
+  shell(`${pageHead('Localizaciones', 'Lugares de celebración con sus precios y color de agenda.', `<button class="btn btn--primary" id="newLoc">+ Crear localización</button>`)}
+    <div class="panel"><div class="panel__body">${table('dtLocs', { rows: items, order: [1, 'asc'], filters: true, cols: [
+      { t: 'Id', get: l => l.id }, { t: 'Nombre', get: l => l.name, html: l => `<a data-edit="${l.id}">${esc(l.name)}</a>` },
+      { t: 'Dirección', get: l => l.direction || '' }, { t: 'Responsable', get: l => l.responsable || '' },
+      { t: 'Precio boda', get: l => l.weddingPrice ? l.weddingPrice + ' €' : '—', nofilter: true }, { t: 'Hora extra', get: l => l.extraPrice ? l.extraPrice + ' €' : '—', nofilter: true },
+      { t: 'Color', get: l => l.colorHex || '', html: l => `<span class="loc-badge" style="background:${esc(l.colorHex || '#777')}">${esc(l.colorHex || '')}</span>`, nofilter: true },
+      { t: '', nosort: true, nofilter: true, html: l => `<div class="row-actions"><a class="btn btn--sm" href="#/plano/${l.id}">Plano</a><button class="btn btn--sm" data-edit="${l.id}">Editar</button><button class="btn btn--icon" data-del="${l.id}">🗑</button></div>` },
+    ] })}</div></div>`, ['Localizaciones']);
+  el('newLoc').onclick = () => locForm({});
+  bindTable('dtLocs', () => {
+    $$('[data-edit]').forEach(b => b.onclick = () => locForm(items.find(l => l.id == b.dataset.edit)));
+    $$('[data-del]').forEach(b => b.onclick = () => modal('Borrar', '¿Eliminar esta localización?', { okText: 'Eliminar', danger: true, onOk: async () => { await coll.del('locations', b.dataset.del); toast('Eliminada', 'ok'); location.reload(); } }));
+  });
+});
+function locForm(l) {
+  const f = (lab, n, t) => `<div class="field"><label>${lab}</label>${inp(n, l[n], { type: t || 'text' })}</div>`;
+  modal(l.id ? 'Editar localización' : 'Nueva localización', `<form id="locForm">
+    ${f('Nombre', 'name')}${f('Dirección', 'direction')}${f('Enlace a maps', 'directionLink')}
+    <div class="grid-2">${f('Responsable', 'responsable')}${f('Teléfono', 'phone')}</div>
+    ${f('Color (hex)', 'colorHex')}
+    <h4 class="form-sub">Información económica de la finca</h4>
+    <div class="grid-2">${f('Precio boda', 'weddingPrice', 'number')}${f('Precio evento', 'eventPrice', 'number')}</div>
+    <div class="grid-2">${f('Precio ceremonia', 'ceremonyPrice', 'number')}${f('Precio hora extra', 'extraPrice', 'number')}</div>
+    <p class="hint">El precio de hora extra de la finca se usa automáticamente en la facturación cuando el evento tiene horas extra.</p>
+    <div class="field"><label>Comentarios</label>${ta('comments', l.comments)}</div></form>`,
+    { okText: 'Guardar', onOk: async () => { const d = collectForm($('#locForm')); await coll.save('locations', Object.assign({ id: l.id }, d)); await CS.loadContext(); toast('Guardada', 'ok'); location.hash = '#/localizaciones'; } });
+}
+
+/* =========================================================================
+   PLANO DE MONTAJE POR FINCA  (admin + dj/técnico)
+   Vista aérea + símbolos arrastrables (altavoces, truss, cables, luces…).
+   Se guarda por finca y por zona en IndexedDB. Online, sin instalar nada.
+   ========================================================================= */
+// Los planos se guardan por PACK (el montaje depende del tipo de servicio), no por momento.
+const PLAN_ZONAS = [['recomendado', 'Recomendado'], ['fiesta', 'Pack fiesta'], ['bodorrio', 'Pack bodorrio'], ['tinglado', 'Pack tinglado']];
+const tipoToPack = tipo => { const t = (tipo || '').toLowerCase(); return /recomendad/.test(t) ? 'recomendado' : /fiesta/.test(t) ? 'fiesta' : /bodorrio/.test(t) ? 'bodorrio' : /tinglado/.test(t) ? 'tinglado' : null; };
+const PLAN_SYMS = {
+  ctrl:   { g: 'Sonido', lab: 'Mesa de control', cls: 'pm-ctrl', txt: 'CTRL', rot: 1 },
+  speaker:{ g: 'Sonido', lab: 'Altavoz', cls: 'pm-speaker', txt: '▶', rot: 1 },
+  mic:    { g: 'Sonido', lab: 'Micro', cls: 'pm-mic' },
+  artist: { g: 'Sonido', lab: 'Instrumento / artista', cls: 'pm-artist' },
+  stage:  { g: 'Escenario', lab: 'Escenario', cls: 'pm-stage', txt: 'Escenario', rot: 1 },
+  dj:     { g: 'Escenario', lab: 'Cabina DJ', cls: 'pm-dj', txt: 'DJ', rot: 1 },
+  truss:  { g: 'Estructura', lab: 'Truss', cls: 'pm-truss', txt: '✕', rot: 1 },
+  power:  { g: 'Corriente', lab: 'Punto de corriente', cls: 'pm-power' },
+  zenit:  { g: 'Luz', lab: 'Zenit', cls: 'pm-zenit', txt: '▶', rot: 1 },
+  garland:{ g: 'Luz', lab: 'Guirnalda', cls: 'pm-garland', txt: '∿' },
+};
+const PLAN_LINES = {
+  cableSound: { lab: 'Cable sonido', col: '#31B9CB' },
+  cablePower: { lab: 'Cable corriente', col: '#F0E85A' },
+  cableLight: { lab: 'Cable iluminación', col: '#19a44b' },
+};
+let PLAN = null, DRAGP = null;
+const fileIDB = CS.fileIDB; // almacén compartido (lo expone app-pages.js)
+const uidp = () => 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const clampp = v => Math.max(0, Math.min(100, v));
+// keyBase: plantilla de finca = "<locId>_<pack>" · copia de evento = "ev_<eventId>"
+const planoKey = kind => 'plan_' + kind + '_' + PLAN.keyBase;
+
+on(/^#\/plano\/(\d+)(?:\/([a-z]+))?$/, m => planoPage(+m[1], m[2]));
+async function planoPage(locId, zona) {
+  const canEdit = isAdmin() || S.user.role === 'dj';
+  if (!canEdit) { shell('<div class="empty">Sin acceso.</div>', ['Plano']); return; }
+  loading(['Localizaciones', 'Plano']);
+  const loc = (S.meta.locations || []).find(l => l.id == locId) || { id: locId, name: 'Finca #' + locId };
+  const z0 = PLAN_ZONAS.some(z => z[0] === zona) ? zona : 'recomendado';
+  PLAN = { locId, zona: z0, sel: null, img: null, marks: [], readOnly: false, loc };
+  shell(planoShell(loc), ['Localizaciones', 'Plano · ' + loc.name]);
+  planoBindStatic();
+  await planoLoadZona();
+}
+on(/^#\/plano-ev\/(\d+)$/, m => planoPageEvent(+m[1]));
+async function planoPageEvent(eventId) {
+  const canEdit = isAdmin() || S.user.role === 'dj';
+  if (!canEdit) { shell('<div class="empty">Sin acceso.</div>', ['Plano']); return; }
+  loading(['Eventos', '#' + eventId, 'Plano']);
+  let ev; try { ev = (await api('events/' + eventId)).event; } catch (e) { ev = null; }
+  if (!ev) { shell('<div class="empty">Evento no encontrado.</div>', ['Plano']); return; }
+  const pack = tipoToPack(ev.tipo);
+  if (!ev.lugar || !pack) { shell('<div class="empty">Este evento necesita una finca y un pack (tipo) con plano de montaje.</div>', ['Plano']); return; }
+  const loc = (S.meta.locations || []).find(l => l.id == ev.lugar) || { id: ev.lugar, name: 'Finca' };
+  try {
+    const evMk = await fileIDB.getRaw('plan_mk_ev_' + eventId);
+    if (evMk == null) { // primera vez: se parte de la plantilla de la finca
+      const tMk = (await fileIDB.getRaw('plan_mk_' + ev.lugar + '_' + pack)) || [];
+      const tImg = await fileIDB.getRaw('plan_img_' + ev.lugar + '_' + pack);
+      await fileIDB.putRaw('plan_mk_ev_' + eventId, tMk.map(m => Object.assign({}, m)));
+      if (tImg) await fileIDB.putRaw('plan_img_ev_' + eventId, tImg);
+    }
+  } catch (e) {}
+  PLAN = { locId: ev.lugar, eventId, zona: pack, mode: 'event', sel: null, img: null, marks: [], readOnly: false, loc };
+  shell(planoShell(loc), ['Eventos', '#' + eventId, 'Plano']);
+  planoBindStatic();
+  await planoLoadZona();
+}
+function planoShell(loc) {
+  const isEv = PLAN.mode === 'event';
+  const packLabel = (PLAN_ZONAS.find(z => z[0] === PLAN.zona) || [, '—'])[1];
+  const topBar = isEv
+    ? `<div class="plan-evbanner">✎ Estás editando una <b>copia para el evento #${PLAN.eventId}</b> (pack ${esc(packLabel)}). Los cambios <b>no afectan</b> a la plantilla de la finca. <button class="btn btn--sm" id="planUseTemplate" type="button">Descartar copia y usar la plantilla</button></div>`
+    : `<div class="plan-tabs">${PLAN_ZONAS.map(z => `<button class="plan-tab${z[0] === PLAN.zona ? ' on' : ''}" data-z="${z[0]}">${z[1]}</button>`).join('')}</div>`;
+  const backLink = isEv ? `<a class="btn btn--sm" href="#/eventos/${PLAN.eventId}">← Volver al evento</a>` : `<a class="btn btn--sm" href="#/localizaciones">← Localizaciones</a>`;
+  const title = isEv ? ('Plano · ' + esc(loc.name) + ' · copia del evento #' + PLAN.eventId) : ('Plano de montaje · ' + esc(loc.name));
+  const sub = isEv ? 'Copia de montaje solo para este evento (parte de la plantilla de la finca; edítala a tu gusto).' : 'Un montaje predefinido por pack de servicio. Coloca altavoces, truss, cables e iluminación sobre la vista aérea; se guarda por pack y por finca.';
+  const sym = t => `<span class="pm ${PLAN_SYMS[t].cls}" style="position:static;transform:none">${PLAN_SYMS[t].txt ? `<span>${PLAN_SYMS[t].txt}</span>` : ''}</span>`;
+  const pal = Object.keys(PLAN_SYMS).map(t => `<button class="pal-item" data-t="${t}"><span class="pal-ico">${sym(t)}</span>${PLAN_SYMS[t].lab}</button>`).join('');
+  const palLines = Object.keys(PLAN_LINES).map(l => `<button class="pal-line" data-l="${l}"><span class="pal-ico"><span class="pal-cable" style="background:${PLAN_LINES[l].col}"></span></span>${PLAN_LINES[l].lab}</button>`).join('');
+  return `${pageHead(title, sub, backLink)}
+  <div class="panel"><div class="panel__body">
+    ${topBar}
+    <div class="plan-wrap">
+      <div class="plan-pal">
+        <input id="planUp" type="file" accept="image/*" hidden>
+        <div class="plan-pal-actions">
+          <button class="btn btn--sm btn--primary" id="planImgBtn">Subir / cambiar imagen</button>
+          <button class="btn btn--sm" id="planImgDel">Quitar imagen</button>
+        </div>
+        <div class="pal-group">Símbolos — toca para añadir</div>
+        ${pal}
+        <div class="pal-group">Cables</div>
+        ${palLines}
+      </div>
+      <div>
+        <div class="plan-stage" id="planStage"></div>
+        <div class="plan-toolbar">
+          <span class="hint">Toca un símbolo para añadirlo y <b>arrástralo</b> sobre el plano. Los cables tienen dos extremos que puedes mover.</span>
+          <span class="plan-tb-right">
+            <button class="btn btn--sm" id="planRotL" title="Girar a la izquierda">⟲</button>
+            <button class="btn btn--sm" id="planRotR" title="Girar a la derecha">⟳</button>
+            <button class="btn btn--sm" id="planLbl" title="Poner etiqueta">🏷</button>
+            <button class="btn btn--sm btn--red" id="planDelSel">Borrar selección</button>
+            <button class="btn btn--sm" id="planClear">Vaciar zona</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div></div>`;
+}
+async function planoLoadZona() {
+  PLAN.sel = null;
+  PLAN.keyBase = PLAN.mode === 'event' ? ('ev_' + PLAN.eventId) : (PLAN.locId + '_' + PLAN.zona);
+  try { PLAN.img = await fileIDB.getRaw(planoKey('img')); } catch (e) { PLAN.img = null; }
+  try { PLAN.marks = (await fileIDB.getRaw(planoKey('mk'))) || []; } catch (e) { PLAN.marks = []; }
+  $$('.plan-tab').forEach(b => b.classList.toggle('on', b.dataset.z === PLAN.zona));
+  planoRenderStage();
+}
+async function planoSaveMarks() { try { await fileIDB.putRaw(planoKey('mk'), PLAN.marks.map(m => Object.assign({}, m))); } catch (e) {} }
+function planoMarkHTML(m) {
+  const s = PLAN_SYMS[m.t] || { cls: '' };
+  const sel = m.id === PLAN.sel ? ' sel' : '';
+  const inner = s.txt ? `<span>${s.txt}</span>` : '';
+  return `<div class="pm ${s.cls}${sel}" data-id="${m.id}" style="left:${m.x}%;top:${m.y}%;transform:translate(-50%,-50%) rotate(${m.rot || 0}deg)">${inner}${m.label ? `<span class="pm-lbl">${esc(m.label)}</span>` : ''}</div>`;
+}
+function planoRenderStage() {
+  const st = el('planStage'); if (!st) return;
+  const ro = PLAN.readOnly;
+  let html = '';
+  if (PLAN.img) html += `<img class="plan-img" src="${PLAN.img}" alt="">`;
+  else html += `<div class="plan-drop"><div style="font-size:34px">🛰️</div><div><b>Sin plano aéreo</b> en esta zona</div><div class="hint" style="max-width:34ch">Sube una captura de la vista satélite de la finca (Google Maps → captura de pantalla).</div>${ro ? '' : `<button class="btn btn--primary" id="planDropBtn" type="button">Subir imagen</button>`}</div>`;
+  const lines = PLAN.marks.filter(m => m.t === 'line');
+  html += `<svg class="plan-lines" viewBox="0 0 100 100" preserveAspectRatio="none">` + lines.map(l => {
+    const col = (PLAN_LINES[l.sub] || {}).col || '#fff';
+    return `<line class="pl-hit" data-id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}"/>` +
+           `<line data-id="${l.id}" x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${col}" stroke-width="${l.id === PLAN.sel ? 1.2 : 0.9}" stroke-linecap="round"/>`;
+  }).join('') + `</svg>`;
+  html += PLAN.marks.filter(m => m.t !== 'line').map(planoMarkHTML).join('');
+  const sl = lines.find(l => l.id === PLAN.sel);
+  if (sl && !ro) html += `<div class="pm-h" data-h="1" style="left:${sl.x1}%;top:${sl.y1}%"></div><div class="pm-h" data-h="2" style="left:${sl.x2}%;top:${sl.y2}%"></div>`;
+  st.innerHTML = html;
+}
+function planoPct(e) { const st = el('planStage'); const r = st.getBoundingClientRect(); return { x: clampp((e.clientX - r.left) / r.width * 100), y: clampp((e.clientY - r.top) / r.height * 100) }; }
+function planoRotate(d) { if (!PLAN.sel) return; const m = PLAN.marks.find(x => x.id === PLAN.sel); if (!m || m.t === 'line') return; m.rot = ((m.rot || 0) + d) % 360; planoRenderStage(); planoSaveMarks(); }
+function planoBindStatic() {
+  $$('.plan-tab').forEach(b => b.onclick = async () => { PLAN.zona = b.dataset.z; await planoLoadZona(); });
+  if (!PLAN.readOnly) {
+    $$('.pal-item').forEach(b => b.onclick = () => { const n = PLAN.marks.filter(x => x.t !== 'line').length; const m = { id: uidp(), t: b.dataset.t, x: 44 + (n % 6) * 3, y: 40 + (n % 6) * 4, rot: 0 }; PLAN.marks.push(m); PLAN.sel = m.id; planoRenderStage(); planoSaveMarks(); });
+    $$('.pal-line').forEach(b => b.onclick = () => { const m = { id: uidp(), t: 'line', sub: b.dataset.l, x1: 38, y1: 50, x2: 62, y2: 50 }; PLAN.marks.push(m); PLAN.sel = m.id; planoRenderStage(); planoSaveMarks(); });
+    el('planImgBtn').onclick = () => el('planUp').click();
+    el('planUp').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = async () => { PLAN.img = r.result; try { await fileIDB.putRaw(planoKey('img'), r.result); } catch (err) {} planoRenderStage(); toast('Imagen guardada', 'ok'); }; r.readAsDataURL(f); e.target.value = ''; };
+    el('planImgDel').onclick = () => { if (!PLAN.img) return toast('No hay imagen', 'warn'); modal('Quitar imagen', '¿Quitar la imagen de esta zona? Los símbolos se mantienen.', { okText: 'Quitar', danger: true, onOk: async () => { try { await fileIDB.delRaw(planoKey('img')); } catch (e) {} PLAN.img = null; planoRenderStage(); } }); };
+    el('planRotL').onclick = () => planoRotate(-15);
+    el('planRotR').onclick = () => planoRotate(15);
+    el('planLbl').onclick = () => { if (!PLAN.sel) return toast('Selecciona un símbolo', 'warn'); const m = PLAN.marks.find(x => x.id === PLAN.sel); if (!m || m.t === 'line') return toast('Los cables no llevan etiqueta', 'warn'); modal('Etiqueta', `<div class="field"><label>Texto (p. ej. "Control en el suelo")</label><input class="control" id="lblIn" value="${esc(m.label || '')}"></div>`, { okText: 'Guardar', onOk: () => { m.label = (el('lblIn').value || '').trim(); planoRenderStage(); planoSaveMarks(); } }); };
+    el('planDelSel').onclick = () => { if (!PLAN.sel) return; PLAN.marks = PLAN.marks.filter(m => m.id !== PLAN.sel); PLAN.sel = null; planoRenderStage(); planoSaveMarks(); };
+    el('planClear').onclick = () => modal('Vaciar', '¿Quitar todos los símbolos?', { okText: 'Vaciar', danger: true, onOk: () => { PLAN.marks = []; PLAN.sel = null; planoRenderStage(); planoSaveMarks(); } });
+    const ut = el('planUseTemplate'); if (ut) ut.onclick = () => modal('Usar la plantilla de la finca', '¿Descartar esta copia del evento y volver a usar la plantilla de la finca? Se perderán los cambios de la copia.', { okText: 'Descartar copia', danger: true, onOk: async () => { try { await fileIDB.delRaw('plan_mk_ev_' + PLAN.eventId); await fileIDB.delRaw('plan_img_ev_' + PLAN.eventId); } catch (e) {} location.hash = '#/eventos/' + PLAN.eventId; } });
+    const st = el('planStage');
+    st.addEventListener('click', e => { if (e.target.closest('#planDropBtn')) el('planUp').click(); });
+    st.addEventListener('pointerdown', planoDown);
+  }
+  if (!window._planMoveBound) { window.addEventListener('pointermove', planoMove); window.addEventListener('pointerup', planoUp); window._planMoveBound = 1; }
+}
+function planoDown(e) {
+  if (!PLAN || PLAN.readOnly) return;
+  const h = e.target.closest('.pm-h');
+  if (h) { DRAGP = { mode: 'end', which: h.dataset.h }; e.preventDefault(); return; }
+  const pm = e.target.closest('.pm');
+  if (pm) { PLAN.sel = pm.dataset.id; const m = PLAN.marks.find(x => x.id === PLAN.sel); const p = planoPct(e); DRAGP = { mode: 'move', id: m.id, ox: p.x - m.x, oy: p.y - m.y }; planoRenderStage(); e.preventDefault(); return; }
+  const ln = e.target.closest('.pl-hit');
+  if (ln) { PLAN.sel = ln.dataset.id; const l = PLAN.marks.find(x => x.id === PLAN.sel); const p = planoPct(e); DRAGP = { mode: 'lineMove', sx: p.x, sy: p.y, o: { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2 } }; planoRenderStage(); e.preventDefault(); return; }
+  if (PLAN.sel) { PLAN.sel = null; planoRenderStage(); }
+}
+function planoMove(e) {
+  if (!DRAGP || !el('planStage')) return;
+  const p = planoPct(e); const sel = PLAN.marks.find(x => x.id === PLAN.sel); if (!sel) return;
+  if (DRAGP.mode === 'move') { sel.x = clampp(p.x - DRAGP.ox); sel.y = clampp(p.y - DRAGP.oy); }
+  else if (DRAGP.mode === 'end') { if (DRAGP.which === '1') { sel.x1 = p.x; sel.y1 = p.y; } else { sel.x2 = p.x; sel.y2 = p.y; } }
+  else if (DRAGP.mode === 'lineMove') { const dx = p.x - DRAGP.sx, dy = p.y - DRAGP.sy; sel.x1 = clampp(DRAGP.o.x1 + dx); sel.y1 = clampp(DRAGP.o.y1 + dy); sel.x2 = clampp(DRAGP.o.x2 + dx); sel.y2 = clampp(DRAGP.o.y2 + dy); }
+  planoRenderStage();
+}
+function planoUp() { if (DRAGP) { DRAGP = null; planoSaveMarks(); } }
+
+/* --- Render de solo lectura del plano (para la pestaña Ruta y el PDF) --- */
+function planoMarkHTML2(m) {
+  const s = PLAN_SYMS[m.t] || { cls: '' };
+  const inner = s.txt ? `<span>${s.txt}</span>` : '';
+  return `<div class="pm ${s.cls}" style="left:${m.x}%;top:${m.y}%;transform:translate(-50%,-50%) rotate(${m.rot || 0}deg)">${inner}${m.label ? `<span class="pm-lbl">${esc(m.label)}</span>` : ''}</div>`;
+}
+async function planoPreviewHTML(locId, zona) { return planoPreviewByKey(locId + '_' + zona); }
+async function planoPreviewByKey(keyBase) {
+  let img = null, marks = [];
+  try { img = await fileIDB.getRaw('plan_img_' + keyBase); } catch (e) {}
+  try { marks = (await fileIDB.getRaw('plan_mk_' + keyBase)) || []; } catch (e) {}
+  if (!img && !marks.length) return '';
+  const lines = marks.filter(m => m.t === 'line');
+  let h = `<div class="plan-view">`;
+  if (img) h += `<img src="${img}" alt="">`; else h += `<div class="plan-view-noimg">Croquis sin imagen de fondo</div>`;
+  h += `<svg class="plan-lines" viewBox="0 0 100 100" preserveAspectRatio="none">` + lines.map(l => {
+    const c = (PLAN_LINES[l.sub] || {}).col || '#fff';
+    return `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${c}" stroke-width="0.9" stroke-linecap="round"/>`;
+  }).join('') + `</svg>`;
+  h += marks.filter(m => m.t !== 'line').map(planoMarkHTML2).join('');
+  h += `</div>`;
+  return h;
+}
+async function loadRutaPlano(ev) {
+  const box = el('rutaPlano'); if (!box) return;
+  if (!ev.lugar) { box.innerHTML = ''; return; }
+  const pack = tipoToPack(ev.tipo);
+  if (!pack) { box.innerHTML = `<div class="panel ruta-plano-empty"><div class="panel__body"><p class="hint">El tipo "<b>${esc(ev.tipo || '—')}</b>" no tiene pack de montaje predefinido. <a href="#/plano/${ev.lugar}">Ver planos de la finca →</a></p></div></div>`; return; }
+  const packLabel = (PLAN_ZONAS.find(z => z[0] === pack) || [, '—'])[1];
+  let evMk = null; try { evMk = await fileIDB.getRaw('plan_mk_ev_' + ev.id); } catch (e) {}
+  const isCopy = evMk != null;
+  const h = isCopy ? await planoPreviewByKey('ev_' + ev.id) : await planoPreviewHTML(ev.lugar, pack);
+  const editBtn = `<a class="btn btn--sm btn--primary" href="#/plano-ev/${ev.id}">${isCopy ? 'Editar copia del evento' : 'Editar una copia para este evento'}</a>`;
+  const src = isCopy ? `${esc(packLabel)} · <span class="plan-src plan-src--copy">copia de este evento</span>` : `${esc(packLabel)} · <span class="plan-src">plantilla de la finca</span>`;
+  box.innerHTML = h
+    ? `<div class="panel ruta-plano-panel"><div class="panel__head"><h3>🗺️ Plano de montaje · ${src}</h3>${editBtn}</div><div class="panel__body"><div class="ruta-plano-single">${h}</div></div></div>`
+    : `<div class="panel ruta-plano-empty"><div class="panel__body"><p class="hint">Aún no hay plano de montaje para <b>${esc(packLabel)}</b> en esta finca. ${editBtn} · o define la <a href="#/plano/${ev.lugar}/${pack}">plantilla de la finca →</a></p></div></div>`;
+}
+window.loadRutaPlano = loadRutaPlano; // para que lo invoque app-pages.js al abrir la pestaña Ruta
+window.planoPreviewHTML = planoPreviewHTML;
+window.planoPreviewByKey = planoPreviewByKey;
+window.tipoToPack = tipoToPack;
+
+/* =========================================================================
+   CONTROL HORARIO  (admin: todos · dj: lo suyo)
+   ========================================================================= */
+const slotsTxt = a => (a.slots || []).map(s => `Entrada: ${s.in} · Salida: ${s.out}`).join('<br>');
+const attMin = a => (a.slots || []).reduce((t, s) => { let d = toMin(s.out) - toMin(s.in); if (d < 0) d += 1440; return t + d; }, 0);
+on(/^#\/horario$/, async () => {
+  loading(['Control horario']);
+  const items = await coll.list('attendances');
+  const admin = isAdmin();
+  const cols = [
+    { t: 'Id', get: a => a.id },
+    ...(admin ? [{ t: 'Usuario', get: a => a.userName || userName(a.userId) }] : []),
+    { t: 'Fecha', get: a => a.date || '' },
+    { t: 'Franja horaria', get: a => slotsTxt(a).replace(/<br>/g, ' '), html: a => slotsTxt(a) },
+    { t: 'Horas', get: a => attMin(a), html: a => hm(attMin(a)) },
+    { t: 'Comentario', get: a => a.comment || '' },
+    { t: '', nosort: true, html: a => `<div class="row-actions"><button class="btn btn--sm" data-edit="${a.id}">Editar</button><button class="btn btn--icon" data-del="${a.id}">🗑</button></div>` },
+  ];
+  const links = admin ? `<div class="btn-row"><button class="btn" id="newAtt">+ Fichaje</button><a class="btn" href="#/horario/calendario">Calendario</a><a class="btn" href="#/horario/resumen">Resumen</a></div>`
+    : `<div class="btn-row"><button class="btn btn--primary" id="newAtt">+ Registrar jornada</button></div>`;
+  shell(`${pageHead('Control horario', admin ? 'Fichajes de todo el equipo.' : 'Tus jornadas registradas.', links)}
+    <div class="panel"><div class="panel__body">${table('dtAtt', { rows: items, order: [admin ? 2 : 1, 'desc'], cols, empty: 'Sin fichajes.' })}</div></div>`, ['Control horario']);
+  el('newAtt').onclick = () => attForm({ date: ymd(TODAY), slots: [{ in: '09:00', out: '14:00' }] });
+  bindTable('dtAtt', () => {
+    $$('[data-edit]').forEach(b => b.onclick = () => attForm(items.find(a => a.id == b.dataset.edit)));
+    $$('[data-del]').forEach(b => b.onclick = () => modal('Borrar', '¿Eliminar este fichaje?', { okText: 'Eliminar', danger: true, onOk: async () => { await coll.del('attendances', b.dataset.del); toast('Eliminado', 'ok'); location.hash = '#/horario'; CS.route ? location.reload() : location.reload(); } }));
+  });
+});
+function attForm(a) {
+  const slotHtml = s => `<div class="svc-row" data-slot style="grid-template-columns:1fr 1fr auto"><input class="control" type="time" data-in value="${esc(s.in || '')}"><input class="control" type="time" data-out value="${esc(s.out || '')}"><button type="button" class="btn btn--icon" data-del-slot>✕</button></div>`;
+  const workerOpts = [['', 'Selecciona trabajador']].concat((S.meta.staff || []).map(u => [u.id, u.name]));
+  const bg = modal(a.id ? 'Editar jornada' : 'Registrar jornada', `<form id="attForm">
+    ${isAdmin() && !a.id ? `<div class="field"><label>Trabajador</label>${sel('userId', workerOpts, '')}</div>` : ''}
+    <div class="field"><label>Fecha</label>${inp('date', a.date, { type: 'date' })}</div>
+    <label style="font-weight:700;font-size:13px">Franjas horarias</label><div id="slotBox" style="margin:8px 0">${(a.slots || []).map(slotHtml).join('')}</div>
+    <button type="button" class="btn btn--sm" id="addSlot">+ Añadir franja</button>
+    <div class="field" style="margin-top:14px"><label>Comentario</label>${ta('comment', a.comment)}</div></form>`,
+    { okText: 'Guardar', onOk: async () => {
+      const d = collectForm($('#attForm'));
+      const slots = $$('[data-slot]', bg).map(r => ({ in: $('[data-in]', r).value, out: $('[data-out]', r).value })).filter(s => s.in && s.out);
+      const rec = Object.assign({ id: a.id }, { date: d.date, comment: d.comment, slots });
+      if (isAdmin()) { const uid = a.userId || +d.userId || 0; if (uid) { rec.userId = uid; rec.userName = a.userName || userName(uid); } }
+      await coll.save('attendances', rec); toast('Guardado', 'ok'); location.hash = '#/horario'; location.reload();
+    } });
+  $('#addSlot', bg).onclick = () => $('#slotBox', bg).insertAdjacentHTML('beforeend', slotHtml({}));
+  bg.addEventListener('click', e => { if (e.target.closest('[data-del-slot]')) e.target.closest('[data-slot]').remove(); });
+}
+
+/* calendario (admin) */
+let calCursor = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+// color por trabajador para el calendario (su color de agenda, o uno estable por id)
+function colorOf(id) { const u = (S.meta.staff || []).find(x => x.id == id); if (u && u.color) return u.color; return 'hsl(' + (((+id || 0) * 47) % 360) + ',62%,45%)'; }
+function renderCalendar(evsForDay) {
+  const y = calCursor.getFullYear(), m = calCursor.getMonth();
+  const first = new Date(y, m, 1), offset = (first.getDay() + 6) % 7;
+  const start = new Date(y, m, 1 - offset);
+  const dows = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  let cells = dows.map(d => `<div class="dow">${d}</div>`).join('');
+  for (let i = 0; i < 42; i++) { const d = new Date(start); d.setDate(start.getDate() + i); const k = ymd(d);
+    cells += `<div class="cell ${d.getMonth() !== m ? 'other' : ''} ${k === ymd(TODAY) ? 'today' : ''}"><div class="n">${d.getDate()}</div>${evsForDay(k).map(e => `<div class="cal-ev" style="background:${e.c}">${esc(e.t)}</div>`).join('')}</div>`; }
+  return `<div class="cal-head"><h3>${MONTHS[m]} ${y}</h3><div class="btn-row"><button class="btn btn--sm" data-cal="-1">‹</button><button class="btn btn--sm" data-cal="0">Hoy</button><button class="btn btn--sm" data-cal="1">›</button></div></div><div class="cal-grid">${cells}</div>`;
+}
+on(/^#\/horario\/calendario$/, async () => {
+  if (!requireAdmin()) return; loading(['Control horario', 'Calendario']);
+  const items = await coll.list('attendances');
+  function draw() {
+    const y = calCursor.getFullYear(), m = calCursor.getMonth(); const pre = y + '-' + pad(m + 1);
+    const inMonth = items.filter(a => (a.date || '').startsWith(pre));
+    const totals = {}; inMonth.forEach(a => totals[a.userName || a.userId] = (totals[a.userName || a.userId] || 0) + attMin(a));
+    shell(`${pageHead('Calendario de fichajes', 'Vista mensual del equipo.', `<a class="btn" href="#/horario">Listado</a>`)}
+      <div class="panel"><div class="panel__body">${renderCalendar(k => inMonth.filter(a => a.date === k).map(a => ({ t: (a.userName || userName(a.userId)) + ' · ' + hm(attMin(a)) + 'h', c: colorOf(a.userId) })))}
+        <div class="legend">${Object.entries(totals).map(([n, t]) => `<div style="background:#130F17">${esc(n)} — ${hm(t)} h</div>`).join('') || '<p>Sin fichajes este mes.</p>'}</div></div></div>`, ['Control horario', 'Calendario']);
+    $$('[data-cal]').forEach(b => b.onclick = () => { const n = +b.dataset.cal; calCursor = n === 0 ? new Date(TODAY.getFullYear(), TODAY.getMonth(), 1) : new Date(calCursor.getFullYear(), calCursor.getMonth() + n, 1); draw(); });
+  }
+  draw();
+});
+on(/^#\/horario\/resumen$/, async () => {
+  if (!requireAdmin()) return;
+  let end = '';
+  const draw = async () => {
+    loading(['Control horario', 'Resumen']);
+    const res = await api('attendance-summary' + (end ? '?end=' + encodeURIComponent(end) : ''));
+    end = res.end;
+    shell(`${pageHead('Resumen mensual de horas', 'Horas por trabajador. Puedes retroceder todlos los meses que quieras.')}
+      <div class="panel"><div class="panel__head"><h3>${esc(res.months[2])} — ${esc(res.months[0])}</h3>
+        <div class="btn-row"><button class="btn btn--sm" id="mPrev">‹ Meses anteriores</button><button class="btn btn--sm" id="mNext" ${res.next ? '' : 'disabled'}>Meses siguientes ›</button></div></div>
+      <div class="panel__body">${table('dtSum', { rows: res.rows, order: [2, 'desc'], filters: true, cols: [
+        { t: 'Id', get: w => w.id }, { t: 'Usuario', get: w => w.name },
+        { t: res.months[0], get: w => w.m0, html: w => hm(w.m0) + ' h' },
+        { t: res.months[1], get: w => w.m1, html: w => hm(w.m1) + ' h' },
+        { t: res.months[2], get: w => w.m2, html: w => hm(w.m2) + ' h' },
+      ] })}</div></div>`, ['Control horario', 'Resumen']);
+    el('mPrev').onclick = () => { end = res.prev; draw(); };
+    const nx = el('mNext'); if (nx && res.next) nx.onclick = () => { end = res.next; draw(); };
+  };
+  draw();
+});
+
+/* =========================================================================
+   VACACIONES
+   ========================================================================= */
+on(/^#\/vacaciones$/, async () => {
+  loading(['Vacaciones']);
+  const items = await coll.list('vacations');
+  const admin = isAdmin();
+  const stTag = s => s === 'Aprobado' ? '<span class="tag tag--green">Aprobado</span>' : s === 'Denegado' ? '<span class="tag tag--red">Denegado</span>' : '<span class="tag tag--yellow">Solicitado</span>';
+  const rows = items.slice().sort((a, b) => (b.start || '').localeCompare(a.start || ''));
+  const stColor = s => s === 'Aprobado' ? '#2e7d32' : s === 'Denegado' ? '#d9534f' : '#f0ad4e';
+  shell(`${pageHead('Vacaciones', admin ? 'Solicitudes de todo el equipo.' : 'Tus solicitudes de vacaciones.', `<button class="btn btn--primary" id="newVac">+ Solicitar</button>`)}
+    <div class="panel"><div class="panel__head"><h3>Solicitudes</h3></div><div class="panel__body"><div class="table-wrap"><table class="dt"><thead><tr>${admin ? '<th>Usuario</th>' : ''}<th>Inicio</th><th>Fin</th><th>Estado</th><th></th></tr></thead><tbody>
+      ${rows.length ? rows.map(v => `<tr>${admin ? `<td>${esc(userName(v.userId))}</td>` : ''}<td>${dmy(v.start)}</td><td>${dmy(v.end)}</td><td>${stTag(v.status)}</td>
+        <td class="row-actions">${admin ? `${v.status !== 'Aprobado' ? `<button class="btn btn--sm btn--blue" data-set="${v.id}" data-st="Aprobado">Aprobar</button>` : ''}${v.status !== 'Denegado' ? `<button class="btn btn--xs btn--red" data-set="${v.id}" data-st="Denegado">Denegar</button>` : ''}` : ''}<button class="btn btn--icon" data-del="${v.id}">🗑</button></td></tr>`).join('') : `<tr><td class="td-empty" colspan="${admin ? 5 : 4}">Sin solicitudes.</td></tr>`}
+    </tbody></table></div></div></div>
+    <div class="panel"><div class="panel__head"><h3>Calendario de vacaciones</h3></div><div class="panel__body" id="vacCal"></div></div>`, ['Vacaciones']);
+  const dayFn = k => items.filter(v => v.start && v.end && k >= v.start && k <= v.end).map(v => ({ t: admin ? userName(v.userId) : 'Vacaciones', c: stColor(v.status) }));
+  const drawVacCal = () => {
+    const box = el('vacCal'); if (!box) return;
+    box.innerHTML = renderCalendar(dayFn) + `<div class="legend"><div style="background:#2e7d32">Aprobadas</div><div style="background:#f0ad4e">Solicitadas</div><div style="background:#d9534f">Denegadas</div></div>`;
+    $$('[data-cal]', box).forEach(b => b.onclick = () => { const n = +b.dataset.cal; calCursor = n === 0 ? new Date(TODAY.getFullYear(), TODAY.getMonth(), 1) : new Date(calCursor.getFullYear(), calCursor.getMonth() + n, 1); drawVacCal(); });
+  };
+  drawVacCal();
+  el('newVac').onclick = () => {
+    const bg = modal('Solicitar vacaciones', `<form id="vForm"><div class="grid-2"><div class="field"><label>Desde</label>${inp('start', '', { type: 'date' })}</div><div class="field"><label>Hasta</label>${inp('end', '', { type: 'date' })}</div></div></form>`,
+      { okText: 'Enviar solicitud', onOk: async () => { const d = collectForm($('#vForm')); if (!d.start || !d.end) { toast('Indica las fechas', 'err'); return true; } await coll.save('vacations', { start: d.start, end: d.end, status: isAdmin() ? 'Aprobado' : 'Solicitado' }); toast('Solicitud enviada', 'ok'); location.reload(); } });
+  };
+  $$('[data-set]').forEach(b => b.onclick = async () => { const v = items.find(x => x.id == b.dataset.set); await coll.save('vacations', Object.assign({}, v, { status: b.dataset.st })); toast('Actualizado', 'ok'); location.reload(); });
+  $$('[data-del]').forEach(b => b.onclick = () => modal('Borrar', '¿Eliminar esta solicitud?', { okText: 'Eliminar', danger: true, onOk: async () => { await coll.del('vacations', b.dataset.del); location.reload(); } }));
+});
+
+/* =========================================================================
+   FACTURACIÓN DE EQUIPO (admin) + MIS PAGOS (dj)
+   ========================================================================= */
+on(/^#\/facturacion$/, async () => {
+  if (!requireAdmin()) return; loading(['Facturación']);
+  const { workers } = await api('finance/workers');
+  shell(`${pageHead('Facturación del equipo', 'Pendiente de pago por trabajador.')}
+    <div class="panel"><div class="panel__body">${table('dtWork', { rows: workers, order: [1, 'asc'], filters: true, cols: [
+      { t: 'Id', get: w => w.id }, { t: 'Nombre', get: w => w.name, html: w => `<a href="#/facturacion/${w.id}">${esc(w.name)}</a>` },
+      { t: 'Pendiente de pago', get: w => w.pend, html: w => fmtEur(w.pend) },
+      { t: 'Último movimiento', get: w => w.last || '', html: w => w.last ? dmy(w.last) : '—' },
+      { t: '', nosort: true, nofilter: true, html: w => `<a class="btn btn--sm" href="#/facturacion/${w.id}">Ver histórico</a>` },
+    ] })}</div></div>`, ['Facturación']);
+});
+on(/^#\/facturacion\/(\d+)$/, async m => { if (!requireAdmin()) return; return historyView(+m[1], true); });
+on(/^#\/mis-pagos$/, async () => { if (S.user.role !== 'dj') { shell('<div class="empty">Sin acceso.</div>', ['Pagos']); return; } return historyView(S.user.id, false); });
+async function historyView(uid, admin) {
+  loading(['Facturación']);
+  const r = admin ? await api('finance/history/' + uid) : await api('finance/me');
+  const H = r.history; const pays = r.payments || [];
+  if (!H) return shell('<div class="empty"><span class="script">Sin histórico</span>No hay datos para este usuario.</div>', ['Facturación']);
+  const paid = pays.reduce((t, p) => t + (+p.amount || 0), 0);
+  const e2 = s => fmtEur(s);
+  // fusionar eventos del histórico (snapshot) + pagos locales nuevos
+  const locals = pays.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(p => ({ type: 'pay', date: p.date, amount: +p.amount, description: p.description, bal: 0 }));
+  { let run = H.rest; locals.slice().reverse().forEach(it => { run -= it.amount; it.bal = run; }); }
+  const card = i => i.type === 'ev'
+    ? `<li class="tl"><span class="ind"></span><div class="card"><h5>${i.evId && admin ? `<a href="#/eventos/${i.evId}">${esc(i.title)}</a>` : esc(i.title)}</h5><div class="b">${(i.body || []).map((b, k) => { const mt = b.match(/^([^:]+):\s*(.*)$/); return (k === 2 ? '<hr style="border:0;border-top:1px solid #eee">' : '') + (mt ? `<p><b>${esc(mt[1])}:</b> ${esc(mt[2])}</p>` : `<p>${esc(b)}</p>`); }).join('')}</div><div class="when">${dmy(i.date)} · ${fmtEur(i.bal)}</div></div></li>`
+    : `<li class="tl r"><span class="ind"></span><div class="card"><h5>Pago realizado</h5><div class="b"><p><b>Fecha:</b> ${dmy(i.date)}</p><p><b>Cantidad:</b> ${e2(i.amount)}</p><p><b>Descripción:</b> ${esc(i.description || '-')}</p></div><div class="when">${dmy(i.date)} · ${fmtEur(i.bal)}</div></div></li>`;
+  const timelineAll = locals.map(card).concat((H.items || []).map(card)).join('');
+  const genItems = (H.items || []).filter(i => i.type === 'ev');
+  const payItems = locals.concat((H.items || []).filter(i => i.type === 'pay'));
+  const bal = H.rest - paid;
+  // Admin ve el total; el trabajador NO ve su histórico total, solo su saldo, sus importes generados y sus pagos.
+  const statsHtml = admin
+    ? `<div class="grid-3"><div class="stat stat--blue"><div class="k">Total a cobrar</div><div class="v">${e2(H.cobrar)}</div></div>
+        <div class="stat"><div class="k">Total cobrado</div><div class="v">${e2(H.cobrado + paid)}</div></div>
+        <div class="stat stat--pink"><div class="k">Pendiente</div><div class="v">${e2(H.rest - paid)}</div></div></div>`
+    : `<div class="grid-2"><div class="stat"><div class="k">Total que te he pagado</div><div class="v">${e2(H.cobrado + paid)}</div></div>
+        <div class="stat stat--pink"><div class="k">${bal >= 0 ? 'Pendiente (te debo)' : 'Me debes'}</div><div class="v">${e2(Math.abs(bal))}</div></div></div>`;
+  const bodyLists = admin
+    ? `<ul class="timeline">${timelineAll || '<div class="empty">Sin movimientos.</div>'}</ul>`
+    : `<div class="panel"><div class="panel__head"><h3>💶 Importes generados</h3></div><div class="panel__body"><ul class="timeline">${genItems.map(card).join('') || '<div class="empty">Sin importes generados.</div>'}</ul></div>
+       <div class="panel"><div class="panel__head"><h3>🧾 Historial de pagos</h3></div><div class="panel__body"><ul class="timeline">${payItems.map(card).join('') || '<div class="empty">Sin pagos registrados.</div>'}</ul></div>`;
+  shell(`${pageHead(admin ? 'Histórico · ' + userName(uid) : 'Mis pagos', admin ? 'Eventos realizados y pagos.' : 'Tu saldo, tus importes generados y tus pagos.')}
+    ${statsHtml}
+    ${admin ? `<div class="panel"><div class="panel__head"><h3>Registrar pago</h3></div><div class="panel__body"><form id="payForm" class="btn-row" style="align-items:flex-end">
+      <div class="field" style="margin:0"><label>Cantidad (€)</label><input class="control" type="number" step="0.01" name="amount" required></div>
+      <div class="field" style="margin:0"><label>Fecha</label><input class="control" type="date" name="date" value="${ymd(TODAY)}"></div>
+      <div class="field" style="margin:0;flex:1;min-width:180px"><label>Descripción</label><input class="control" name="description"></div>
+      <button class="btn btn--primary" type="submit">Registrar pago</button></form></div></div>` : ''}
+    ${bodyLists}`, ['Facturación']);
+  if (admin) el('payForm').onsubmit = async e => { e.preventDefault(); const d = collectForm(e.target); await api('finance/pay', { method: 'POST', body: { userId: uid, amount: d.amount, date: d.date, description: d.description } }); toast('Pago registrado', 'ok'); historyView(uid, admin); };
+}
+
+/* beneficios (admin) — protegida con contraseña fija, solo administración */
+const BENEF_PASS = 'lamusica20';
+const benefOk = () => { try { return sessionStorage.getItem('conecta_benef_ok') === '1'; } catch (e) { return false; } };
+function benefGate() {
+  shell(`${pageHead('Beneficios', 'Sección protegida.')}
+    <div class="panel" style="max-width:480px"><div class="panel__body">
+      <p class="hint" style="margin-bottom:14px">🔒 Esta sección está protegida. Introduce la contraseña para ver los beneficios.</p>
+      <form id="benefForm"><div class="field"><label>Contraseña</label><input class="control" type="password" id="benefPass" autocomplete="off"></div>
+        <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Entrar</button>
+          <button type="button" class="btn btn--sm" id="benefForgot">¿Olvidaste la contraseña?</button></div></form>
+      <p id="benefMsg" style="margin-top:12px;display:none;font-size:13px"></p>
+    </div></div>`, ['Beneficios']);
+  $('#benefForm').onsubmit = e => { e.preventDefault(); const v = ($('#benefPass') || {}).value || ''; if (v === BENEF_PASS) { try { sessionStorage.setItem('conecta_benef_ok', '1'); } catch (x) {} if (CS.route) CS.route(); else location.reload(); } else { const m = $('#benefMsg'); m.style.display = 'block'; m.innerHTML = '<span style="color:#d9534f;font-weight:700">Contraseña incorrecta.</span>'; } };
+  $('#benefForgot').onclick = () => { const m = $('#benefMsg'); m.style.display = 'block'; m.innerHTML = 'Te hemos enviado la contraseña a tu email de administración (<b>' + esc(S.user.email || 'tu email') + '</b>).<br><span class="muted">Nota demo: aún no hay envío de correo real. La contraseña es <b>lamusica20</b>.</span>'; };
+}
+on(/^#\/beneficios$/, async () => {
+  if (!requireAdmin()) return;
+  if (!benefOk()) return benefGate();
+  loading(['Beneficios']);
+  const b = await api('finance/beneficios');
+  const y = b.year || [], chart = b.chart || [];
+  const stat = (k, v, cls) => `<div class="stat ${cls || ''}"><div class="k">${k}</div><div class="v">${v != null ? fmtEur(v) : '—'}</div></div>`;
+  shell(`${pageHead('Beneficios', 'Ingresos, gastos y beneficio del negocio.')}
+    <div class="grid-3">${stat('Ingresos del año', y[0], 'stat--blue')}${stat('Gastos del año', y[1])}${stat('Beneficio del año', y[2], 'stat--pink')}</div>
+    <div class="panel"><div class="panel__head"><h3>Últimos 12 meses</h3></div><div class="panel__body">${chartSvg(chart)}</div></div>`, ['Beneficios']);
+});
+function chartSvg(data) {
+  if (!data.length) return '<div class="empty">Sin datos.</div>';
+  const W = 900, H = 320, pad = 40;
+  const max = Math.max(...data.flatMap(r => [r[1], r[2], r[3]]), 1);
+  const x = i => pad + i * (W - 2 * pad) / (data.length - 1);
+  const yv = v => H - pad - v / max * (H - 2 * pad);
+  const line = (idx, col) => `<polyline fill="none" stroke="${col}" stroke-width="3" points="${data.map((r, i) => x(i) + ',' + yv(r[idx])).join(' ')}"/>` + data.map((r, i) => `<circle cx="${x(i)}" cy="${yv(r[idx])}" r="4" fill="#fff" stroke="${col}" stroke-width="2"/>`).join('');
+  const labels = data.map((r, i) => `<text x="${x(i)}" y="${H - 12}" font-size="10" text-anchor="middle" fill="#6a6472">${esc(r[0].slice(0, 3))}</text>`).join('');
+  return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:640px;font-family:var(--body)">
+    ${line(1, '#31B9CB')}${line(2, '#E82C88')}${line(3, '#0B8043')}${labels}
+    <g transform="translate(${pad},12)" font-size="12"><rect width="12" height="12" fill="#31B9CB"/><text x="18" y="11">Ingresos</text>
+      <rect x="110" width="12" height="12" fill="#E82C88"/><text x="128" y="11">Gastos</text>
+      <rect x="210" width="12" height="12" fill="#0B8043"/><text x="228" y="11">Beneficio</text></g></svg></div>`;
+}
+
+/* =========================================================================
+   VEHÍCULOS
+   ========================================================================= */
+const fmtDT = iso => { if (!iso) return ''; const d = new Date(iso); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+on(/^#\/vehiculos$/, async () => {
+  loading(['Vehículos']);
+  const [vehicles, usages] = await Promise.all([coll.list('vehicles'), coll.list('usages')]);
+  const admin = isAdmin();
+  const openUse = vid => usages.find(u => u.vehicleId == vid && !u.end);
+  shell(`${pageHead('Vehículos', admin ? 'Flota y su historial de uso.' : 'Flota disponible y tu historial de uso.', admin ? `<button class="btn btn--primary" id="newVeh">+ Añadir vehículo</button>` : '')}
+    <div class="panel"><div class="panel__head"><h3>Vehículos</h3></div><div class="panel__body"><div class="table-wrap"><table class="dt"><thead><tr><th>Matrícula</th><th>Marca</th><th>Modelo</th><th>Color</th><th>Disponible</th><th>ITV</th><th>Seguro</th><th></th></tr></thead><tbody>
+      ${vehicles.map(v => { const u = openUse(v.id); return `<tr><td><b>${esc(v.license_plate)}</b></td><td>${esc(v.brand)}</td><td>${esc(v.model)}</td><td>${esc(v.color)}</td><td>${u ? dot('#D50000', 'En uso') : dot('#0B8043', 'Disponible')}</td><td>${slash(v.itvDate)}</td><td>${slash(v.insuranceRenewal)}</td>
+        <td class="row-actions">${u ? `<button class="btn btn--sm" data-end="${u.id}">Terminar uso</button>` : `<button class="btn btn--sm btn--blue" data-start="${v.id}">Iniciar uso</button>`}${admin ? `<button class="btn btn--sm" data-edit="${v.id}">Editar</button>` : ''}</td></tr>`; }).join('')}
+    </tbody></table></div></div></div>
+    <div class="panel"><div class="panel__head"><h3>Historial de uso</h3></div><div class="panel__body">${table('dtUse', { rows: usages, order: [0, 'desc'], cols: [
+      { t: 'Matrícula', get: u => (vehicles.find(v => v.id == u.vehicleId) || {}).license_plate || '' },
+      { t: 'Trabajador', get: u => userName(u.userId) },
+      { t: 'Inicio', get: u => u.start || '', html: u => fmtDT(u.start) }, { t: 'Fin', get: u => u.end || '', html: u => u.end ? fmtDT(u.end) : '<span class="tag tag--yellow">En uso</span>' },
+    ] })}</div></div>`, ['Vehículos']);
+  if (admin) { el('newVeh').onclick = () => vehForm({}); $$('[data-edit]').forEach(b => b.onclick = () => vehForm(vehicles.find(v => v.id == b.dataset.edit))); }
+  $$('[data-start]').forEach(b => b.onclick = async () => { await coll.save('usages', { vehicleId: +b.dataset.start, userId: S.user.id, start: new Date().toISOString(), end: null }); toast('Uso iniciado', 'ok'); location.reload(); });
+  $$('[data-end]').forEach(b => b.onclick = async () => { const u = usages.find(x => x.id == b.dataset.end); await coll.save('usages', Object.assign({}, u, { end: new Date().toISOString() })); toast('Uso terminado', 'ok'); location.reload(); });
+});
+function vehForm(v) {
+  const f = (lab, n, t) => `<div class="field"><label>${lab}</label>${inp(n, v[n], { type: t || 'text' })}</div>`;
+  modal(v.id ? 'Editar vehículo' : 'Nuevo vehículo', `<form id="vehForm"><div class="grid-2">${f('Marca', 'brand')}${f('Modelo', 'model')}</div><div class="grid-2">${f('Color', 'color')}${f('Matrícula', 'license_plate')}</div><div class="grid-2">${f('Próxima ITV', 'itvDate', 'date')}${f('Renovación seguro', 'insuranceRenewal', 'date')}</div><div class="field"><label>Observaciones</label>${ta('observations', v.observations)}</div></form>`,
+    { okText: 'Guardar', onOk: async () => { const d = collectForm($('#vehForm')); await coll.save('vehicles', Object.assign({ id: v.id }, d)); toast('Guardado', 'ok'); location.reload(); } });
+}
+
+/* =========================================================================
+   TYC (admin)
+   ========================================================================= */
+on(/^#\/tyc$/, async () => {
+  if (!requireAdmin()) return; loading(['TYC']);
+  const r = await api('tyc/current');
+  const t = r.tyc;
+  shell(`${pageHead('Términos y condiciones de servicio', 'Contrato que cada boda acepta y firma electrónicamente. El estado de cada firma y su PDF descargable están en la lista de Usuarios.')}
+    <div class="panel"><div class="panel__head"><h3>${esc(t.title || 'Contrato')}</h3><button class="btn btn--sm btn--primary" id="editTac">Editar contrato</button></div>
+      <div class="panel__body">
+        <div class="pdf-grid" style="margin-bottom:12px"><div>Versión (año): <b>${esc(t.version || '—')}</b></div></div>
+        <p class="hint">Al aceptar, en el PDF de cada boda se rellenan automáticamente los contratantes, DNI, lugar y fecha del evento.</p>
+        <div class="readbox tyc-body" style="max-height:none">${t.text || ''}</div>
+      </div></div>`, ['TYC']);
+  el('editTac').onclick = () => tacForm(t);
+});
+function tacForm(t) {
+  modal('Editar términos y condiciones', `<form id="tacForm">
+    <div class="field"><label>Título</label>${inp('title', t.title)}</div>
+    <div class="field"><label>Versión (año)</label>${inp('date', t.version || t.date, { ph: 'Ej: 2027' })}<p class="hint">Si cambias la versión, las bodas de ese año vuelven a firmar.</p></div>
+    <div class="field"><label>Contenido (HTML)</label><textarea class="control" name="text" style="min-height:240px;font-family:monospace;font-size:12px">${esc(t.text || '')}</textarea></div></form>`,
+    { okText: 'Guardar', onOk: async () => { const d = collectForm($('#tacForm')); await api('tyc', { method: 'PUT', body: { id: t.id, title: d.title, date: d.date, text: d.text } }); toast('Contrato guardado', 'ok'); location.hash = '#/tyc'; CS.route ? CS.route() : location.reload(); } });
+}
+/* PDF del contrato firmado por un usuario (o aviso de no firmado) */
+on(/^#\/tyc-firma\/(\d+)$/, async m => {
+  if (!requireAdmin()) return; loading(['Usuarios', 'TYC']);
+  const r = await api('tyc/signature/' + m[1]);
+  const a = r.autofill || {}, s = r.signature, u = r.user;
+  const fecha = a.fecha ? dmy(a.fecha) : '';
+  const text = (r.tyc.text || '').replace(/\{novios\}/g, `<b>${esc(a.novios || '—')}</b>`).replace(/\{finca\}/g, `<b>${esc(a.finca || '—')}</b>`).replace(/\{fecha\}/g, `<b>${esc(fecha || '—')}</b>`);
+  const head = `<div class="pdf-head"><img src="assets/brand/logo-principal-azul.svg" alt="Conecta So"><div style="text-align:right;color:#777;font-size:10px">Contrato interno<br>${esc(u.name)}</div></div>`;
+  const firma = s
+    ? `<div class="pdf-sign"><h3>Firma</h3><div class="pdf-grid">
+         <div>Firmado por: <b>${esc(s.name)}</b></div><div>Fecha de firma: <b>${esc(dmy((s.date || '').slice(0, 10)))}</b></div>
+         <div>DNI: <b>${esc(s.dni || a.dnis || '—')}</b></div>${s.dni2 ? `<div>DNI 2: <b>${esc(s.dni2)}</b></div>` : ''}
+         <div>Hora de aceptación: <b>${esc(((s.date || '').slice(11, 16)) || '—')}</b></div><div>Versión aceptada: <b>${esc(s.version || r.tyc.version || '—')}</b></div></div>
+       <p class="pdf-signline">✓ Documento aceptado y firmado electrónicamente por los contratantes.</p></div>`
+    : `<div class="pdf-notice">Esta boda <b>todavía no ha firmado</b> los términos y condiciones del servicio.</div>`;
+  shell(`${pageHead('Contrato · ' + u.name, s ? 'Firmado' : 'No firmado')}
+    <div class="pdf-toolbar"><a class="btn" href="#/usuarios">← Usuarios</a>${s ? '<button class="btn btn--primary" onclick="window.print()">Descargar / Imprimir PDF</button>' : ''}</div>
+    <div class="pdf-page">${head}<h2>${esc(r.tyc.title)}</h2>
+      ${u.role === 'user' ? `<div class="pdf-grid" style="margin-bottom:12px">
+        <div>Contratantes: <b>${esc(a.novios || '—')}</b></div><div>DNI: <b>${esc(a.dnis || '—')}</b></div>
+        <div>Lugar de celebración: <b>${esc(a.finca || '—')}</b></div><div>Fecha del evento: <b>${esc(fecha || '—')}</b></div>
+        <div>Versión del contrato: <b>${esc(r.tyc.version || '—')}</b></div></div>` : ''}
+      <div class="tyc-body" style="font-size:12px">${text}</div>${firma}</div>`, ['Usuarios', u.name]);
+});
+
+/* =========================================================================
+   MI CUENTA (todos)
+   ========================================================================= */
+on(/^#\/cuenta$/, async () => {
+  loading(['Mi cuenta']);
+  shell(`${pageHead('Mi cuenta', 'Tus datos de acceso.')}
+    <div class="grid-2">
+      <div class="panel"><div class="panel__head"><h3>Datos</h3></div><div class="panel__body"><div class="form-grid">
+        <label>Nombre</label><div>${esc(S.user.name || '—')}</div>
+        <label>Email</label><div>${esc(S.user.email)}</div>
+        <label>Perfil</label><div>${esc(CS.roleLabel(S.user.role))}</div>
+      </div></div></div>
+      <div class="panel"><div class="panel__head"><h3>Cambiar contraseña</h3></div><div class="panel__body"><form id="pwForm">
+        <div class="field"><label>Contraseña actual</label><input class="control" type="password" name="current" required></div>
+        <div class="field"><label>Nueva contraseña</label><input class="control" type="password" name="password" required></div>
+        <div class="hint">Mínimo 10 caracteres, con letras y números.</div>
+        <div id="pwErr" class="field-error" style="display:none"></div>
+        <button class="btn btn--primary" type="submit" style="margin-top:12px">Actualizar</button>
+      </form></div></div>
+    </div>`, ['Mi cuenta']);
+  el('pwForm').onsubmit = async e => {
+    e.preventDefault(); const d = collectForm(e.target); const errEl = el('pwErr'); errEl.style.display = 'none';
+    try { await api('auth/change-password', { method: 'POST', body: { current: d.current, password: d.password } }); toast('Contraseña actualizada', 'ok'); e.target.reset(); }
+    catch (err) { errEl.textContent = err.message; errEl.style.display = 'block'; }
+  };
+});
+})();
