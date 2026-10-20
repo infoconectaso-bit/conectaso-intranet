@@ -466,7 +466,6 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
   </div></div></div>
   ${isAdmin() ? `<div class="mblock mblock--of"><h4>Asignaciones</h4><div class="inner"><div class="form-grid">
     ${fg('DJ asignado', sel('dj_vinculated', [['', 'Selecciona un DJ']].concat((S.meta.djs || []).map(u => [u.id, u.name])), ev.djId, 'data-search'))}
-    ${eventFinished(ev) ? fg('Horas extra DJ', sel('dj_assigned_overtime', [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas', '4 hora y media', '5 Horas'], ev.djOvertime)) : fg('Horas extra DJ', '<div class="readbox"><span class="muted">Se rellena cuando finaliza la boda (el DJ lo indica en su albarán).</span></div>')}
     ${fg('Wedding planner', sel('wp_vinculated', [['', 'Selecciona un planner']].concat((S.meta.planners || []).map(u => [u.id, u.name])), ev.wpId, 'data-search'))}
   </div></div></div>` : ''}
   ${showSpouse ? `<div class="mblock"><h4>Datos de los cónyuges</h4><div class="inner"><div class="grid-2">
@@ -770,8 +769,10 @@ function paneFacturacion(ev) {
     ${rows ? `<div class="table-wrap"><table class="dt"><tbody>${rows}</tbody></table></div>` : '<div class="empty">Sin datos de facturación.</div>'}
     ${revRows ? `<h4 class="form-sub" style="margin-top:18px">Ingresos y beneficio</h4><div class="table-wrap"><table class="dt"><tbody>${revRows}</tbody></table></div>` : ''}
     ${(ev.plus || []).length ? `<h4 class="form-sub">Pluses</h4>${plusList}` : ''}${plusAdd}
-    ${eventFinished(ev) ? `<div class="form-grid" style="margin-top:18px">${fg('Pedir opinión', sel('ask_for_opinion', [['', '—'], 'Si', 'No'], ev.opinion))}${fg('Observaciones del DJ', ta('dj_observations', ev.obsDj))}</div>
-      ${ev.djId ? `<div class="btn-row" style="margin-top:12px"><button type="button" class="btn btn--sm btn--blue" data-albaran-link title="Genera el enlace de autologin para que el DJ rellene su parte">🔗 Enlace parte de trabajo del DJ</button></div>` : ''}` : '<p class="hint" style="margin-top:14px">El albarán del DJ (horas extra, opinión y observaciones) se rellena cuando finaliza la boda.</p>'}</div></div>`;
+    ${eventFinished(ev) ? `<h4 class="form-sub" style="margin-top:18px">Albarán de trabajo del DJ</h4>
+      <div class="form-grid">${fg('Horas extra realizadas', sel('dj_assigned_overtime', [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas', '4 hora y media', '5 Horas'], ev.djOvertime))}${fg('Pedir opinión', sel('ask_for_opinion', [['', '—'], 'Si', 'No'], ev.opinion))}</div>
+      ${fg('Observaciones del DJ', ta('dj_observations', ev.obsDj))}
+      ${ev.djId ? `<div class="btn-row" style="margin-top:12px"><button type="button" class="btn btn--sm btn--blue" data-albaran-link title="Genera el enlace de autologin para que el DJ rellene su parte">🔗 Enlace parte de trabajo del DJ</button></div>` : ''}` : ''}</div></div>`;
 }
 
 /* --- interacción del formulario de evento --- */
