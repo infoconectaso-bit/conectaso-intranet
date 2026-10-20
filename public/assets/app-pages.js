@@ -1376,7 +1376,9 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
       </section>` : ''}
 
     </div>`, ['Eventos', '#' + ev.id, 'Hoja de ruta']);
-  const fitDeck = () => { const deck = document.querySelector('.ruta-deck'); if (!deck) return; const avail = deck.clientWidth || (deck.parentElement ? deck.parentElement.clientWidth : 1280); const s = Math.min(1, avail / 1280); deck.querySelectorAll('.slide').forEach(sl => { sl.style.zoom = s; }); };
+  // Escala las slides fijas (1280×720) para que quepan; la escaleta musical (.slide--auto) NO se
+  // escala con zoom (iOS la renderiza mal): es responsive por sí misma y refluye en móvil.
+  const fitDeck = () => { const deck = document.querySelector('.ruta-deck'); if (!deck) return; const avail = deck.clientWidth || (deck.parentElement ? deck.parentElement.clientWidth : 1280); const s = Math.min(1, avail / 1280); deck.querySelectorAll('.slide:not(.slide--auto)').forEach(sl => { sl.style.zoom = s; }); };
   setTimeout(fitDeck, 30);
   if (!window.__rutaFitBound) { window.__rutaFitBound = true; window.addEventListener('resize', () => { clearTimeout(window.__rutaFitT); window.__rutaFitT = setTimeout(fitDeck, 120); }); }
 });
