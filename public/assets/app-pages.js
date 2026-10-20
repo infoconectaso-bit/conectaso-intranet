@@ -477,7 +477,7 @@ function momentRow(ev, key, title, { readonly }) {
   const t = momentTitle(ev, key, (ev.labels && ev.labels[key]) || title);
   const ro = readonly ? 'readonly' : '';
   return `<div class="moment" data-moment data-key="${esc(key)}" data-deftitle="${esc(title)}">
-    <h5>${toolsHtml(readonly, false)}<label class="switch switch--incl" title="Verde = se incluye · Rojo = no se incluye"><input type="checkbox" name="check_${key}" ${m.on ? 'checked' : ''} ${readonly ? 'disabled' : ''}><span class="track"></span><span class="switch-state">${m.on ? 'No se incluye' : 'Se incluye'}</span></label> <span data-mtitle><span class="m-ic">${momentIcon(key)}</span> ${esc(t)}</span></h5>
+    <h5>${toolsHtml(readonly, false)}<span data-mtitle><span class="m-ic">${momentIcon(key)}</span> ${esc(t)}</span><label class="switch switch--incl" style="margin-left:auto" title="Verde = activado (se incluye) · Rojo = desactivado (no se incluye)"><input type="checkbox" name="check_${key}" ${m.on ? 'checked' : ''} ${readonly ? 'disabled' : ''}><span class="track"></span><span class="switch-state">${m.on ? 'Desactivado' : 'Activado'}</span></label></h5>
     <div class="mgrid">
       <div><label class="mlab">Artista · Canción</label><input class="control" name="${key}" value="${esc(m.song || '')}" placeholder="Artista - Canción" ${ro}></div>
       <div><label class="mlab">Enlace (Spotify o YouTube)</label>${linkField('link_' + key, m.link, readonly)}</div>
@@ -854,7 +854,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   if (enTog) enTog.addEventListener('change', () => { const st = enTog.closest('.switch--onoff').querySelector('.switch-state'); if (st) st.textContent = enTog.checked ? 'Activado' : 'Desactivado'; });
   // tarjetas de servicios extra: marcar/desmarcar en vivo
   form.addEventListener('change', e => {
-    const sw = e.target.closest('.switch--incl'); if (sw && e.target.matches('input[type=checkbox]')) { const st = sw.querySelector('.switch-state'); if (st) st.textContent = e.target.checked ? 'No se incluye' : 'Se incluye'; }
+    const sw = e.target.closest('.switch--incl'); if (sw && e.target.matches('input[type=checkbox]')) { const st = sw.querySelector('.switch-state'); if (st) st.textContent = e.target.checked ? 'Desactivado' : 'Activado'; }
   });
   // ceremonia fuera del lugar: activa el mensaje en Música → Ceremonia en vivo
   const cOut = form.querySelector('[name=ceremony_outside]');
@@ -951,10 +951,18 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const payload = buildEventPayload(ev, form, { full, role, canEditMusic });
-    const btn = form.querySelector('button[type=submit]'); if (btn) btn.disabled = true;
-    try { const r = await api('events/' + ev.id, { method: 'PUT', body: { event: payload } }); toast('Guardado correctamente', 'ok'); Object.assign(ev, r.event); reloadExtras(); }
-    catch (err) { toast(err.message, 'err'); }
-    finally { if (btn) btn.disabled = false; }
+    const btn = form.querySelector('button[type=submit]');
+    const orig = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.classList.remove('btn--ok'); btn.classList.add('btn--loading'); btn.innerHTML = '<span class="btn-spin"></span> Guardando…'; }
+    try {
+      const r = await api('events/' + ev.id, { method: 'PUT', body: { event: payload } });
+      Object.assign(ev, r.event); reloadExtras();
+      if (btn) { btn.classList.remove('btn--loading'); btn.classList.add('btn--ok'); btn.innerHTML = '✓ Guardado'; setTimeout(() => { btn.classList.remove('btn--ok'); btn.innerHTML = orig; btn.disabled = false; }, 1600); }
+      else toast('Guardado correctamente', 'ok');
+    } catch (err) {
+      toast(err.message, 'err');
+      if (btn) { btn.classList.remove('btn--loading'); btn.innerHTML = orig; btn.disabled = false; }
+    }
   });
 }
 // Arrastrar para reordenar momentos dentro de cada bloque. Usa Pointer Events: funciona con ratón y con el dedo (táctil).

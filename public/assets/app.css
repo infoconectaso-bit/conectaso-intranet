@@ -71,6 +71,11 @@ textarea.control{min-height:92px;resize:vertical}
 .btn:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--onyx)}
 .btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:var(--shadow-sticker);transform:none}
 .btn--primary{background:var(--pink);color:#fff}
+/* estados del botón Guardar: rosa (normal) → cargando (spinner) → verde (guardado) */
+.btn--loading{background:var(--pink);color:#fff;opacity:.92;cursor:progress}
+.btn--ok{background:#0B8043!important;color:#fff!important}
+.btn-spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;vertical-align:-2px;margin-right:4px;animation:btnspin .6s linear infinite}
+@keyframes btnspin{to{transform:rotate(360deg)}}
 .btn--blue{background:var(--blue);color:var(--onyx)}
 .btn--yellow{background:var(--yellow);color:var(--onyx)}
 .btn--dark{background:var(--onyx);color:var(--cream)}
