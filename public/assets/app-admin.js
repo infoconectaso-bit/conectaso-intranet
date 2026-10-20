@@ -967,10 +967,10 @@ on(/^#\/tyc$/, async () => {
   const r = await api('tyc/current');
   const t = r.tyc;
   shell(`${pageHead('Términos y condiciones de servicio', 'Contrato que cada boda acepta y firma electrónicamente. El estado de cada firma y su PDF descargable están en la lista de Usuarios.')}
-    <div class="panel"><div class="panel__head"><h3>${esc(t.title || 'Contrato')}</h3><button class="btn btn--sm btn--primary" id="editTac">Editar contrato</button></div>
+    <div class="panel"><div class="panel__head"><h3>${esc((t.title || 'Contrato').replace(/\s*\b(19|20)\d{2}\b\s*$/, ''))}</h3><button class="btn btn--sm btn--primary" id="editTac">Editar contrato</button></div>
       <div class="panel__body">
-        <div class="pdf-grid" style="margin-bottom:12px"><div>Versión (año): <b>${esc(t.version || '—')}</b></div></div>
-        <p class="hint">Al aceptar, en el PDF de cada boda se rellenan automáticamente los contratantes, DNI, lugar y fecha del evento.</p>
+        <div class="pdf-grid" style="margin-bottom:12px"><div>Versión del contrato: <b>${esc(t.version || '—')}</b></div></div>
+        <p class="hint"><b>El año de la boda se añade solo</b> al título de cada contrato (p. ej. "…de servicio 2026" para una boda de 2026). La "versión" de arriba es solo un identificador interno para saber qué texto firmó cada pareja. Al aceptar, en el PDF de cada boda se rellenan automáticamente los contratantes, DNI, lugar y fecha del evento.</p>
         <div class="readbox tyc-body" style="max-height:none">${t.text || ''}</div>
       </div></div>`, ['TYC']);
   el('editTac').onclick = () => tacForm(t);

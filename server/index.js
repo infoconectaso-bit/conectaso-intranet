@@ -229,6 +229,7 @@ function autofillSpousesFromTyc(user, sign) {
 function tycSignedBy(u) {
   if (!u || u.role !== 'user') return false;
   if (u.tycSign && u.tycSign.date) return true;           // firma hecha en la intranet nueva
+  if (u.tyc === true) return true;                        // firma del sistema anterior (booleano "tyc")
   const ev = eventOfUser(u); return !!(ev && ev.tycSigned); // firma ya registrada en los datos reales
 }
 function tycAutofill(u) {
@@ -246,6 +247,9 @@ function tycSignatureFor(u) {
   if (u.tycSign && u.tycSign.date) return u.tycSign;
   const ev = eventOfUser(u);
   if (ev && ev.tycSigned) { const a = tycAutofill(u); return { name: ev.tycSigner || a.novios || '', dni: a.dnis || '', date: ev.tycSignedAt || '', version: String(ev.tycVersion || '2027') }; }
+  // Firma del sistema anterior (booleano "tyc"): no guardaba fecha ni firmante, se reconstruye
+  // a partir de los datos del evento para poder visualizar/descargar el contrato.
+  if (u.tyc === true) { const a = tycAutofill(u); return { name: a.novios || u.name || '', dni: a.dnis || '', date: '', legacy: true, version: '2027' }; }
   return null;
 }
 async function tycApi(req, res, user, seg, method) {
@@ -686,7 +690,9 @@ async function usersApi(req, res, user, seg, method) {
     const signedUserIds = new Set();
     store.all('events').forEach(e => { if (e.tycSigned) { if (e.userId) signedUserIds.add(+e.userId); (e.coUsers || []).forEach(x => signedUserIds.add(+x)); } });
     const list = users.all().map(u => {
-      const signed = u.role === 'user' && (!!(u.tycSign && u.tycSign.date) || signedUserIds.has(+u.id));
+      // Firmado si: firmó en la intranet nueva (tycSign), o en los datos del evento (ev.tycSigned),
+      // o tiene el booleano "tyc" del sistema anterior puesto a true (así es como se guardaban las firmas antiguas).
+      const signed = u.role === 'user' && (!!(u.tycSign && u.tycSign.date) || u.tyc === true || signedUserIds.has(+u.id));
       return Object.assign({}, u, { tycSigned: signed });
     });
     return ok(res, { users: list });
