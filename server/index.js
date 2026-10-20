@@ -184,6 +184,46 @@ function eventOfUser(u) {
   if (!u || u.role !== 'user') return null;
   return store.all('events').find(e => e.userId == u.id || (e.coUsers || []).map(String).indexOf(String(u.id)) >= 0) || null;
 }
+// Heurística de género por nombre (castellano/catalán) para ordenar los cónyuges.
+// Devuelve 'f', 'm' o '?'. Conservadora: solo clasifica lo evidente.
+function guessGender(name) {
+  const n = String(name || '').trim().toLowerCase().split(/\s+/)[0].normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (!n) return '?';
+  const FEM = new Set(['carmen', 'isabel', 'pilar', 'mar', 'nuria', 'meritxell', 'montserrat', 'beatriz', 'raquel', 'ruth', 'esther', 'ines', 'iris', 'lydia', 'ainhoa', 'abril', 'dolors', 'nerea', 'maribel']);
+  const MASC = new Set(['pau', 'marc', 'jordi', 'pol', 'pere', 'oriol', 'aleix', 'guillem', 'arnau', 'biel', 'nil', 'roger', 'gerard', 'adria', 'joan', 'josep', 'david', 'daniel', 'sergi', 'albert', 'ferran', 'xavier', 'xavi', 'victor', 'hector', 'ivan', 'ruben', 'noel', 'isaac', 'abel', 'izan', 'aaron', 'luca', 'elias', 'joshua', 'jose', 'andres', 'matias', 'tobias', 'lucas', 'jonas', 'bruno', 'hugo', 'pablo', 'alvaro', 'nicolas', 'unai', 'eric', 'cesc']);
+  if (FEM.has(n)) return 'f';
+  if (MASC.has(n)) return 'm';
+  if (n.endsWith('a')) return 'f';
+  if (n.endsWith('o')) return 'm';
+  return '?';
+}
+// Al firmar el contrato, autorrellena los cónyuges del evento (nombres + DNIs) si aún no están.
+function autofillSpousesFromTyc(user, sign) {
+  const ev = eventOfUser(user); if (!ev) return;
+  const names = String(ev.conyuges || '').split(/\s+y\s+/i).map(s => s.trim()).filter(Boolean);
+  const cur = ev.spouses || [];
+  const hasData = cur.some(s => s && (s.name || s.dni));
+  if (hasData) {
+    // Ya hay datos (p. ej. admin): solo rellena DNIs que falten, sin reordenar ni pisar nombres.
+    const next = [0, 1].map(i => Object.assign({}, cur[i] || {}));
+    if (!next[0].dni && sign.dni) next[0].dni = sign.dni;
+    if (!next[1].dni && sign.dni2) next[1].dni = sign.dni2;
+    if (!next[0].name && names[0]) next[0].name = names[0];
+    if (!next[1].name && names[1]) next[1].name = names[1];
+    ev.spouses = next; store.put('events', ev); return;
+  }
+  if (!names.length) return;
+  let pairs = [{ name: names[0] || '', dni: sign.dni || '' }, { name: names[1] || '', dni: sign.dni2 || '' }];
+  // Usa el nombre completo del firmante para el cónyuge cuyo nombre de pila coincide.
+  const full = String(sign.name || '').trim();
+  if (full) pairs.forEach(p => { if (p.name && full.toLowerCase().startsWith(p.name.toLowerCase())) p.name = full; });
+  // Orden: masculino primero SOLO si el otro es claramente femenino; si no, se mantiene como está.
+  const g0 = guessGender(pairs[0].name), g1 = guessGender(pairs[1].name);
+  if (g0 === 'f' && g1 === 'm') pairs = [pairs[1], pairs[0]];
+  ev.spouses = pairs.map((p, i) => Object.assign({}, cur[i] || {}, { name: p.name, dni: p.dni }));
+  ev.conyuges = ev.spouses.map(s => s.name).filter(Boolean).join(' y ') || ev.conyuges;
+  store.put('events', ev);
+}
 function tycSignedBy(u) {
   if (!u || u.role !== 'user') return false;
   if (u.tycSign && u.tycSign.date) return true;           // firma hecha en la intranet nueva
@@ -217,6 +257,7 @@ async function tycApi(req, res, user, seg, method) {
     const body = await readBody(req);
     const sign = { version: c.version, name: body.name || user.name, dni: body.dni || '', dni2: body.dni2 || '', date: new Date().toISOString() };
     users.update(user.id, { data: { tycSign: sign } });
+    try { autofillSpousesFromTyc(user, sign); } catch (e) { /* no bloquear la firma */ }
     store.audit(user.id, 'tyc-sign');
     return ok(res, { ok: true, user: meView(users.get(user.id)) });
   }
