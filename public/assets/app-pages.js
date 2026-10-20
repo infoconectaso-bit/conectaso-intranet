@@ -69,10 +69,10 @@ const RIBAS_AREAS = [
 const OLIVER_AREAS = [
   { key: 'ceremony', title: 'Ceremonia', sec: 'C', moments: [['first_spouse_entry', 'Entrada primer cónyuge'], ['second_spouse_entry', 'Entrada segundo cónyuge'], ['rings', 'Anillos'], ['signatures', 'Firmas'], ['exit', 'Salida'], ['readings', 'Lecturas']] },
   { key: 'aperitif', title: 'Aperitivo', sec: 'A', moments: [['entry', 'Entrada de novios']] },
-  { key: 'banquet', title: 'Banquete', sec: 'B', moments: [['entry', 'Entrada de novios'], ['wine_white', 'Vino blanco'], ['first', 'Primer plato'], ['sorbet', 'Sorbete'], ['second', 'Segundo plato'], ['wine_red', 'Vino tinto'], ['cake', 'Tarta nupcial']] },
+  { key: 'banquet', title: 'Banquete', sec: 'B', moments: [['entry', 'Entrada de novios'], ['wine_white', 'Vino blanco'], ['first', 'Primer plato'], ['sorbet', 'Sorbete'], ['wine_red', 'Vino tinto'], ['second', 'Segundo plato'], ['cake', 'Tarta nupcial']] },
 ];
-// Can Oliver: extras que los novios NO pueden ver (fuego frío y tarima)
-const OLIVER_HIDE_EXTRAS = ['extra_maquinas_fuego_frio', 'extra_servicio_de_tarima'];
+// Can Oliver: extras que los novios NO pueden ver (fuego frío, tarima y confeti)
+const OLIVER_HIDE_EXTRAS = ['extra_maquinas_fuego_frio', 'extra_servicio_de_tarima', 'extra_confeti'];
 const RIBAS_IDS = [14, 15, 16];          // Can Ribas Cirerers / Oliveres / Exclusivo
 const OLIVER_IDS = [8, 25, 26, 27];      // Can Oliver Carpa / 200 / 400 / Rústico
 const isRibas = ev => RIBAS_IDS.includes(+((ev && ev.lugar) || 0));

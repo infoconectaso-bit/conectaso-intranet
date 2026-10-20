@@ -535,9 +535,12 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 /* aviso de vacaciones en inicio (reusa estilo del aviso de precios) */
 .va-panel{border:2px solid #E65100}
 .va-panel .panel__head h2{color:#E65100}
-.va-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px dashed var(--line);font-size:13px}
+.va-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 0;border-top:1px dashed var(--line);font-size:13px}
 .va-row:first-of-type{border-top:0}
-.va-row .va-when{color:#777;white-space:nowrap}
+/* el detalle (fecha + nombres de novios) puede ser muy largo: debe envolver, no estirar la página */
+.va-row .va-when{color:#777;overflow-wrap:anywhere;min-width:0}
+.va-row .btn{margin-left:auto}
+@media(max-width:640px){.va-row .btn{margin-left:0;width:100%}}
 .va-row .va-badge{margin-left:auto;background:#FFF3E0;color:#E65100;font-weight:700;border-radius:999px;padding:2px 9px;font-size:12px;white-space:nowrap}
 
 /* aviso de evento sin DJ asignado en el listado: icono de alerta llamativo */
