@@ -8,6 +8,10 @@ const { S, api, shell, pageHead, table, refreshTable, toast, modal, esc, fmtEur,
   estado, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$ } = CS;
 const isAdmin = () => S.user.role === 'admin';
 const el = id => document.getElementById(id);
+// Traducción directa de bloques largos del cliente (con negritas/importes), que el
+// traductor por nodos no puede cubrir. Solo traduce para novios/wedding planner.
+const _tLang = () => (S.user && (S.user.role === 'user' || S.user.role === 'planner')) ? (S.lang || 'es') : 'es';
+const tt = (es, ca, en, fr) => ({ es: es, ca: ca || es, en: en || es, fr: fr || es }[_tLang()] || es);
 // la boda ha finalizado: a partir de las 00:00 del día siguiente a la fecha de la boda
 // Una boda se considera finalizada al DÍA SIGUIENTE a las 05:00 (hora local): hasta entonces sigue pendiente.
 const bizToday = () => { const d = new Date(Date.now() - 5 * 3600000); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -404,7 +408,7 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
     ${fg('Hora inicio aperitivo', inp('celebration_hour', ev.celebrationHour, { type: 'time', ...roH }))}
     ${fg('Lugar de la celebración', sel('celebration_location', locOpts, ev.lugar === 0 && ev.lugarOtro ? 'otro' : ev.lugar, roSel + ' data-search') + `<div id="otroWrap" style="margin-top:8px;display:${(!ev.lugar && ev.lugarOtro) ? 'block' : 'none'}">${inp('celebration_location_other', ev.lugarOtro, { ph: 'Indica el lugar', ...ro })}</div>` + travelInfo(ev))}
     ${fg('Lugar de la ceremonia', inp('wedding_location', ev.lugarCeremonia, ro))}
-    ${fg('Ceremonia fuera del lugar de la celebración', `<label class="chk"><input type="checkbox" name="ceremony_outside" ${ev.ceremoniaFuera ? 'checked' : ''} ${readonly ? 'disabled' : ''}> <span>Marca si la ceremonia se celebra fuera de la finca (no realizamos la sonorización de ceremonia)</span></label>`)}
+    ${fg(tt('Ceremonia fuera del lugar de la celebración', 'Cerimònia fora del lloc de la celebració', 'Ceremony away from the venue', 'Cérémonie hors du lieu de réception'), `<label class="chk"><input type="checkbox" name="ceremony_outside" ${ev.ceremoniaFuera ? 'checked' : ''} ${readonly ? 'disabled' : ''}> <span>${tt('Marca si la ceremonia se celebra fuera de la finca (no realizamos la sonorización de ceremonia)', 'Marca si la cerimònia se celebra fora de la finca (no fem la sonorització de cerimònia)', 'Tick if the ceremony is held away from the venue (we do not provide ceremony sound)', 'Cochez si la cérémonie a lieu hors du lieu (nous ne sonorisons pas la cérémonie)')}</span></label>`)}
     ${fg('Nº de invitados', inp('guest_number', ev.guests, { type: 'number', ...ro }))}
     ${isAdmin() ? fg('Observaciones ocultas', ta('privat_observations', ev.obsPriv, 'Solo las ven administración y el DJ')) : (S.user.role === 'dj' && ev.obsPriv !== undefined ? fg('Observaciones ocultas', `<div class="readbox">${esc(ev.obsPriv) || '<span class="muted">Sin observaciones ocultas</span>'}</div>`) : '')}
   </div></div></div>
@@ -514,7 +518,11 @@ function paneMusica(ev, canEdit) {
   const oliverAperitivo = isOliver(ev) ? `<div class="alert alert--warn"><b>La sonorización del aperitivo no está incluida en Can Oliver.</b> Si la queréis, tiene un coste extra de <b>170 €</b>. Para confirmarlo, avisad a <b>Nández</b> de que queréis el servicio.</div>` : '';
   const sections = musicAreasFor(ev).map(a => ({ key: a.key, label: a.title, body: (a.key === 'ceremony')
     ? `<div class="inner ceremony-inner${ev.ceremoniaFuera ? ' ceremony-out' : ''}">
-        <div class="alert alert--warn ceremony-out-msg"><b>No realizamos la sonorización de ceremonia.</b> La ceremonia se celebra <b>fuera de la finca de la boda</b>, por lo que no se configura la música de ceremonia.</div>
+        <div class="alert alert--warn ceremony-out-msg">${tt(
+          '<b>No realizamos la sonorización de ceremonia.</b> La ceremonia se celebra <b>fuera de la finca de la boda</b>, por lo que no se configura la música de ceremonia.',
+          '<b>No fem la sonorització de cerimònia.</b> La cerimònia se celebra <b>fora de la finca de la boda</b>, per la qual cosa no es configura la música de cerimònia.',
+          '<b>We do not provide ceremony sound.</b> The ceremony takes place <b>away from the wedding venue</b>, so ceremony music is not set up here.',
+          '<b>Nous ne sonorisons pas la cérémonie.</b> La cérémonie a lieu <b>hors du lieu de réception</b>, la musique de cérémonie n\'est donc pas configurée ici.')}</div>
         <div class="ceremony-fields">${sectionBody(SEC_OF[a.key], a.moments.map(mm => [a.key + '_' + mm[0], mm[1]]))}</div></div>`
     : `<div class="inner">${a.key === 'aperitif' ? oliverAperitivo : ''}${sectionBody(SEC_OF[a.key], a.moments.map(mm => [a.key + '_' + mm[0], mm[1]]))}</div>` }));
   const radset = (name, opts, cur) => `<div class="radset">${opts.map(([v, l]) => `<label class="chk chk--radio"><input type="radio" name="${name}" value="${esc(v)}" ${String(cur) === String(v) ? 'checked' : ''} ${roS}> <span>${esc(l)}</span></label>`).join('')}</div>`;
@@ -575,9 +583,18 @@ function paneExtras(ev, { readonly = false } = {}) {
       ${action ? `<div class="ex-actions" data-noopen>${action}</div>` : ''}
     </div>`;
   }).join('');
+  const reserva = fmtEur(RESERVA_TOTAL);
   const avisos = `<div class="alert alert--warn">
-    <p><b>Atención!</b> Al marcar y guardar un servicio extra se envía la solicitud a Conecta So (<b>facturación</b> y <b>comercial</b>). Para cancelarlo, ponte en contacto por email.</p>
-    <p style="margin:6px 0 0"><b>Cómo funciona:</b> 1) lo marcáis → <b>pendiente de confirmación</b>; 2) confirmamos disponibilidad y os llega un WhatsApp con el enlace de pago de la reserva (${fmtEur(RESERVA_TOTAL)} por servicio) → <b>pendiente de pago</b>; 3) al pagar queda <b>reservado</b>.</p></div>`;
+    <p>${tt(
+      '<b>Atención!</b> Al marcar y guardar un servicio extra se envía la solicitud a Conecta So (<b>facturación</b> y <b>comercial</b>). Para cancelarlo, ponte en contacto por email.',
+      '<b>Atenció!</b> En marcar i desar un servei extra s\'envia la sol·licitud a Conecta So (<b>facturació</b> i <b>comercial</b>). Per cancel·lar-ho, contacta per email.',
+      '<b>Note!</b> When you tick and save an extra service, the request is sent to Conecta So (<b>billing</b> and <b>sales</b>). To cancel it, contact us by email.',
+      '<b>Attention !</b> En cochant et enregistrant un service supplémentaire, la demande est envoyée à Conecta So (<b>facturation</b> et <b>commercial</b>). Pour l\'annuler, contactez-nous par email.')}</p>
+    <p style="margin:6px 0 0">${tt(
+      '<b>Cómo funciona:</b> 1) lo marcáis → <b>pendiente de confirmación</b>; 2) confirmamos disponibilidad y os llega un WhatsApp con el enlace de pago de la reserva (' + reserva + ' por servicio) → <b>pendiente de pago</b>; 3) al pagar queda <b>reservado</b>.',
+      '<b>Com funciona:</b> 1) ho marqueu → <b>pendent de confirmació</b>; 2) confirmem disponibilitat i us arriba un WhatsApp amb l\'enllaç de pagament de la reserva (' + reserva + ' per servei) → <b>pendent de pagament</b>; 3) en pagar queda <b>reservat</b>.',
+      '<b>How it works:</b> 1) you tick it → <b>awaiting confirmation</b>; 2) we confirm availability and you get a WhatsApp with the deposit payment link (' + reserva + ' per service) → <b>awaiting payment</b>; 3) once paid it is <b>booked</b>.',
+      '<b>Comment ça marche :</b> 1) vous cochez → <b>en attente de confirmation</b> ; 2) nous confirmons la disponibilité et vous recevez un WhatsApp avec le lien de paiement de l\'acompte (' + reserva + ' par service) → <b>en attente de paiement</b> ; 3) une fois payé, c\'est <b>réservé</b>.')}</p></div>`;
   return `<div class="panel"><div class="panel__head"><h3>Servicios extras a contratar</h3></div>
     <div class="panel__body">${avisos}<p class="hint" style="margin-bottom:12px">Pulsa un servicio para ver la información${readonly ? '' : ' y añadirlo a tu boda'}.</p><div class="extra-tiles">${tiles}</div></div></div>`;
 }
@@ -730,7 +747,7 @@ function accessBlock(ev) {
   if (!(S.user.role === 'admin' || S.user.role === 'user')) return '';
   const users = ev.accessUsers || [];
   return `<div class="panel access-block"><div class="panel__head"><h3>Acceso a la boda</h3><button type="button" class="btn btn--sm btn--blue" data-invite-user>+ Invitar a otra persona</button></div>
-    <div class="panel__body"><p class="hint" style="margin-bottom:10px">Novio y novia (o quien queráis) podéis tener cada uno vuestro acceso con vuestro propio email.</p>
+    <div class="panel__body"><p class="hint" style="margin-bottom:10px">${tt('Novio y novia (o quien queráis) podéis tener cada uno vuestro acceso con vuestro propio email.', 'Els dos (o qui vulgueu) podeu tenir cadascú el vostre accés amb el vostre propi email.', 'Both of you (or whoever you like) can each have your own access with your own email.', 'Vous pouvez chacun (ou qui vous voulez) avoir votre propre accès avec votre propre email.')}</p>
       <ul class="access-list">${users.length ? users.map(u => `<li><b>${esc(u.name || u.email)}</b> <span class="muted">${esc(u.email)}</span> ${u.owner ? '<span class="tag tag--green">Titular</span>' : `<button type="button" class="btn btn--xs btn--red" data-rm-user="${u.id}">Quitar</button>`}</li>`).join('') : '<li class="muted">Sin accesos todavía.</li>'}</ul></div></div>`;
 }
 function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
@@ -1083,11 +1100,15 @@ async function loadFiles(ev) {
           </div></div>
         ${isAudio(f) ? `<audio controls preload="none" src="/api/files/${f.id}" style="width:100%;margin-top:8px"></audio>` : ''}
       </div>`).join('');
-    box.innerHTML = `<div class="panel__intro"><p class="hint">Sube archivos para la boda (partituras, voz en off, anuncios, documentos…). Se guardan en el servidor y cualquier usuario del evento podrá descargarlos. Los MP3 se pueden escuchar aquí mismo.</p></div>
+    box.innerHTML = `<div class="panel__intro"><p class="hint">${tt(
+      'Sube archivos para la boda (partituras, voz en off, anuncios, documentos…). Se guardan en el servidor y cualquier usuario del evento podrá descargarlos. Los MP3 se pueden escuchar aquí mismo.',
+      'Puja arxius per a la boda (partitures, veu en off, anuncis, documents…). Es desen al servidor i qualsevol usuari de l\'esdeveniment els podrà descarregar. Els MP3 es poden escoltar aquí mateix.',
+      'Upload files for the wedding (scores, voice-overs, announcements, documents…). They are stored on the server and anyone in the event can download them. MP3s can be played right here.',
+      'Téléversez des fichiers pour le mariage (partitions, voix off, annonces, documents…). Ils sont stockés sur le serveur et toute personne de l\'événement peut les télécharger. Les MP3 se lisent ici même.')}</p></div>
       ${cards ? `<div class="file-list">${cards}</div>` : '<div class="empty">Sin archivos todavía.</div>'}
       ${canUpload ? `<div class="file-upload">
         <div class="form-grid" style="align-items:end">
-          ${fg('Archivo', `<input type="file" id="fileInput" class="control"><p class="hint">Máx. 60 MB por archivo.</p>`)}
+          ${fg(tt('Archivo', 'Arxiu', 'File', 'Fichier'), `<input type="file" id="fileInput" class="control"><p class="hint">${tt('Máx. 60 MB por archivo.', 'Màx. 60 MB per arxiu.', 'Max 60 MB per file.', 'Max 60 Mo par fichier.')}</p>`)}
         </div>
         <button type="button" class="btn btn--primary btn--sm" id="fileBtn">Subir archivo</button>
       </div>` : ''}`;
