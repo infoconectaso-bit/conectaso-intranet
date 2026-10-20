@@ -366,18 +366,15 @@ const PLAN_SYMS = {
   ctrl:   { g: 'Sonido', lab: 'Mesa de control', cls: 'pm-ctrl', txt: 'CTRL', rot: 1 },
   speaker:{ g: 'Sonido', lab: 'Altavoz', cls: 'pm-speaker', txt: '▶', rot: 1 },
   mic:    { g: 'Sonido', lab: 'Micro', cls: 'pm-mic' },
-  artist: { g: 'Sonido', lab: 'Instrumento / artista', cls: 'pm-artist' },
   stage:  { g: 'Escenario', lab: 'Escenario', cls: 'pm-stage', txt: 'Escenario', rot: 1 },
   dj:     { g: 'Escenario', lab: 'Cabina DJ', cls: 'pm-dj', txt: 'DJ', rot: 1 },
   truss:  { g: 'Estructura', lab: 'Truss', cls: 'pm-truss', txt: '✕', rot: 1 },
   power:  { g: 'Corriente', lab: 'Punto de corriente', cls: 'pm-power' },
-  zenit:  { g: 'Luz', lab: 'Zenit', cls: 'pm-zenit', txt: '▶', rot: 1 },
   garland:{ g: 'Luz', lab: 'Guirnalda', cls: 'pm-garland', txt: '∿' },
 };
 const PLAN_LINES = {
   cableSound: { lab: 'Cable sonido', col: '#31B9CB' },
   cablePower: { lab: 'Cable corriente', col: '#F0E85A' },
-  cableLight: { lab: 'Cable iluminación', col: '#19a44b' },
 };
 let PLAN = null, DRAGP = null;
 // Almacén de planos EN EL SERVIDOR (imagen en disco + símbolos). Se comparte entre
