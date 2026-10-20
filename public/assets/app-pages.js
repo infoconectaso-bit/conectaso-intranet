@@ -1179,7 +1179,7 @@ async function loadFiles(ev) {
       ${canUpload ? `<div class="file-upload">
         <div class="form-grid" style="align-items:end">
           ${fg(tt('Archivo', 'Arxiu', 'File', 'Fichier'), `<input type="file" id="fileInput" class="control"><p class="hint">${tt('Máx. 60 MB por archivo.', 'Màx. 60 MB per arxiu.', 'Max 60 MB per file.', 'Max 60 Mo par fichier.')}</p>`)}
-          ${fg(tt('¿Para qué momento?', 'Per a quin moment?', 'For which moment?', 'Pour quel moment ?'), `<select id="fileMomento" class="control">${FILE_MOMENTS.map(m => `<option value="${esc(m[0])}">${esc(tt(m[1][0], m[1][1], m[1][2], m[1][3]))}</option>`).join('')}</select>`)}
+          ${fg(tt('¿Para qué momento?', 'Per a quin moment?', 'For which moment?', 'Pour quel moment ?'), `<input id="fileMomento" class="control" type="text" list="fileMomentos" autocomplete="off" placeholder="${tt('Escribe el momento (opcional)', 'Escriu el moment (opcional)', 'Type the moment (optional)', 'Écrivez le moment (facultatif)')}"><datalist id="fileMomentos">${FILE_MOMENTS.filter(m => m[0]).map(m => `<option value="${esc(tt(m[1][0], m[1][1], m[1][2], m[1][3]))}"></option>`).join('')}</datalist>`)}
         </div>
         <button type="button" class="btn btn--primary btn--sm" id="fileBtn">${tt('Subir archivo', 'Pujar arxiu', 'Upload file', 'Téléverser')}</button>
       </div>` : ''}`;
