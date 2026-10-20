@@ -457,7 +457,7 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
     ${fg('Nº de invitados', inp('guest_number', ev.guests, { type: 'number', ...ro }))}
     ${isAdmin() ? fg('Observaciones ocultas', ta('privat_observations', ev.obsPriv, 'Solo las ven administración y el DJ')) : (S.user.role === 'dj' && ev.obsPriv !== undefined ? fg('Observaciones ocultas', `<div class="readbox">${esc(ev.obsPriv) || '<span class="muted">Sin observaciones ocultas</span>'}</div>`) : '')}
   </div></div></div>
-  ${isAdmin() ? `<div class="mblock"><h4>Asignaciones</h4><div class="inner"><div class="form-grid">
+  ${isAdmin() ? `<div class="mblock mblock--of"><h4>Asignaciones</h4><div class="inner"><div class="form-grid">
     ${fg('DJ asignado', sel('dj_vinculated', [['', 'Selecciona un DJ']].concat((S.meta.djs || []).map(u => [u.id, u.name])), ev.djId, 'data-search'))}
     ${eventFinished(ev) ? fg('Horas extra DJ', sel('dj_assigned_overtime', [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas', '4 hora y media', '5 Horas'], ev.djOvertime)) : fg('Horas extra DJ', '<div class="readbox"><span class="muted">Se rellena cuando finaliza la boda (el DJ lo indica en su albarán).</span></div>')}
     ${fg('Wedding planner', sel('wp_vinculated', [['', 'Selecciona un planner']].concat((S.meta.planners || []).map(u => [u.id, u.name])), ev.wpId, 'data-search'))}

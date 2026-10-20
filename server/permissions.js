@@ -13,6 +13,9 @@ const STAFF_HIDDEN = ['pagoCliente', 'pagado', 'pagoRestaurante', 'metodo', 'fac
 const CLIENT_HIDDEN = ['factRows', 'plus', 'obsPriv', 'obsDj', 'totalCost', 'djOvertime', 'opinion', 'pagoRestaurante'];
 // Campos que el cliente puede modificar cuando la edición está habilitada
 const CLIENT_EDITABLE = ['music', 'optionals', 'disco', 'extras', 'spouses', 'guests', 'celebrationHour', 'lugarCeremonia', 'ceremoniaFuera', 'hora'];
+// El wedding planner puede modificar lo mismo que el cliente (música, extras, horarios,
+// datos de la boda) EXCEPTO la fecha y el lugar, y sin el bloqueo de 7 días del cliente.
+const PLANNER_EDITABLE = CLIENT_EDITABLE;
 // Campos que el DJ puede modificar en sus eventos
 const DJ_EDITABLE = ['obsDj'];
 
@@ -61,6 +64,8 @@ function mergeEventUpdate(user, current, incoming) {
   if (user.role === 'user') {
     if (!clientEditOpen(current)) throw httpError(403, 'La edición de este evento no está habilitada. Contacta con Conecta So.');
     allowed = CLIENT_EDITABLE;
+  } else if (user.role === 'planner') {
+    allowed = PLANNER_EDITABLE;  // puede editar siempre; nunca fecha ni lugar (no están en la lista)
   } else if (user.role === 'dj') allowed = DJ_EDITABLE;
   else throw httpError(403, 'Tu perfil solo puede consultar este evento.');
   const next = Object.assign({}, current);

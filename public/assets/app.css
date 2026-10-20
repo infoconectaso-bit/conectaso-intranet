@@ -192,6 +192,8 @@ table.dt tbody tr:hover td{background:#fdf0f7}
 .mtab:hover{background:var(--cream)}
 .mtab.on{background:var(--pink);color:#fff}
 .mblock{border:2px solid var(--onyx);border-radius:var(--radius);margin-bottom:18px;overflow:hidden}
+.mblock--of{overflow:visible}
+.mblock--of > h4{border-radius:calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0}
 .mblock > h4{background:var(--cream);padding:12px 16px;font-size:15px;border-bottom:2px solid var(--onyx);display:flex;justify-content:space-between;align-items:center}
 .mblock .inner{padding:9px 14px}
 .mblock .inner > .form-grid{gap:8px 14px;margin-bottom:8px}
