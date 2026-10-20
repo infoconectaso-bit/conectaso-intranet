@@ -134,9 +134,13 @@ function computeRevenue(ev) {
   rows.push(['BENEFICIO', money(ingresos - coste), 't']);
   return rows;
 }
-/** Totales numéricos de un evento: facturado (ingresos), coste de personal y beneficio. */
-function eventTotals(ev) {
-  refresh();
+/** Precarga las cachés (locations, extras, users, tarifas) una sola vez. Útil para
+ * bucles grandes (p. ej. beneficios) que llaman a eventTotals muchas veces. */
+function prime() { refresh(); }
+/** Totales numéricos de un evento: facturado (ingresos), coste de personal y beneficio.
+ * Pasa skipRefresh=true cuando ya has llamado a prime() en un bucle. */
+function eventTotals(ev, skipRefresh) {
+  if (!skipRefresh) refresh();
   const loc = locById(ev.lugar) || {};
   const isMasia = !!(ev.lugar && loc.id);
   let fincaTot = 0, cliTot = 0;
@@ -177,4 +181,4 @@ function aggregateFor(uid) {
   return { cobrar: (snap.cobrar || 0) + extra, cobrado: (snap.cobrado || 0), rest: (snap.rest || 0) + extra, items: extraItems.concat(snap.items || []) };
 }
 
-module.exports = { computeFact, computeRevenue, factTotal, eventTotals, workerEarning, assignedWorkers, withFacturacion, aggregateFor, HOURLY_RATE, OVERTIME };
+module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, HOURLY_RATE, OVERTIME };

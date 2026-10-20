@@ -668,10 +668,11 @@ function computeBeneficios() {
   const now = new Date(); const curY = now.getFullYear();
   const months = {};
   let yIng = 0, yCost = 0, yBen = 0;
+  fact.prime();  // precarga cachés una sola vez (evita refrescar por cada boda)
   store.all('events').forEach(ev => {
     if (!evRealized(ev)) return;
     const ym = String(ev.fecha || '').slice(0, 7); if (!/^\d{4}-\d{2}$/.test(ym)) return;
-    let t; try { t = fact.eventTotals(ev); } catch (e) { return; }
+    let t; try { t = fact.eventTotals(ev, true); } catch (e) { return; }
     const m = months[ym] || (months[ym] = { ing: 0, cost: 0, ben: 0 });
     m.ing += t.ingresos; m.cost += t.coste; m.ben += t.beneficio;
     if (ym.slice(0, 4) === String(curY)) { yIng += t.ingresos; yCost += t.coste; yBen += t.beneficio; }
