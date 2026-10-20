@@ -393,17 +393,20 @@ function montajeInfo(ev) {
   const tipo = (ev.tipo || '').toLowerCase();
   const extrasOn = ev.extras ? Object.keys(ev.extras).filter(k => ev.extras[k]) : [];
   const svcNames = (ev.services || []).map(s => (extraName(s.servicio) || '').toLowerCase());
-  const hasTarima = extrasOn.includes('extra_servicio_de_tarima') || svcNames.some(n => /tarima/.test(n));
-  let min = 90, regla = '', note = '';
+  // Tiempo de montaje por defecto según el pack (antes del inicio de la ceremonia).
+  let min = 90, regla = '';
   if (/recomendad/.test(tipo)) { min = 60; regla = 'Recomendado · 1 h antes'; }
-  else if (/fiesta/.test(tipo)) { min = 90; regla = 'Pack fiesta · 1 h 30'; }
-  else if (/bodorrio/.test(tipo)) { min = 90; regla = 'Bodorrio · 1 h 30'; }
-  else if (/tinglado/.test(tipo)) { min = hasTarima ? 210 : 180; regla = 'Tinglado · ' + (hasTarima ? '3 h 30 (con tarima)' : '3 h'); }
-  else { min = 90; regla = 'Montaje estándar'; note = 'Tipo sin regla fija: revisa el montaje.'; }
-  // "si tiene más extras, valorarlo en cada ocasión"
-  const extraOtros = extrasOn.filter(k => k !== 'extra_servicio_de_tarima').length;
-  if (extraOtros > 0) note = 'Lleva extras adicionales: valora si necesita más tiempo de montaje en esta ocasión.';
-  return { min, regla, note };
+  else if (/fiesta/.test(tipo)) { min = 90; regla = 'Pack fiesta · 1 h 30 antes'; }
+  else if (/bodorrio/.test(tipo)) { min = 90; regla = 'Bodorrio · 1 h 30 antes'; }
+  else if (/tinglado/.test(tipo)) { min = 180; regla = 'Tinglado · 3 h antes'; }
+  else { min = 90; regla = 'Montaje estándar · 1 h 30 antes'; }
+  // Servicios de montaje pesado que exigen ir con MÁS tiempo (valorar en cada evento).
+  const HEAVY = /(tarima|pantalla|suelo led|proyecci|c[aá]bez|cabeza|moving head|truss)/;
+  const heavy = extrasOn.some(k => /tarima|suelo_led|proyeccion|pantalla/.test(k)) || svcNames.some(n => HEAVY.test(n));
+  const note = heavy
+    ? '⚠ Ojo con el tiempo: este evento lleva servicios de montaje pesado (tarima, pantalla LED, cabezas móviles o truss extra). Valora salir con más antelación de la indicada.'
+    : '';
+  return { min, regla, note, warn: heavy };
 }
 function paneRuta(ev) {
   const loc = (S.meta.locations || []).find(l => String(l.id) === String(ev.lugar));
@@ -1349,6 +1352,7 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
               <div class="row"><div class="k">Tiempo estimado</div><div class="v">${travel != null ? travel + ' min' : '—'}</div></div>
               <div class="row"><div class="k">Distancia</div><div class="v sm">${travelKm ? travelKm + ' km desde base (Martorelles)' : '—'}</div></div>
               ${salidaTxt ? `<div class="note-tip">Salida recomendada con margen para montaje a las <b>${salidaTxt}</b>.</div>` : ''}
+              ${mt.note ? `<div class="warn-tip">${esc(mt.note)}</div>` : ''}
             </div>
           </div>
           ${planoHtml
