@@ -474,7 +474,7 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
       ${fg('DNI', inp(p + '_spouse_dni', s.dni, ro))}
       ${fg('Email', inp(p + '_spouse_email', s.email, { type: 'email', ...ro }))}
       ${fg('Móvil', inp(p + '_spouse_mobile', s.mobile, ro))}
-      ${fg('Dirección', inp(p + '_spouse_address', s.address, ro))}</div></div>`; }).join('')}
+      ${i === 0 ? fg('Dirección <span class="hint">(normalmente viven juntos)</span>', inp(p + '_spouse_address', s.address, ro)) : ''}</div></div>`; }).join('')}
   </div></div></div>` : ''}`;
 }
 
@@ -1105,7 +1105,7 @@ function buildEventPayload(ev, form, { full, role, canEditMusic }) {
   const readOpts = () => mo.optionals;
   const readDisco = () => ({ playlist: d.link_playlist, compliance: d.compliance_list || '', guests: d.guest_requests || '', restrictions: d.disco_restrictions, observations: d.disco_observations, fotoLogo: d.foto_logo_data || '' });
   const readExtras = () => { const o = {}; EXTRAS_CLIENTE.forEach(x => { if (d[x[0]]) o[x[0]] = true; }); return o; };
-  const readSpouses = () => ['first', 'second'].map((p, i) => Object.assign({}, (ev.spouses || [])[i] || {}, { name: d[p + '_spouse'], dni: d[p + '_spouse_dni'], email: d[p + '_spouse_email'], mobile: d[p + '_spouse_mobile'], address: d[p + '_spouse_address'] }));
+  const readSpouses = () => ['first', 'second'].map((p, i) => { const cur = (ev.spouses || [])[i] || {}; const o = { name: d[p + '_spouse'], dni: d[p + '_spouse_dni'], email: d[p + '_spouse_email'], mobile: d[p + '_spouse_mobile'] }; if (d[p + '_spouse_address'] !== undefined) o.address = d[p + '_spouse_address']; return Object.assign({}, cur, o); });
 
   if (!full) {
     // cliente: música/momentos/extras/datos permitidos; dj: solo obsDj
