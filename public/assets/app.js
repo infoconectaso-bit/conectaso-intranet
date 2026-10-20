@@ -653,7 +653,7 @@ async function dashboardDj() {
   api('attendance-summary').then(s => { const r = (s.rows || [])[0]; if (r && el('hMes')) el('hMes').textContent = hm(r.m0) + ' h'; }).catch(() => {});
 }
 // Datos de contacto de Conecta So (visibles para el cliente en su Inicio).
-const CS_CONTACT = { phone: '674 758 989', wa: '34674758989', email: 'comercial@conectaso.es', web: 'https://www.conectaso.es', ig: 'https://www.instagram.com/conectaso/' };
+const CS_CONTACT = { phone: '674 758 989', wa: '34674758989', email: 'comercial@conectaso.es', web: 'https://www.conectaso.es', ig: 'https://www.instagram.com/conecta.so/' };
 async function dashboardSimple() {
   const ev = await api('events');
   const list = ev.events;
