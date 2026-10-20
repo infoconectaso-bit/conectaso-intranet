@@ -203,6 +203,7 @@ const ICON = {
   doc: 'M14 3v5h5M8 13h8M8 17h8M8 9h3M7 3h8l5 5v11a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z',
   edit: 'M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z',
   moon: 'M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z',
+  wrench: 'M14.7 6.3a4 4 0 00-5.4 5.2L3 17.8 6.2 21l6.3-6.3a4 4 0 005.2-5.4l-2.7 2.7-2.1-.6-.6-2.1 2.7-2.7z',
   logout: 'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9', key: 'M15 7a4 4 0 11-5.6 3.6L3 17v4h4l1-1h2v-2h2l1.4-1.4A4 4 0 0015 7z',
 };
 const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON[k]}"/></svg>`;
@@ -375,7 +376,7 @@ function navFor(role) {
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
     { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' },
     { s: 'Negocio' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' }, { t: 'Beneficios', i: 'euro', h: '#/beneficios' },
-    { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
+    { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
   ];
   if (role === 'dj') {
     const tt = !!(S.user && S.user.time_tracking);     // solo quien tiene control horario habilitado
@@ -388,6 +389,7 @@ function navFor(role) {
       { t: 'Mis vacaciones', i: 'plane', h: '#/vacaciones' },
       { s: 'Otros' }, { t: 'Mis pagos', i: 'euro', h: '#/mis-pagos' },
       ...(veh ? [{ t: 'Vehículos', i: 'car', h: '#/vehiculos' }] : []),
+      { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' },
     ];
   }
   if (role === 'planner') return [

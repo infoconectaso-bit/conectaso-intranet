@@ -103,6 +103,7 @@ const POLICY = {
   attendances:   { read: 'own',   write: ['admin', 'dj'], ownWrite: ['dj'] },
   vacations:     { read: 'own',   write: ['admin', 'dj'], ownWrite: ['dj'] },
   usages:        { read: 'own',   write: ['admin', 'dj'], ownWrite: ['dj'] },
+  maintenance:   { read: 'own',   write: ['admin', 'dj'], ownWrite: ['dj'] },
   payments:      { read: 'own',   write: ['admin'] },
   workers:       { read: 'own',   write: ['admin'] },
   history:       { read: 'own',   write: ['admin'] },

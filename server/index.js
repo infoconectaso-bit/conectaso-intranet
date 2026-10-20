@@ -869,7 +869,7 @@ const userName = id => (users.get(id) || {}).name || '';
 /* ---------- archivos ---------- */
 // Nombre seguro para disco y ruta organizada por boda: uploads/boda-<id>/<fileid>-<nombre>
 const safeName = n => String(n || 'archivo').normalize('NFKD').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120) || 'archivo';
-const fileFull = f => path.join(UPLOADS, 'boda-' + f.record_id, f.id + '-' + safeName(f.name));
+const fileFull = f => path.join(UPLOADS, (f.collection === 'maintenance' ? 'mant-' : 'boda-') + f.record_id, f.id + '-' + safeName(f.name));
 /* ---------- planos de montaje ----------
  * Imagen (vista aérea) guardada en disco; símbolos ("marks") en un setting.
  * Clave = keyBase: plantilla de finca "<locId>_<pack>" o copia de evento "ev_<id>".
@@ -924,10 +924,15 @@ async function planosApi(req, res, user, seg, method) {
 async function filesApi(req, res, user, seg, method, url) {
   if (method === 'POST') {
     const col = seg[1], rid = +seg[2];
-    if (col !== 'events') return fail(res, 400, 'Colección no admitida');
-    const ev = store.get('events', rid);
-    if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 404, 'Evento no encontrado');
-    if (user.role === 'user' && !ev.editUser) return fail(res, 403, 'La edición no está habilitada.');
+    if (col === 'events') {
+      const ev = store.get('events', rid);
+      if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 404, 'Evento no encontrado');
+      if (user.role === 'user' && !ev.editUser) return fail(res, 403, 'La edición no está habilitada.');
+    } else if (col === 'maintenance') {
+      const m = store.get('maintenance', rid);
+      if (!m) return fail(res, 404, 'Parte no encontrado');
+      if (user.role !== 'admin' && +m.userId !== +user.id) return fail(res, 403, 'Sin acceso');
+    } else return fail(res, 400, 'Colección no admitida');
     const parts = await parseMultipart(req);
     const momPart = parts.find(p => p.name === 'momento' && !p.filename);
     const momento = momPart ? momPart.content.toString('utf8').trim().slice(0, 120) : '';
@@ -935,7 +940,7 @@ async function filesApi(req, res, user, seg, method, url) {
     for (const p of parts.filter(p => p.filename && p.content.length)) {
       if (p.content.length > MAX_UPLOAD) return fail(res, 413, 'Archivo demasiado grande');
       const id = crypto.randomBytes(12).toString('hex');
-      const dir = path.join(UPLOADS, 'boda-' + rid);
+      const dir = path.join(UPLOADS, (col === 'maintenance' ? 'mant-' : 'boda-') + rid);
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, id + '-' + safeName(p.filename)), p.content);
       db().prepare('INSERT INTO files (id, collection, record_id, name, description, mime, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
@@ -951,12 +956,21 @@ async function filesApi(req, res, user, seg, method, url) {
     const rows = db().prepare('SELECT id, name, description AS momento, mime, size, created_at FROM files WHERE collection = ? AND record_id = ? ORDER BY created_at').all('events', +seg[2]);
     return ok(res, { files: rows });
   }
+  if (method === 'GET' && seg[1] === 'mant-list') {
+    const m = store.get('maintenance', +seg[2]);
+    if (!m) return fail(res, 404, 'No encontrado');
+    if (user.role !== 'admin' && +m.userId !== +user.id) return fail(res, 403, 'Sin acceso');
+    const rows = db().prepare('SELECT id, name, mime, size, created_at FROM files WHERE collection = ? AND record_id = ? ORDER BY created_at').all('maintenance', +seg[2]);
+    return ok(res, { files: rows });
+  }
   if (method === 'GET') {
     const fid = seg[1];
     const f = db().prepare('SELECT * FROM files WHERE id = ?').get(fid);
     if (!f) return fail(res, 404, 'Archivo no encontrado');
-    const ev = store.get(f.collection, f.record_id);
-    if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 403, 'Sin acceso');
+    let allowed;
+    if (f.collection === 'maintenance') { const m = store.get('maintenance', f.record_id); allowed = !!m && (user.role === 'admin' || +m.userId === +user.id); }
+    else { const ev = store.get(f.collection, f.record_id); allowed = !!ev && perm.canSeeEvent(user, ev); }
+    if (!allowed) return fail(res, 403, 'Sin acceso');
     let full = fileFull(f);
     if (!fs.existsSync(full)) full = path.join(UPLOADS, fid); // compatibilidad con archivos antiguos (planos)
     if (!fs.existsSync(full)) return fail(res, 404, 'Archivo no disponible');
@@ -995,6 +1009,15 @@ async function collection(req, res, user, seg, method) {
     const rec = body.item || body;
     if (method === 'PUT') rec.id = +seg[2];
     if (policy.ownWrite && policy.ownWrite.includes(user.role)) rec.userId = user.id; // el DJ solo escribe lo suyo
+    if (col === 'maintenance' && user.role !== 'admin') {
+      // El DJ no decide urgencia ni estado: los fija administración. Un parte nuevo nace pendiente.
+      const prev = (method === 'PUT') ? store.get(col, rec.id) : null;
+      rec.urgency = prev ? prev.urgency : 'media';
+      rec.status = prev ? prev.status : 'pendiente';
+      rec.fixedAt = prev ? prev.fixedAt : null;
+      if (method === 'POST') rec.date = new Date().toISOString().slice(0, 10);
+    }
+    if (col === 'maintenance' && user.role === 'admin' && method === 'PUT' && rec.status === 'completado' && !rec.fixedAt) rec.fixedAt = new Date().toISOString().slice(0, 10);
     if (method === 'PUT' && policy.read === 'own' && user.role !== 'admin') {
       const cur = store.get(col, rec.id);
       if (!cur || +cur.userId !== +user.id) return fail(res, 403, 'Sin acceso');

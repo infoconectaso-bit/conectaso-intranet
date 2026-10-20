@@ -902,6 +902,64 @@ function vehForm(v) {
 }
 
 /* =========================================================================
+   MANTENIMIENTO — el DJ crea un parte (con fotos) y administración lo gestiona
+   ========================================================================= */
+const URG = { baja: ['Baja', 'tag--green'], media: ['Media', 'tag--yellow'], alta: ['Alta', 'tag--red'] };
+on(/^#\/mantenimiento$/, () => mantenimientoPage());
+async function mantenimientoPage() {
+  loading(['Mantenimiento']);
+  const admin = isAdmin();
+  const items = await coll.list('maintenance');
+  // cargar las imágenes de cada parte
+  const imgs = {};
+  await Promise.all(items.map(async m => { try { const r = await api('files/mant-list/' + m.id); imgs[m.id] = r.files || []; } catch (e) { imgs[m.id] = []; } }));
+  const urgRank = { alta: 0, media: 1, baja: 2 };
+  const pend = items.filter(m => m.status !== 'completado').sort((a, b) => (urgRank[a.urgency] - urgRank[b.urgency]) || (b.date || '').localeCompare(a.date || ''));
+  const done = items.filter(m => m.status === 'completado').sort((a, b) => (b.fixedAt || '').localeCompare(a.fixedAt || ''));
+  const thumbs = m => (imgs[m.id] || []).length ? `<div class="mant-imgs">${imgs[m.id].map(f => `<a href="/api/files/${f.id}" target="_blank" rel="noopener"><img src="/api/files/${f.id}" alt="foto" loading="lazy"></a>`).join('')}</div>` : '';
+  const card = (m, isDone) => `<div class="panel mant-card mant-card--${m.urgency || 'media'}"><div class="panel__body">
+      <div class="mant-top"><div><b class="mant-subj">${esc(m.subject || 'Parte de mantenimiento')}</b>
+        <div class="mant-meta">${esc(userName(m.userId))} · ${m.date ? dmy(m.date) : ''}${isDone && m.fixedAt ? ' · <b>Arreglado el ' + dmy(m.fixedAt) + '</b>' : ''}</div></div>
+        <span class="tag ${(URG[m.urgency] || URG.media)[1]}">Urgencia: ${(URG[m.urgency] || URG.media)[0]}</span></div>
+      ${m.desc ? `<p class="mant-desc">${esc(m.desc)}</p>` : ''}
+      ${thumbs(m)}
+      ${admin && !isDone ? `<div class="mant-actions">
+        <label>Urgencia ${sel('', [['baja', 'Baja'], ['media', 'Media'], ['alta', 'Alta']], m.urgency || 'media', 'data-urg="' + m.id + '"')}</label>
+        <button class="btn btn--sm btn--primary" data-fix="${m.id}">✓ Marcar arreglado</button>
+        <button class="btn btn--icon" data-delm="${m.id}" title="Eliminar">🗑</button></div>` : ''}
+      ${!admin && !isDone ? `<div class="mant-actions"><span class="muted">Pendiente de revisar por administración.</span><button class="btn btn--icon" data-delm="${m.id}" title="Eliminar">🗑</button></div>` : ''}
+    </div></div>`;
+  shell(`${pageHead('Mantenimiento', admin ? 'Partes de avería del equipo.' : 'Crea un parte cuando algo falle (con fotos).', `<button class="btn btn--primary" id="newMant">+ Nuevo parte</button>`)}
+    <h3 class="form-sub" style="margin:4px 0 10px">Pendientes (${pend.length})</h3>
+    ${pend.length ? pend.map(m => card(m, false)).join('') : '<div class="empty">No hay partes pendientes.</div>'}
+    <h3 class="form-sub" style="margin:20px 0 10px">Completados (${done.length})</h3>
+    ${done.length ? done.map(m => card(m, true)).join('') : '<div class="empty">Sin partes completados.</div>'}`, ['Mantenimiento']);
+  el('newMant').onclick = () => mantForm();
+  if (admin) {
+    $$('[data-urg]').forEach(s => s.onchange = async () => { const m = items.find(x => x.id == s.dataset.urg); await coll.save('maintenance', Object.assign({}, m, { urgency: s.value })); toast('Urgencia actualizada', 'ok'); mantenimientoPage(); });
+    $$('[data-fix]').forEach(b => b.onclick = async () => { const m = items.find(x => x.id == b.dataset.fix); await coll.save('maintenance', Object.assign({}, m, { status: 'completado' })); toast('Parte marcado como arreglado', 'ok'); mantenimientoPage(); });
+  }
+  $$('[data-delm]').forEach(b => b.onclick = () => modal('Eliminar parte', '¿Eliminar este parte de mantenimiento?', { okText: 'Eliminar', danger: true, onOk: async () => { await coll.del('maintenance', b.dataset.delm); toast('Eliminado', 'ok'); mantenimientoPage(); } }));
+}
+function mantForm() {
+  const bg = modal('Nuevo parte de mantenimiento', `<form id="mForm">
+    <div class="field"><label>¿Qué falla?</label>${inp('subject', '', { ph: 'Ej. Altavoz derecho no suena' })}</div>
+    <div class="field"><label>Explicación</label>${ta('desc', '', 'Describe el problema con detalle…')}</div>
+    <div class="field"><label>Fotos (opcional)</label><input type="file" id="mImgs" class="control" accept="image/*" multiple><p class="hint">Puedes adjuntar varias fotos del problema.</p></div>
+  </form>`, { okText: 'Enviar parte', onOk: async () => {
+    const d = collectForm($('#mForm'));
+    if (!d.subject || !d.subject.trim()) { toast('Indica qué falla', 'err'); return true; }
+    try {
+      const r = await coll.save('maintenance', { subject: d.subject.trim(), desc: d.desc || '' });
+      const id = r.item.id;
+      const files = ($('#mImgs', bg) || {}).files;
+      if (files && files.length) { const fd = new FormData(); for (const f of files) fd.append('file', f, f.name); await api('files/maintenance/' + id, { method: 'POST', form: fd }); }
+      toast('Parte enviado', 'ok'); mantenimientoPage();
+    } catch (e) { toast(e.message || 'No se pudo enviar', 'err'); return true; }
+  } });
+}
+
+/* =========================================================================
    TYC (admin)
    ========================================================================= */
 on(/^#\/tyc$/, async () => {
