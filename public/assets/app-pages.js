@@ -296,15 +296,15 @@ function eventViewRole(ev) {
   const tabs = simple
     ? (role === 'user'
       ? `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="archivos">Archivos</button></div>`
-      : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="servicios">Servicios</button></div>`)
+      : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button>${role === 'dj' ? '<button data-tab="servicios">Servicios</button>' : ''}</div>`)
     : (role === 'user'
     ? `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="archivos">Archivos</button></div>`
-    : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="servicios">Servicios</button>${role === 'dj' ? '<button data-tab="ruta">Ruta</button>' : ''}</div>`);
+    : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button>${role === 'dj' ? '<button data-tab="servicios">Servicios</button><button data-tab="ruta">Ruta</button>' : ''}</div>`);
   const panes = `
     <div data-pane="datos">${paneDatos(ev, locOpts, { readonly: !(role === 'user' && ev.canEdit), horariosEditable: isPlanner })}${role === 'user' ? clientPaymentBlock(ev) + accessBlock(ev) : ''}</div>
     ${simple ? '' : `<div data-pane="musica" style="display:none">${paneMusica(ev, canEditMusic)}</div>
     <div data-pane="extras" style="display:none">${paneExtras(ev, { readonly: !canEditMusic })}</div>`}
-    ${role !== 'user' ? `<div data-pane="servicios" style="display:none">${paneServicios(ev, null, null, { readonly: true })}${(role === 'dj' && !simple) ? (eventFinished(ev)
+    ${role === 'dj' ? `<div data-pane="servicios" style="display:none">${paneServicios(ev, null, null, { readonly: true })}${(role === 'dj' && !simple) ? (eventFinished(ev)
         ? (HOURLY_IDS[S.user.id]
           ? `<div class="panel"><div class="panel__head"><h3>Parte de horas</h3></div><div class="panel__body">
               <p class="hint" style="margin-bottom:12px">La boda ha finalizado. Indica <b>cuántas horas has trabajado</b> y pulsa guardar. Se te sumarán a tu ficha para el cobro.</p>
@@ -318,7 +318,7 @@ function eventViewRole(ev) {
             </div>
             ${fg('Observaciones', ta('dj_observations', ev.obsDj, 'Notas tras el evento…'))}</div></div>`)
         : `<div class="panel"><div class="panel__body"><div class="alert alert--info">${HOURLY_IDS[S.user.id] ? 'Tu <b>parte de horas</b> estará disponible <b>cuando finalice la boda</b> (a partir del día siguiente).' : 'El <b>albarán de trabajo</b> (horas extra, opinión y observaciones) estará disponible para rellenar <b>cuando finalice la boda</b> (a partir del día siguiente). Recibirás un email como recordatorio.'}</div></div></div>`) : ''}</div>
-      ${(role === 'dj' && !simple) ? `<div data-pane="ruta" style="display:none">${paneRuta(ev)}</div>` : ''}` : `<div data-pane="archivos" style="display:none"><div class="panel"><div class="panel__body" id="filesBox">Cargando…</div></div></div>`}`;
+      ${(role === 'dj' && !simple) ? `<div data-pane="ruta" style="display:none">${paneRuta(ev)}</div>` : ''}` : (role === 'user' ? `<div data-pane="archivos" style="display:none"><div class="panel"><div class="panel__body" id="filesBox">Cargando…</div></div></div>` : '')}`;
   const canSave = canEditMusic || role === 'dj';
   // porcentaje de música completada (también visible para los novios)
   const prog = eventProgress(ev);
@@ -433,6 +433,10 @@ function paneRuta(ev) {
       ${ev.ceremoniaFuera ? '' : row('💍', 'Ceremonia', _min2hm(_hm2min(ev.hora)), '')}
       ${(() => { const ap = ev.ceremoniaFuera ? _hm2min(ev.celebrationHour) : (_hm2min(ev.hora) != null ? _hm2min(ev.hora) + 60 : null); return ap != null ? row('🥂', 'Aperitivo', _min2hm(ap), ev.ceremoniaFuera ? '' : '1 h después de la ceremonia') : ''; })()}
     </div>
+    ${(ev.services || []).filter(s => s.servicio).length ? `<h4 class="form-sub" style="margin-top:18px">Servicios y técnicos</h4>
+      <div class="table-wrap"><table class="dt"><thead><tr><th>Servicio</th><th>Responsable(s)</th></tr></thead><tbody>
+      ${(ev.services || []).filter(s => s.servicio).map(s => `<tr><td><b>${esc(extraName(s.servicio))}</b></td><td>${esc([s.resp, s.resp2].filter(Boolean).map(r => userName(r)).join(' · ') || 'Sin asignar')}</td></tr>`).join('')}
+      </tbody></table></div>` : ''}
     <div class="btn-row" style="margin-top:14px">
       <a class="btn btn--sm btn--primary" href="#/eventos/${ev.id}/ruta-doc">📄 Ver / imprimir hoja de ruta</a>
     </div>
@@ -1292,6 +1296,17 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
   const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(destName + ' Barcelona');
   // aviso (no el contenido) si hay observaciones ocultas
   const obsAviso = (ev.obsPriv && String(ev.obsPriv).trim()) ? '<div class="note-tip" style="margin-top:12px">⚠ Este evento tiene <b>observaciones ocultas</b>. Entra en la intranet para leerlas (no se muestran aquí).</div>' : '';
+  // Servicios con su técnico responsable (para la hoja de ruta).
+  const svcList = (ev.services || []).filter(s => s.servicio).map(s => ({
+    nm: extraName(s.servicio),
+    resp: [s.resp, s.resp2].filter(Boolean).map(r => userName(r)).join(' · ') || 'Sin asignar',
+  }));
+  const svcSlide = svcList.length ? `<section class="slide dark page slide--auto" style="min-height:auto">
+      <h2>Servicios y técnicos</h2>
+      <p style="color:#b4aeb9;margin-bottom:18px">Quién se encarga de cada servicio en este evento.</p>
+      <div class="svc-resp-grid">${svcList.map(s => `<div class="card"><h3>${esc(s.nm)} <span class="ic">🔧</span></h3><div class="v" style="font-size:19px">${esc(s.resp)}</div></div>`).join('')}</div>
+      <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
+    </section>` : '';
   let pageNo = 1;
   const pg = () => ('0' + (++pageNo)).slice(-2);
   shell(`${pageHead('Hoja de ruta', 'Boda #' + ev.id)}
@@ -1369,6 +1384,8 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
         </div>
         <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
       </section>` : ''}
+
+      ${svcSlide}
 
       ${escRows ? `<section class="slide light slide--auto" style="padding:48px 64px 40px">
         <h2 style="font-size:40px;margin-bottom:14px">Escaleta musical</h2>

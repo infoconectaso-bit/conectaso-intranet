@@ -44,6 +44,8 @@ function sanitizeEvent(user, ev) {
   const out = JSON.parse(JSON.stringify(ev));
   const hide = user.role === 'user' ? CLIENT_HIDDEN : STAFF_HIDDEN;
   hide.forEach(k => delete out[k]);
+  // El wedding planner NO ve los servicios ni quién los lleva (solo admin y DJ).
+  if (user.role === 'planner') delete out.services;
   if (user.role !== 'user' && Array.isArray(out.spouses)) out.spouses.forEach(s => { delete s.dni; delete s.address; });
   return out;
 }

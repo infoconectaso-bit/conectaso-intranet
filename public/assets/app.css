@@ -840,6 +840,7 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
   .ruta-deck .slide *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 
+.ruta-deck .svc-resp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
 /* planos por zona (recomendado) */
 .ruta-deck .plano-zonas-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .ruta-deck .plano-zonas-grid .card{display:flex;flex-direction:column;padding:12px 16px}
