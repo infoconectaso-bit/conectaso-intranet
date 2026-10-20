@@ -95,8 +95,8 @@ function computeFact(ev) {
   ws.forEach(wid => {
     const name = userName(wid);
     const e = workerEarning(ev, wid);
-    rows.push([name + (e.isDj ? ' (DJ asignado)' : ' (servicios)'), money(e.amount)]);
-    e.lines.forEach(l => rows.push(l));
+    rows.push([name + (e.isDj ? ' (DJ asignado)' : ' (servicios)'), money(e.amount), 'w']);
+    e.lines.forEach(l => rows.push([l[0], l[1], 'sub']));
     grand += e.amount;
   });
   if (ws.length === 0) rows.push(['Sin personal asignado', '—']);
