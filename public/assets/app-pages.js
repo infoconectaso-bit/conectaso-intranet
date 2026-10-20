@@ -80,6 +80,26 @@ const EXTRAS_CLIENTE = [
   ['extra_humo_bajo', 'Humo bajo', 'Niebla cerca del suelo para el baile nupcial: un efecto nube espectacular.', '🌁'],
   ['extra_lanzadores_humo_aereo', 'Lanzadores de humo aéreo', 'Humos aéreos de colores que se elevan por el aire. Un toque de magia para el evento.', '🎇'],
 ];
+// --- traducciones de los extras (nombre y descripción) para ca / en / fr ---
+const EXTRAS_I18N = {
+  extra_fotomaton: { ca: ['Fotomatón', "Una manera original de crear records: càmera d'alta definició, caixa d'attrezzo i disfresses, i impressió de les fotos en tires personalitzables. Us enviem còpia de totes les fotos per e-mail."], en: ['Photo booth', 'An original way to create memories: high-definition camera, props and costume box, and prints of the photos on customisable strips. We email you a copy of all the photos.'], fr: ['Photomaton', "Une façon originale de créer des souvenirs : caméra haute définition, boîte d'accessoires et déguisements, et impression des photos sur des bandes personnalisables. Nous vous envoyons une copie de toutes les photos par e-mail."] },
+  extra_videomaton: { ca: ['Videomatón 360 graus', "Càmera sobre un braç que gira 360º captant moviments i balls. Vídeo personalitzat (noms, data) que s'envia a cada convidat per codi QR."], en: ['360-degree video booth', 'Camera on an arm that spins 360º capturing movements and dancing. Personalised video (names, date) sent to each guest via QR code.'], fr: ['Vidéomaton 360 degrés', 'Caméra sur un bras qui tourne à 360º en captant les mouvements et les danses. Vidéo personnalisée (noms, date) envoyée à chaque invité par code QR.'] },
+  extra_hora_loca_animacion: { ca: ['Hora boja animació', "2 animadors per donar l'espectacle durant la festa: xopets, limbo, pals i ulleres led, globus, xiulets i bengales fredes per a una gran festa."], en: ['Crazy hour animation', '2 entertainers to put on a show during the party: shots, limbo, LED sticks and glasses, balloons, whistles and cold sparklers for a huge party.'], fr: ['Heure folle animation', '2 animateurs pour faire le show pendant la fête : shots, limbo, bâtons et lunettes led, ballons, sifflets et feux froids pour une grande fête.'] },
+  extra_pistola_co2: { ca: ['Pistoles CO₂', 'Efecte megatró manejat pels nuvis o els DJs, perquè la teva boda sigui un tomorrowland.'], en: ['CO₂ guns', 'Megatron effect operated by the couple or the DJs, to turn your wedding into a tomorrowland.'], fr: ['Pistolets CO₂', 'Effet mégatron manié par les mariés ou les DJs, pour que votre mariage soit un tomorrowland.'] },
+  extra_maquinas_fuego_frio: { ca: ['2 màquines de foc fred', 'Moments increïbles, fotos espectaculars i efecte WOW entre els convidats. Molt recomanable per al ball nupcial.'], en: ['2 cold-fire machines', 'Incredible moments, spectacular photos and a WOW effect among guests. Highly recommended for the first dance.'], fr: ['2 machines à feu froid', 'Des moments incroyables, des photos spectaculaires et un effet WOW parmi les invités. Très recommandé pour la danse nuptiale.'] },
+  extra_maquinas_humo_vertical_led: { ca: ['2 màquines de fum vertical amb led', 'Sumem contingut a la festa amb una mica de fum il·luminat?'], en: ['2 vertical smoke machines with LED', 'Shall we add something to the party with a bit of lit-up smoke?'], fr: ['2 machines à fumée verticale avec led', 'On ajoute du contenu à la fête avec un peu de fumée illuminée ?'] },
+  extra_photocall_sofa_chester_letras_led: { ca: ['Photocall sofà chester + lletres led', 'Un espai únic on fer-se fotos amb els convidats, amb 3 frases a triar.'], en: ['Chesterfield sofa photocall + LED letters', 'A unique space to take photos with guests, with 3 phrases to choose from.'], fr: ['Photocall canapé chesterfield + lettres led', 'Un espace unique pour prendre des photos avec les invités, avec 3 phrases au choix.'] },
+  extra_iluminacion_ambiental_led: { ca: ['Il·luminació ambiental façanes led colors', 'Decora amb color les zones que vulguis, personalitzable en el color que triïs.'], en: ['Ambient façade LED colour lighting', 'Decorate the areas you want with colour, customisable in the colour you choose.'], fr: ["Éclairage d'ambiance façades led couleurs", 'Décorez de couleur les zones que vous voulez, personnalisable dans la couleur de votre choix.'] },
+  extra_burbujas_humo_interior: { ca: ["Bombolles amb fum a l'interior", "Vols donar un toc diferent a l'entrada a l'aperitiu o al ball nupcial?"], en: ['Bubbles with smoke inside', 'Want to give a different touch to the entrance to the aperitif or the first dance?'], fr: ["Bulles avec de la fumée à l'intérieur", "Envie de donner une touche différente à l'entrée de l'apéritif ou à la danse nuptiale ?"] },
+  extra_confeti: { ca: ['Servei de confeti (a consultar permís amb el lloc)', 'Aconsegueix 3 moments WOW en diferents moments de la boda.'], en: ['Confetti service (permission to be checked with the venue)', 'Get 3 WOW moments at different points of the wedding.'], fr: ['Service de confettis (autorisation à vérifier avec le lieu)', 'Obtenez 3 moments WOW à différents moments du mariage.'] },
+  extra_servicio_de_tarima: { ca: ['Servei de tarima', 'Que el DJ estigui enlaire sempre mola. Converteix la teva boda en tot un espectacle.'], en: ['Stage platform service', 'Having the DJ up high always looks great. Turn your wedding into a real show.'], fr: ["Service d'estrade", "Avoir le DJ en hauteur, c'est toujours sympa. Transformez votre mariage en véritable spectacle."] },
+  extra_servicio_de_suelo_led: { ca: ['Servei de terra led', 'Sorprèn els convidats amb un terra led: fotos espectaculars i una zona de ball diferent.'], en: ['LED floor service', 'Surprise your guests with an LED floor: spectacular photos and a different dance area.'], fr: ['Service de sol led', 'Surprenez les invités avec un sol led : des photos spectaculaires et une piste de danse différente.'] },
+  extra_servicio_de_proyeccion: { ca: ['Servei de projecció', "Has de projectar un vídeo? Avisa'ns per estar preparats."], en: ['Projection service', "Need to project a video? Let us know so we're ready."], fr: ['Service de projection', 'Vous devez projeter une vidéo ? Prévenez-nous pour que nous soyons prêts.'] },
+  extra_humo_bajo: { ca: ['Fum baix', 'Boira a prop del terra per al ball nupcial: un efecte núvol espectacular.'], en: ['Low smoke', 'Fog close to the floor for the first dance: a spectacular cloud effect.'], fr: ['Fumée basse', 'Brouillard au ras du sol pour la danse nuptiale : un effet nuage spectaculaire.'] },
+  extra_lanzadores_humo_aereo: { ca: ['Llançadors de fum aeri', "Fums aeris de colors que s'eleven per l'aire. Un toc de màgia per a l'esdeveniment."], en: ['Aerial smoke launchers', 'Coloured aerial smoke that rises into the air. A touch of magic for the event.'], fr: ['Lanceurs de fumée aérienne', "Fumées aériennes colorées qui s'élèvent dans les airs. Une touche de magie pour l'événement."] },
+};
+const exName = x => { const l = _tLang(); const t = l !== 'es' && EXTRAS_I18N[x[0]] && EXTRAS_I18N[x[0]][l]; return t ? t[0] : x[1]; };
+const exDesc = x => { const l = _tLang(); const t = l !== 'es' && EXTRAS_I18N[x[0]] && EXTRAS_I18N[x[0]][l]; return t ? t[1] : (x[2] || ''); };
 // --- auto-detección de extras a partir de los servicios asignados al evento ---
 const EXTRA_STOP = new Set(['de', 'con', 'y', 'en', 'la', 'el', 'los', 'las', 'x', 'por', 'un', 'una', 'del', 'al', 'a', 'o', 'led', 'servicio', 'servicios', 'maquina', 'maquinas', 'grados', 'su', 'interior', 'ambiental', 'color', 'colores', 'consultar', 'permiso', 'lugar']);
 const normX = s => (s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -285,7 +305,7 @@ function eventViewRole(ev) {
     : pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''));
   shell(`${headHtml}
     ${intro}${progHtml}<form id="evForm" class="${role === 'user' ? 'ev-client' : ''}" data-id="${ev.id}">${tabs}${panes}
-    ${canSave ? `<div class="floatbar"><button type="submit" class="btn btn--primary">Guardar</button></div>` : ''}</form>`, ['Eventos', '#' + ev.id]);
+    ${canSave ? `<div class="floatbar"><button type="submit" class="btn btn--primary">Guardar</button></div>` : ''}</form>`, role === 'user' ? [esc(ev.conyuges || ev.tipo || 'Mi boda')] : ['Eventos', '#' + ev.id]);
   wireEventForm(ev, { full: false, role, canEditMusic, canSave });
 }
 
@@ -564,20 +584,20 @@ function paneExtras(ev, { readonly = false } = {}) {
     const lock = readonly || isAuto;
     // estado y acción según el flujo de reserva
     let stLabel, badge = '', action = '';
-    if (isAuto) stLabel = '✓ Incluido';
-    else if (st === 'reservado') { stLabel = '✓ Reservado'; badge = '<span class="ex-badge ex-badge--ok">✓ Reservado</span>'; }
+    if (isAuto) stLabel = tt('✓ Incluido', '✓ Inclòs', '✓ Included', '✓ Inclus');
+    else if (st === 'reservado') { stLabel = tt('✓ Reservado', '✓ Reservat', '✓ Booked', '✓ Réservé'); badge = `<span class="ex-badge ex-badge--ok">${stLabel}</span>`; }
     else if (st === 'pendiente_pago') {
-      stLabel = 'Pendiente de pago'; badge = '<span class="ex-badge ex-badge--pay">💳 Pendiente de pago</span>';
-      if (role === 'user' || role === 'planner') action = `<button type="button" class="btn btn--xs btn--primary" data-extra-pay="${x[0]}">Pagar reserva ${fmtEur(RESERVA_TOTAL)}</button>`;
+      stLabel = tt('Pendiente de pago', 'Pendent de pagament', 'Awaiting payment', 'En attente de paiement'); badge = `<span class="ex-badge ex-badge--pay">💳 ${stLabel}</span>`;
+      if (role === 'user' || role === 'planner') action = `<button type="button" class="btn btn--xs btn--primary" data-extra-pay="${x[0]}">${tt('Pagar reserva', 'Pagar reserva', 'Pay deposit', "Payer l'acompte")} ${fmtEur(RESERVA_TOTAL)}</button>`;
       else if (role === 'admin') action = `<button type="button" class="btn btn--xs" data-extra-pay="${x[0]}">Marcar pagado</button>`;
     } else if (st === 'solicitado') {
-      stLabel = 'Pendiente de confirmación'; badge = '<span class="ex-badge ex-badge--wait">⏳ Pendiente de confirmación</span>';
+      stLabel = tt('Pendiente de confirmación', 'Pendent de confirmació', 'Awaiting confirmation', 'En attente de confirmation'); badge = `<span class="ex-badge ex-badge--wait">⏳ ${stLabel}</span>`;
       if (role === 'admin') action = `<button type="button" class="btn btn--xs btn--primary" data-extra-confirm="${x[0]}">Confirmar disponibilidad</button> <a class="ex-mail" data-extra-mail="${x[0]}">ver aviso enviado</a>`;
-    } else stLabel = manual ? '✓ Añadido' : 'Ver info';
-    return `<div class="extra-tile${on ? ' on' : ''}${isAuto ? ' extra-tile--auto' : ''}${st ? ' extra-tile--' + st : ''}" data-extra="${x[0]}" role="button" tabindex="0" aria-label="${esc(x[1])}">
+    } else stLabel = manual ? tt('✓ Añadido', '✓ Afegit', '✓ Added', '✓ Ajouté') : tt('Ver info', 'Veure info', 'View info', 'Voir info');
+    return `<div class="extra-tile${on ? ' on' : ''}${isAuto ? ' extra-tile--auto' : ''}${st ? ' extra-tile--' + st : ''}" data-extra="${x[0]}" role="button" tabindex="0" aria-label="${esc(exName(x))}">
       <input type="checkbox" name="${x[0]}" ${on ? 'checked' : ''} ${lock ? 'disabled' : ''} hidden>
       <span class="extra-tile__ic">${x[3] || '✨'}</span>
-      <span class="extra-tile__nm">${esc(x[1])}</span>
+      <span class="extra-tile__nm">${esc(exName(x))}</span>
       <span class="extra-tile__st">${stLabel}</span>
       ${badge}
       ${action ? `<div class="ex-actions" data-noopen>${action}</div>` : ''}
@@ -596,7 +616,7 @@ function paneExtras(ev, { readonly = false } = {}) {
       '<b>How it works:</b> 1) you tick it → <b>awaiting confirmation</b>; 2) we confirm availability and you get a WhatsApp with the deposit payment link (' + reserva + ' per service) → <b>awaiting payment</b>; 3) once paid it is <b>booked</b>.',
       '<b>Comment ça marche :</b> 1) vous cochez → <b>en attente de confirmation</b> ; 2) nous confirmons la disponibilité et vous recevez un WhatsApp avec le lien de paiement de l\'acompte (' + reserva + ' par service) → <b>en attente de paiement</b> ; 3) une fois payé, c\'est <b>réservé</b>.')}</p></div>`;
   return `<div class="panel"><div class="panel__head"><h3>Servicios extras a contratar</h3></div>
-    <div class="panel__body">${avisos}<p class="hint" style="margin-bottom:12px">Pulsa un servicio para ver la información${readonly ? '' : ' y añadirlo a tu boda'}.</p><div class="extra-tiles">${tiles}</div></div></div>`;
+    <div class="panel__body">${avisos}<p class="hint" style="margin-bottom:12px">${readonly ? tt('Pulsa un servicio para ver la información.', 'Prem un servei per veure la informació.', 'Tap a service to see the information.', 'Appuyez sur un service pour voir les informations.') : tt('Pulsa un servicio para ver la información y añadirlo a tu boda.', 'Prem un servei per veure la informació i afegir-lo a la teva boda.', 'Tap a service to see the information and add it to your wedding.', "Appuyez sur un service pour voir les informations et l'ajouter à votre mariage.")}</p><div class="extra-tiles">${tiles}</div></div></div>`;
 }
 // Textos de los avisos (email a facturación/comercial y WhatsApp con enlace de pago)
 function extraFincaName(ev) { const l = (S.meta.locations || []).find(y => String(y.id) === String(ev.lugar)); return l ? l.name : (ev.lugarOtro || '—'); }
@@ -629,14 +649,14 @@ function openExtraDetail(key, form) {
   const render = () => {
     const on = cb && cb.checked;
     ov.innerHTML = `<div class="xmodal__box">
-      <button type="button" class="xmodal__x" data-x aria-label="Cerrar">✕</button>
-      <div class="xmodal__img"><img src="${EXTRA_IMG}${key}.jpg" alt="${esc(x[1])}" onerror="this.closest('.xmodal__img').classList.add('noimg')"><span class="xmodal__imgnote">Imagen pendiente de subir</span></div>
+      <button type="button" class="xmodal__x" data-x aria-label="${tt('Cerrar', 'Tancar', 'Close', 'Fermer')}">✕</button>
+      <div class="xmodal__img"><img src="${EXTRA_IMG}${key}.jpg" alt="${esc(exName(x))}" onerror="this.closest('.xmodal__img').classList.add('noimg')"><span class="xmodal__imgnote">${tt('Imagen pendiente de subir', 'Imatge pendent de pujar', 'Image to be uploaded', 'Image à télécharger')}</span></div>
       <div class="xmodal__body">
-        <h3>${x[3] || ''} ${esc(x[1])}</h3>
-        <p>${esc(x[2] || '')}</p>
+        <h3>${x[3] || ''} ${esc(exName(x))}</h3>
+        <p>${esc(exDesc(x))}</p>
         ${readonly
-          ? `<div class="xmodal__state ${on ? 'on' : ''}">${on ? '✓ Contratado para este evento' : 'No contratado'}</div>`
-          : `<button type="button" class="btn ${on ? 'btn--dark' : 'btn--primary'} btn--block" data-toggle>${on ? 'Quitar de mi boda' : 'Añadir a mi boda'}</button>`}
+          ? `<div class="xmodal__state ${on ? 'on' : ''}">${on ? tt('✓ Contratado para este evento', '✓ Contractat per a aquest esdeveniment', '✓ Booked for this event', '✓ Réservé pour cet événement') : tt('No contratado', 'No contractat', 'Not booked', 'Non réservé')}</div>`
+          : `<button type="button" class="btn ${on ? 'btn--dark' : 'btn--primary'} btn--block" data-toggle>${on ? tt('Quitar de mi boda', 'Treure de la meva boda', 'Remove from my wedding', 'Retirer de mon mariage') : tt('Añadir a mi boda', 'Afegir a la meva boda', 'Add to my wedding', 'Ajouter à mon mariage')}</button>`}
       </div></div>`;
   };
   render();
@@ -647,7 +667,7 @@ function openExtraDetail(key, form) {
     if (e.target.closest('[data-toggle]') && cb) {
       cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true }));
       const tile = form.querySelector('.extra-tile[data-extra="' + key + '"]');
-      if (tile) { tile.classList.toggle('on', cb.checked); const st = tile.querySelector('.extra-tile__st'); if (st) st.textContent = cb.checked ? '✓ Añadido' : 'Ver info'; }
+      if (tile) { tile.classList.toggle('on', cb.checked); const st = tile.querySelector('.extra-tile__st'); if (st) st.textContent = cb.checked ? tt('✓ Añadido', '✓ Afegit', '✓ Added', '✓ Ajouté') : tt('Ver info', 'Veure info', 'View info', 'Voir info'); }
       render();
     }
   });
@@ -1147,7 +1167,7 @@ on(/^#\/eventos\/(\d+)\/pdf$/, async m => {
   const extrasList = EXTRAS_CLIENTE.filter(x => ev.extras && ev.extras[x[0]]).map(x => `<div>• ${esc(x[1])}</div>`).join('');
   const sp = ev.spouses || [{}, {}];
   const head = `<div class="pdf-head"><img src="assets/brand/logo-principal-azul.svg" alt="Conecta So"><div style="text-align:right;color:#777;font-size:10px">Configuración musical de boda<br>${esc(ev.conyuges)}<br>${dmy(ev.fecha)}</div></div>`;
-  shell(`${pageHead('Resumen musical', 'Boda #' + ev.id)}
+  shell(`${pageHead('Resumen musical', S.user.role === 'user' ? esc(ev.conyuges || '') : 'Boda #' + ev.id)}
     <div class="pdf-toolbar"><button class="btn btn--primary" onclick="window.print()">Imprimir / Guardar PDF</button></div>
     <div class="pdf-page">${head}<h2>Resumen de configuración musical de boda</h2>
       ${ev.obsPriv && String(ev.obsPriv).trim() ? '<div class="pdf-notice">⚠ Este evento tiene <b>observaciones ocultas</b>. Entra en la intranet para leerlas (no se muestran en este PDF).</div>' : ''}

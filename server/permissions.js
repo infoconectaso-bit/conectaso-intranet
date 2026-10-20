@@ -30,7 +30,7 @@ function clientEditOpen(ev) { return daysUntilEvent(ev) > 7 ? true : (!!ev && (e
 function canSeeEvent(user, ev) {
   if (!ev) return false;
   if (user.role === 'admin') return true;
-  if (user.role === 'user') return +ev.userId === +user.id;
+  if (user.role === 'user') return +ev.userId === +user.id || (ev.coUsers || []).some(x => +x === +user.id);
   if (user.role === 'planner') return +ev.wpId === +user.id;
   if (user.role === 'dj') return +ev.djId === +user.id || (ev.services || []).some(s => +s.resp === +user.id || +s.resp2 === +user.id);
   return false;

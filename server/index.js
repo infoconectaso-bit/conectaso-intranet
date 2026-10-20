@@ -12,7 +12,7 @@ const auth = require('./auth');
 const mail = require('./mail');
 const perm = require('./permissions');
 const fact = require('./facturacion');
-const { evFinished } = require('./time');
+const { evFinished, evRealized } = require('./time');
 
 const PORT = +(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -488,6 +488,59 @@ async function events(req, res, user, seg, method, url) {
     else if (seg[2] === 'extra-decline') { if (ev.extras) delete ev.extras[k]; delete st[k]; }
     store.put('events', ev); store.audit(user.id, seg[2], 'events', id);
     return ok(res, { ok: true, extraStatus: ev.extraStatus });
+  }
+
+  // --- acceso de la pareja: invitar a un segundo usuario (novio/novia) ---
+  if (seg[2] === 'invite-user' && method === 'POST') {
+    const owner = user.role === 'user' && (+ev.userId === +user.id || (ev.coUsers || []).some(x => +x === +user.id));
+    if (user.role !== 'admin' && !owner) return fail(res, 403, 'Sin acceso');
+    const body = await readBody(req);
+    const email = String(body.email || '').trim();
+    if (!email || email.indexOf('@') < 0) return fail(res, 400, 'Indica un email válido');
+    let u = users.byEmail(email);
+    if (!u) u = users.create({ email, name: body.name || email.split('@')[0], role: 'user', data: {} });
+    if (u.role !== 'user') return fail(res, 400, 'Ese email ya pertenece a una cuenta del equipo.');
+    ev.coUsers = ev.coUsers || [];
+    if (+ev.userId !== +u.id && ev.coUsers.indexOf(u.id) < 0) ev.coUsers.push(u.id);
+    store.put('events', ev); store.audit(user.id, 'invite-user', 'events', id);
+    // El correo está desactivado: se genera el enlace de activación para compartir manualmente.
+    const invite = makeInvite(u);
+    return ok(res, { ok: true, user: { id: u.id, name: u.name, email: u.email }, invite });
+  }
+  if (seg[2] === 'remove-user' && method === 'POST') {
+    const owner = user.role === 'user' && (+ev.userId === +user.id || (ev.coUsers || []).some(x => +x === +user.id));
+    if (user.role !== 'admin' && !owner) return fail(res, 403, 'Sin acceso');
+    const body = await readBody(req); const rid = +body.userId;
+    if (rid === +ev.userId) return fail(res, 400, 'No se puede quitar al titular de la boda.');
+    ev.coUsers = (ev.coUsers || []).filter(x => +x !== rid);
+    store.put('events', ev); store.audit(user.id, 'remove-user', 'events', id);
+    return ok(res, { ok: true });
+  }
+
+  // --- trabajador por horas (Josep): indica las horas realizadas tras la boda ---
+  if (seg[2] === 'mis-horas' && method === 'POST') {
+    if (fact.HOURLY_RATE[String(user.id)] == null) return fail(res, 403, 'Este apartado es solo para trabajadores por horas.');
+    if (fact.assignedWorkers(ev).indexOf(String(user.id)) < 0) return fail(res, 403, 'No estás asignado a esta boda.');
+    if (!evRealized(ev)) return fail(res, 400, 'Podrás indicar tus horas cuando se haya celebrado la boda.');
+    const body = await readBody(req); const hrs = parseFloat(body.hours);
+    if (isNaN(hrs) || hrs < 0) return fail(res, 400, 'Indica un número de horas válido.');
+    ev.helperHours = ev.helperHours || {}; ev.helperHours[String(user.id)] = hrs;
+    store.put('events', ev); store.audit(user.id, 'mis-horas', 'events', id);
+    return ok(res, { ok: true, hours: hrs });
+  }
+
+  // --- plus de facturación (admin, boda finalizada) ---
+  if (seg[2] === 'plus' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (!evRealized(ev)) return fail(res, 400, 'Solo se pueden añadir pluses una vez celebrada la boda.');
+    const body = await readBody(req); const amount = Math.round(+body.amount || 0);
+    if (!amount) return fail(res, 400, 'Indica un importe (puede ser positivo o negativo).');
+    ev.plus = ev.plus || [];
+    ev.plus.push({ userId: body.userId ? +body.userId : null, amount, concept: body.concept || '', date: new Date().toISOString().slice(0, 10) });
+    store.put('events', ev); store.audit(user.id, 'plus', 'events', id);
+    const out = perm.sanitizeEvent(user, ev); enrichEvent(out, ev, user);
+    out.factRows = fact.computeFact(ev); out.revRows = fact.computeRevenue(ev);
+    return ok(res, { event: out });
   }
 
   if (method === 'GET') {
