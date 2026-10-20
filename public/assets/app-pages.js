@@ -240,7 +240,7 @@ function eventViewRole(ev) {
       const cierreTxt = p.length === 3 ? dmy(new Date(new Date(+p[0], +p[1] - 1, +p[2]).getTime() - 7 * 86400000).toISOString().slice(0, 10)) : '';
       intro = (dCierre != null && dCierre <= 14 && dCierre >= 0)
         ? `<p class="hint cli-hint cli-hint--warn">✏️ La edición se cierra el <b>${cierreTxt}</b> · quedan <b>${Math.ceil(dCierre)} día${Math.ceil(dCierre) === 1 ? '' : 's'}</b>. Recuerda guardar.</p>`
-        : `<p class="hint cli-hint">Rellena aquí la música y los detalles de tu boda. Recuerda <b>guardar</b> al terminar.</p>`;
+        : `<p class="hint cli-hint">Rellena aquí la música y los detalles de tu boda. Recuerda guardar al terminar.</p>`;
     } else {
       intro = `<p class="hint cli-hint cli-hint--closed"><b>Edición cerrada</b> (desde 7 días antes de la boda). Para cambiar algo, <b>contacta con nosotros</b> y te la reabrimos.</p>`;
     }
@@ -451,8 +451,10 @@ const momentIcon = key => MOMENT_ICON[String(key).replace(/^(ceremony|aperitif|b
 // Enlace con el nombre de la plataforma (Spotify / YouTube) y color de marca. Vale para web y PDF.
 function linkChip(url) {
   const s = linkService(url); if (!s || !url) return '';
-  const warn = s.spotify ? '' : `<span class="link-warn" title="Preferiblemente usa un enlace de Spotify">Mejor Spotify</span>`;
-  return `<a class="link-chip" href="${esc(url)}" target="_blank" rel="noopener" style="background:${s.color}" title="Abrir en ${s.name}"><span class="tri">▶</span>${s.name}</a>${warn}`;
+  const icon = s.spotify ? '▶' : (s.name === 'YouTube' ? '▶' : '↗');
+  const label = s.spotify ? 'Reproducir' : (s.name === 'YouTube' ? 'Abrir en YouTube' : 'Abrir');
+  const ok = s.spotify ? `<span class="link-ok" title="Enlace de Spotify correcto">✓</span>` : '';
+  return `${ok}<a class="link-chip" href="${esc(url)}" target="_blank" rel="noopener" style="background:${s.color}" title="${label}"><span class="tri">${icon}</span>${s.name}</a>`;
 }
 // Título del momento. Los dos de "entrada de cónyuge" toman automáticamente el nombre de los datos del cónyuge.
 function momentTitle(ev, key, def) {
@@ -462,7 +464,7 @@ function momentTitle(ev, key, def) {
   return (ev.labels && ev.labels[key]) || def;
 }
 const toolsHtml = (readonly, isOpt) => readonly ? '' : `<span class="m-tools"><span class="m-grip" title="Arrastra para mover">⠿</span>${isOpt ? '<button type="button" class="m-del" data-del-opt title="Quitar">✕</button>' : ''}</span>`;
-const linkField = (name, val, readonly, extra = '') => `<div data-linkwrap><div class="link-row"><input class="control" ${name ? `name="${name}"` : extra} data-link value="${esc(val || '')}" placeholder="Pega aquí el enlace de Spotify" ${readonly ? 'readonly' : ''}><span data-chip>${linkChip(val)}</span></div></div>`;
+const linkField = (name, val, readonly, extra = '') => `<div data-linkwrap><div class="link-row"><input class="control" ${name ? `name="${name}"` : extra} data-link value="${esc(val || '')}" placeholder="Pega el enlace de Spotify o YouTube" ${readonly ? 'readonly' : ''}><span data-chip>${linkChip(val)}</span></div></div>`;
 
 // comentario plegable (oculto por defecto; abierto si ya tiene texto)
 function cmtField(inner, hasVal) {
@@ -478,7 +480,7 @@ function momentRow(ev, key, title, { readonly }) {
     <h5>${toolsHtml(readonly, false)}<label class="switch switch--incl" title="Verde = se incluye · Rojo = no se incluye"><input type="checkbox" name="check_${key}" ${m.on ? 'checked' : ''} ${readonly ? 'disabled' : ''}><span class="track"></span><span class="switch-state">${m.on ? 'No se incluye' : 'Se incluye'}</span></label> <span data-mtitle><span class="m-ic">${momentIcon(key)}</span> ${esc(t)}</span></h5>
     <div class="mgrid">
       <div><label class="mlab">Artista · Canción</label><input class="control" name="${key}" value="${esc(m.song || '')}" placeholder="Artista - Canción" ${ro}></div>
-      <div><label class="mlab">Enlace (preferiblemente Spotify)</label>${linkField('link_' + key, m.link, readonly)}</div>
+      <div><label class="mlab">Enlace (Spotify o YouTube)</label>${linkField('link_' + key, m.link, readonly)}</div>
       <div class="full">${cmtField(`<input class="control" name="comment_${key}" value="${esc(m.comment || '')}" placeholder="Comentario (opcional)" ${ro}>`, !!m.comment)}</div>
     </div></div>`;
 }
@@ -489,7 +491,7 @@ function optRow(o, { readonly }) {
     <div class="mgrid">
       <div><label class="mlab">Momento / destinatario</label><input class="control" data-f="title" value="${esc(o.title || '')}" placeholder="Ej: Padres, Votos…" ${ro}></div>
       <div><label class="mlab">Artista · Canción</label><input class="control" data-f="value" value="${esc(o.value || '')}" placeholder="Artista - Canción" ${ro}></div>
-      <div><label class="mlab">Enlace (preferiblemente Spotify)</label>${linkField('', o.link, readonly, 'data-f="link"')}</div>
+      <div><label class="mlab">Enlace (Spotify o YouTube)</label>${linkField('', o.link, readonly, 'data-f="link"')}</div>
       <div class="full">${cmtField(`<input class="control" data-f="comment" value="${esc(o.comment || '')}" placeholder="Comentario (opcional)" ${ro}>`, !!o.comment)}</div>
     </div></div>`;
 }
