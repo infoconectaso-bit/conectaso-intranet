@@ -82,6 +82,9 @@ const normX = s => (s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,
 const toksX = s => normX(s).split(' ').filter(t => t && !EXTRA_STOP.has(t) && t.length > 1);
 // tokens que por sí solos ya identifican el extra (basta 1 coincidencia)
 const UNIQUE_X = new Set(['co2', 'fotomaton', 'videomaton', 'confeti', 'tarima', 'burbujas', 'suelo', 'proyeccion', 'proyector', 'aereo', 'aereos', 'chester', 'photocall']);
+// Eventos "sencillos" (Corporativo, Extras): sin música ni extras, solo
+// datos+observaciones, servicios y costes/facturación. Igual que la intranet real.
+function isSimpleEvent(ev) { return /^(corporativ|extras?)/i.test(String((ev && ev.tipo) || '')); }
 function extraMatchesService(extraName, svcName) {
   const et = new Set(toksX(extraName)), common = toksX(svcName).filter(t => et.has(t));
   if (common.some(t => UNIQUE_X.has(t))) return true;
@@ -178,9 +181,14 @@ function eventEditorAdmin(ev) {
   const pend = (+ev.pagoCliente || 0) - (+ev.pagado || 0);
   const prog = eventProgress(ev);
   const shiftIso = (iso, n) => { const p = String(iso || '').slice(0, 10).split('-'); if (p.length < 3) return ''; const d = new Date(+p[0], +p[1] - 1, +p[2]); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
-  const lockNotice = ev.fecha ? `<p class="hint evtop-notice">Edición del cliente: se cierra sola el <b>${dmy(shiftIso(ev.fecha, -7))}</b> (7 días antes). Avisos al cliente: ${prog >= 100 ? `solo <b>${dmy(shiftIso(ev.fecha, -15))}</b> (ya está al 100%)` : `<b>${dmy(shiftIso(ev.fecha, -30))}</b> y <b>${dmy(shiftIso(ev.fecha, -15))}</b>`} <span class="muted">· el envío real de email se activa al conectar el dominio</span></p>` : '';
+  const simple = isSimpleEvent(ev);
+  const lockNotice = (ev.fecha && !simple) ? `<p class="hint evtop-notice">Edición del cliente: se cierra sola el <b>${dmy(shiftIso(ev.fecha, -7))}</b> (7 días antes). Avisos al cliente: ${prog >= 100 ? `solo <b>${dmy(shiftIso(ev.fecha, -15))}</b> (ya está al 100%)` : `<b>${dmy(shiftIso(ev.fecha, -30))}</b> y <b>${dmy(shiftIso(ev.fecha, -15))}</b>`} <span class="muted">· el envío real de email se activa al conectar el dominio</span></p>` : '';
+  const adminTabs = simple
+    ? `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="servicios">Servicios</button><button data-tab="facturacion">Facturación</button><button data-tab="archivos">Archivos</button></div>`
+    : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="servicios">Servicios</button><button data-tab="ruta">Ruta</button><button data-tab="facturacion">Facturación</button><button data-tab="archivos">Archivos</button></div>`;
+  const headLabel = simple ? `${esc(ev.tipo)} #${ev.id}` : `Boda #${ev.id}`;
   const body = `<form id="evForm" data-id="${ev.id}">
-    <div class="page-head"><div><h1 style="font-size:24px">Boda #${ev.id}</h1><div class="lead">${esc(ev.conyuges || 'Sin cónyuges')} · ${dmy(ev.fecha)}</div><div class="page-head__accent"></div></div>
+    <div class="page-head"><div><h1 style="font-size:24px">${headLabel}</h1><div class="lead">${esc(ev.conyuges || 'Sin cónyuges')} · ${dmy(ev.fecha)}</div><div class="page-head__accent"></div></div>
       <div class="btn-row"><a class="btn" href="#/eventos/${ev.id}/pdf">Resumen PDF</a></div></div>
     <div class="panel evtop"><div class="panel__body">
       <div class="evtop-top">
@@ -199,18 +207,18 @@ function eventEditorAdmin(ev) {
       </div>
     </div></div>
     <div class="tabs-row">
-      <div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="servicios">Servicios</button><button data-tab="ruta">Ruta</button><button data-tab="facturacion">Facturación</button><button data-tab="archivos">Archivos</button></div>
-      <label class="switch switch--onoff edituser-toggle" title="La edición se cierra sola 7 días antes de la boda. Actívala aquí para volver a habilitarla."><span class="edituser-lbl">Edición cliente</span><input type="checkbox" name="habilitar_edicion_para_usuario" ${ev.canEdit ? 'checked' : ''}><span class="track"></span><span class="switch-state">${ev.canEdit ? 'Activado' : 'Desactivado'}</span></label>
+      ${adminTabs}
+      ${simple ? '' : `<label class="switch switch--onoff edituser-toggle" title="La edición se cierra sola 7 días antes de la boda. Actívala aquí para volver a habilitarla."><span class="edituser-lbl">Edición cliente</span><input type="checkbox" name="habilitar_edicion_para_usuario" ${ev.canEdit ? 'checked' : ''}><span class="track"></span><span class="switch-state">${ev.canEdit ? 'Activado' : 'Desactivado'}</span></label>`}
     </div>
     ${lockNotice}
-    <div data-pane="datos">${paneDatos(ev, locOpts)}${accessBlock(ev)}</div>
-    <div data-pane="musica" style="display:none">${paneMusica(ev, true)}</div>
-    <div data-pane="extras" style="display:none">${paneExtras(ev)}</div>
+    <div data-pane="datos">${paneDatos(ev, locOpts)}${simple ? '' : accessBlock(ev)}</div>
+    ${simple ? '' : `<div data-pane="musica" style="display:none">${paneMusica(ev, true)}</div>
+    <div data-pane="extras" style="display:none">${paneExtras(ev)}</div>`}
     <div data-pane="servicios" style="display:none">${paneServicios(ev, svcOpts, staffOpts)}</div>
-    <div data-pane="ruta" style="display:none">${paneRuta(ev)}</div>
+    ${simple ? '' : `<div data-pane="ruta" style="display:none">${paneRuta(ev)}</div>`}
     <div data-pane="facturacion" style="display:none">${paneFacturacion(ev)}</div>
     <div data-pane="archivos" style="display:none"><div class="panel"><div class="panel__body" id="filesBox">Cargando archivos…</div></div></div>
-    <div class="floatbar"><button type="button" class="btn" id="genPlaylist">Generar playlist</button><button type="submit" class="btn btn--primary">Guardar boda</button></div>
+    <div class="floatbar">${simple ? '' : '<button type="button" class="btn" id="genPlaylist">Generar playlist</button>'}<button type="submit" class="btn btn--primary">${simple ? 'Guardar evento' : 'Guardar boda'}</button></div>
   </form>`;
   shell(body, ['Eventos', '#' + ev.id]);
   wireEventForm(ev, { full: true });
@@ -230,14 +238,19 @@ function eventViewRole(ev) {
   if (role === 'dj') intro = `<div class="alert alert--info">Ficha del evento. Puedes añadir tus observaciones como DJ al final.</div>`;
   if (role === 'planner') intro = `<div class="alert alert--info">Como <b>wedding planner</b> puedes editar la <b>música</b>, los <b>extras</b> y los <b>horarios</b> de la boda. La <b>finca</b> y la <b>fecha</b> solo las cambia administración. Recuerda <b>Guardar</b> al terminar.</div>`;
 
-  const tabs = role === 'user'
+  const simple = isSimpleEvent(ev);
+  const tabs = simple
+    ? (role === 'user'
+      ? `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="archivos">Archivos</button></div>`
+      : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="servicios">Servicios</button></div>`)
+    : (role === 'user'
     ? `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="archivos">Archivos</button></div>`
-    : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="servicios">Servicios</button>${role === 'dj' ? '<button data-tab="ruta">Ruta</button>' : ''}</div>`;
+    : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="servicios">Servicios</button>${role === 'dj' ? '<button data-tab="ruta">Ruta</button>' : ''}</div>`);
   const panes = `
     <div data-pane="datos">${paneDatos(ev, locOpts, { readonly: !(role === 'user' && ev.canEdit), horariosEditable: isPlanner })}${role === 'user' ? clientPaymentBlock(ev) + accessBlock(ev) : ''}</div>
-    <div data-pane="musica" style="display:none">${paneMusica(ev, canEditMusic)}</div>
-    <div data-pane="extras" style="display:none">${paneExtras(ev, { readonly: !canEditMusic })}</div>
-    ${role !== 'user' ? `<div data-pane="servicios" style="display:none">${paneServicios(ev, null, null, { readonly: true })}${role === 'dj' ? (eventFinished(ev)
+    ${simple ? '' : `<div data-pane="musica" style="display:none">${paneMusica(ev, canEditMusic)}</div>
+    <div data-pane="extras" style="display:none">${paneExtras(ev, { readonly: !canEditMusic })}</div>`}
+    ${role !== 'user' ? `<div data-pane="servicios" style="display:none">${paneServicios(ev, null, null, { readonly: true })}${(role === 'dj' && !simple) ? (eventFinished(ev)
         ? `<div class="panel"><div class="panel__head"><h3>Albarán de trabajo</h3></div><div class="panel__body">
             <p class="hint" style="margin-bottom:12px">La boda ha finalizado. Indica las horas extra realizadas, si hay que pedir opinión y tus observaciones.</p>
             <div class="form-grid">
@@ -246,11 +259,11 @@ function eventViewRole(ev) {
             </div>
             ${fg('Observaciones', ta('dj_observations', ev.obsDj, 'Notas tras el evento…'))}</div></div>`
         : `<div class="panel"><div class="panel__body"><div class="alert alert--info">El <b>albarán de trabajo</b> (horas extra, opinión y observaciones) estará disponible para rellenar <b>cuando finalice la boda</b> (a partir del día siguiente). Recibirás un email como recordatorio.</div></div></div>`) : ''}</div>
-      ${role === 'dj' ? `<div data-pane="ruta" style="display:none">${paneRuta(ev)}</div>` : ''}` : `<div data-pane="archivos" style="display:none"><div class="panel"><div class="panel__body" id="filesBox">Cargando…</div></div></div>`}`;
+      ${(role === 'dj' && !simple) ? `<div data-pane="ruta" style="display:none">${paneRuta(ev)}</div>` : ''}` : `<div data-pane="archivos" style="display:none"><div class="panel"><div class="panel__body" id="filesBox">Cargando…</div></div></div>`}`;
   const canSave = canEditMusic || role === 'dj';
   // porcentaje de música completada (también visible para los novios)
   const prog = eventProgress(ev);
-  const progHtml = (role === 'user' || role === 'planner') ? `<div class="panel cli-prog"><div class="panel__body">
+  const progHtml = (!simple && (role === 'user' || role === 'planner')) ? `<div class="panel cli-prog"><div class="panel__body">
       <div class="cli-prog__row"><span>Música de tu boda completada</span><b>${prog}%</b></div>
       <div class="progress progress--green"><div id="progBar" style="width:${prog}%">${prog}%</div></div></div></div>` : '';
   shell(`${pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''))}
