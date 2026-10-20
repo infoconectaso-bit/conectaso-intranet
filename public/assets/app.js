@@ -33,7 +33,7 @@ try { S.lang = localStorage.getItem('conecta_lang') || 'es'; } catch (e) { S.lan
  * Solo se traduce para roles 'user' y 'planner'; administración y técnicos siempre en español.
  */
 const LANG_IDX = { ca: 0, en: 1, fr: 2 };
-const LANGS = [['ca', 'CAT', '🏴󠁥󠁳󠁣󠁴󠁿'], ['es', 'ESP', '🇪🇸'], ['en', 'ENG', '🇬🇧'], ['fr', 'FRA', '🇫🇷']];
+const LANGS = [['ca', 'CAT', '<span class="senyera" aria-label="Català"></span>'], ['es', 'ESP', '🇪🇸'], ['en', 'ENG', '🇬🇧'], ['fr', 'FRA', '🇫🇷']];
 const TR = {
   // menú
   'Principal': ['Principal', 'Main', 'Principal'], 'Inicio': ['Inici', 'Home', 'Accueil'], 'Mis bodas': ['Les meves bodes', 'My weddings', 'Mes mariages'],

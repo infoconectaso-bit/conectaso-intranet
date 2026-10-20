@@ -673,6 +673,9 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .langsel--top button .code{font-size:9px;font-weight:800;letter-spacing:.03em}
 .langsel--top button.on{background:var(--onyx,#130F17);color:#fff}
 .langsel--top button:not(.on):hover{background:var(--cream,#f6f2ea)}
+/* senyera (bandera de Cataluña): 9 franjas, 5 amarillas y 4 rojas */
+.senyera{display:inline-block;width:17px;height:12px;border-radius:2px;border:1px solid rgba(0,0,0,.2);vertical-align:middle;
+  background:repeating-linear-gradient(to bottom,#FCDD09 0,#FCDD09 11.111%,#DA121A 11.111%,#DA121A 22.222%)}
 
 /* hoja de ruta por evento */
 .ruta{display:flex;flex-direction:column;gap:0;margin-top:6px}
