@@ -834,7 +834,8 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
   @page{size:landscape;margin:0}
   body:has(.ruta-deck){background:#fff}
   .ruta-deck{gap:0;display:block}
-  .ruta-deck .slide{zoom:1 !important;width:100%;height:auto;aspect-ratio:1280/720;border-radius:0;box-shadow:none;page-break-after:always;break-after:page;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  /* Mantener el diseño a 1280px y escalar TODO con zoom para que el contenido no se recorte. */
+  .ruta-deck .slide{zoom:.86;width:1280px;height:720px;aspect-ratio:auto;border-radius:0;box-shadow:none;overflow:hidden;page-break-after:always;break-after:page;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .ruta-deck .slide *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 
@@ -862,4 +863,9 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .ruta-deck .nvc{font-size:13.5px;line-height:1.45;color:#d7d2c4}
 .ruta-deck .nvc b{display:block;font-family:var(--disp);text-transform:uppercase;font-size:14.5px;letter-spacing:.01em;color:var(--cream);margin-bottom:5px}
 .ruta-deck .slide--auto{height:auto;min-height:720px;overflow:visible}
-@media print{ .ruta-deck .slide--auto{min-height:auto} }
+@media print{
+  /* la escaleta musical NO debe forzarse a una sola página: crece y pagina sola, sin recortar músicas */
+  .ruta-deck .slide--auto{height:auto !important;min-height:auto !important;overflow:visible !important;page-break-after:auto;break-after:auto}
+  .ruta-deck .slide--auto .esc tr{break-inside:avoid}
+  .ruta-deck .slide--auto .esc thead{display:table-header-group}
+}
