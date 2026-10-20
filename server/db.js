@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS tokens (
   token_hash TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL CHECK (kind IN ('invite','reset')),
+  kind TEXT NOT NULL CHECK (kind IN ('invite','reset','albaran')),
   expires_at INTEGER NOT NULL,
   used_at INTEGER
 );
@@ -237,5 +237,25 @@ function migrateDjRates() {
   console.log('[migración] Tarifas de DJ (djRates) cargadas:', Object.keys(data).length, 'DJs.');
 }
 try { migrateDjRates(); } catch (e) { console.error('[migración] djRates:', e.message); }
+
+// Amplía el CHECK de 'tokens.kind' para permitir 'albaran' (enlace de autologin del DJ).
+function migrateTokensKind() {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tokens'").get();
+  if (!row || !row.sql || row.sql.includes('albaran')) return; // ya migrada o nueva
+  db.exec(`
+    CREATE TABLE tokens_new (
+      token_hash TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('invite','reset','albaran')),
+      expires_at INTEGER NOT NULL,
+      used_at INTEGER
+    );
+    INSERT INTO tokens_new (token_hash,user_id,kind,expires_at,used_at) SELECT token_hash,user_id,kind,expires_at,used_at FROM tokens;
+    DROP TABLE tokens;
+    ALTER TABLE tokens_new RENAME TO tokens;
+  `);
+  console.log('[migración] tabla tokens: CHECK de kind ampliado con albaran.');
+}
+try { migrateTokensKind(); } catch (e) { console.error('[migración] tokens-kind:', e.message); }
 
 module.exports = { db, store, users, transaction, COLLECTIONS, DATA_DIR, DB_PATH };

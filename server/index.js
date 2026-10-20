@@ -108,6 +108,7 @@ async function api(req, res, url) {
     if (seg[1] === 'me' && method === 'GET') return ok(res, { user: user ? meView(user) : null, mailEnabled: mail.enabled() });
     if (seg[1] === 'invite-info' && method === 'GET') return inviteInfo(req, res, url);
     if (seg[1] === 'activate' && method === 'POST') return activate(req, res);
+    if (seg[1] === 'albaran-login' && method === 'POST') return albaranLogin(req, res);
     if (seg[1] === 'forgot' && method === 'POST') return forgot(req, res);
     if (seg[1] === 'change-password' && method === 'POST') return changePassword(req, res, user);
     return fail(res, 404, 'Ruta no encontrada');
@@ -257,6 +258,18 @@ async function activate(req, res) {
   auth.createSession(req, res, t.user_id);
   store.audit(t.user_id, t.kind === 'invite' ? 'activate' : 'reset-password');
   return ok(res, { user: meView(users.get(t.user_id)) });
+}
+// Autologin del DJ por enlace mágico para rellenar su albarán (no requiere contraseña).
+// El token NO se consume: el enlace sirve durante sus 7 días de validez.
+async function albaranLogin(req, res) {
+  const { token } = await readBody(req);
+  const t = auth.checkToken(token);
+  if (!t || t.kind !== 'albaran') return fail(res, 404, 'El enlace no es válido o ha caducado.');
+  const u = users.get(t.user_id);
+  if (!u || !u.active) return fail(res, 403, 'La cuenta no está activa.');
+  auth.createSession(req, res, t.user_id);
+  store.audit(t.user_id, 'albaran-login');
+  return ok(res, { user: meView(u), mailEnabled: mail.enabled() });
 }
 async function forgot(req, res) {
   const ip = auth.clientIp(req);
@@ -568,6 +581,17 @@ async function events(req, res, user, seg, method, url) {
     const out = perm.sanitizeEvent(user, ev); enrichEvent(out, ev, user);
     out.factRows = fact.computeFact(ev); out.revRows = fact.computeRevenue(ev);
     return ok(res, { event: out });
+  }
+
+  // --- enlace de autologin para que el DJ (o trabajador por horas) rellene su parte (admin) ---
+  if (seg[2] === 'albaran-link' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    const wid = +(url.searchParams.get('worker')) || +ev.djId;
+    if (!wid) return fail(res, 400, 'Este evento no tiene DJ asignado.');
+    const w = users.get(wid);
+    if (!w) return fail(res, 404, 'Trabajador no encontrado.');
+    const token = auth.createToken(wid, 'albaran');
+    return ok(res, { token, eventId: ev.id, workerId: wid, workerName: w.name || '', hourly: !!fact.HOURLY_RATE[String(wid)] });
   }
 
   if (method === 'GET') {

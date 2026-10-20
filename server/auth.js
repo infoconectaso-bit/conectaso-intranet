@@ -78,9 +78,10 @@ const endAllSessions = uid => st.delUser.run(uid);
 
 /* ---------- enlaces de invitación / restablecimiento ---------- */
 function createToken(userId, kind) {
-  st.tokDelUser.run(userId, kind);
+  // El enlace de albarán del DJ puede coexistir para varias bodas, así que no borra los previos.
+  if (kind !== 'albaran') st.tokDelUser.run(userId, kind);
   const token = crypto.randomBytes(24).toString('base64url');
-  const days = kind === 'invite' ? 14 : 1;
+  const days = kind === 'invite' ? 14 : (kind === 'albaran' ? 7 : 1);
   st.tokIns.run(sha(token), userId, kind, Date.now() + days * 864e5);
   return token;
 }

@@ -210,6 +210,8 @@ const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
    ARRANQUE
    ========================================================================= */
 async function boot() {
+  // Autologin del DJ por enlace mágico del albarán (antes de pedir login).
+  if ((location.hash || '').startsWith('#/albaran')) return albaranAutologin();
   try {
     const me = await api('auth/me');
     S.user = me.user; S.mailEnabled = me.mailEnabled;
@@ -219,6 +221,22 @@ async function boot() {
   await loadContext();
   if (await tycGate()) return;
   route();
+}
+/* Autologin del DJ/trabajador por enlace mágico para rellenar su parte de trabajo. */
+async function albaranAutologin() {
+  const qs = new URLSearchParams((location.hash.split('?')[1]) || '');
+  const token = qs.get('token'), ev = qs.get('ev');
+  window.addEventListener('hashchange', route);
+  try {
+    const r = await api('auth/albaran-login', { method: 'POST', body: { token } });
+    S.user = r.user; S.mailEnabled = r.mailEnabled;
+    await loadContext();
+    location.hash = ev ? ('#/eventos/' + ev) : '#/eventos/realizados';
+    route();
+  } catch (e) {
+    app.innerHTML = authShell(`<h1>Enlace no válido</h1><div class="sub">${esc(e.message || 'El enlace ha caducado o no es válido. Pídele a administración uno nuevo.')}</div><a class="btn btn--dark btn--block" href="#/">Ir al inicio</a>`);
+    $$('a[href="#/"]').forEach(a => a.onclick = () => { location.hash = '#/'; location.reload(); });
+  }
 }
 /* Contrato TyC: el cliente debe firmarlo la primera vez antes de entrar. */
 async function tycGate() {

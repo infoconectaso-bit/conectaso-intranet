@@ -747,7 +747,8 @@ function paneFacturacion(ev) {
     ${rows ? `<div class="table-wrap"><table class="dt"><tbody>${rows}</tbody></table></div>` : '<div class="empty">Sin datos de facturación.</div>'}
     ${revRows ? `<h4 class="form-sub" style="margin-top:18px">Ingresos y beneficio</h4><div class="table-wrap"><table class="dt"><tbody>${revRows}</tbody></table></div>` : ''}
     ${(ev.plus || []).length ? `<h4 class="form-sub">Pluses</h4>${plusList}` : ''}${plusAdd}
-    ${eventFinished(ev) ? `<div class="form-grid" style="margin-top:18px">${fg('Pedir opinión', sel('ask_for_opinion', [['', '—'], 'Si', 'No'], ev.opinion))}${fg('Observaciones del DJ', ta('dj_observations', ev.obsDj))}</div>` : '<p class="hint" style="margin-top:14px">El albarán del DJ (horas extra, opinión y observaciones) se rellena cuando finaliza la boda.</p>'}</div></div>`;
+    ${eventFinished(ev) ? `<div class="form-grid" style="margin-top:18px">${fg('Pedir opinión', sel('ask_for_opinion', [['', '—'], 'Si', 'No'], ev.opinion))}${fg('Observaciones del DJ', ta('dj_observations', ev.obsDj))}</div>
+      ${ev.djId ? `<div class="btn-row" style="margin-top:12px"><button type="button" class="btn btn--sm btn--blue" data-albaran-link title="Genera el enlace de autologin para que el DJ rellene su parte">🔗 Enlace parte de trabajo del DJ</button></div>` : ''}` : '<p class="hint" style="margin-top:14px">El albarán del DJ (horas extra, opinión y observaciones) se rellena cuando finaliza la boda.</p>'}</div></div>`;
 }
 
 /* --- interacción del formulario de evento --- */
@@ -910,6 +911,20 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   // flujo de reserva de extras: confirmar disponibilidad / pagar reserva / ver aviso
   const reloadExtras = async () => { try { const r = await api('events/' + ev.id); ev.extraStatus = r.event.extraStatus || {}; const exRO = S.user.role === 'admin' ? false : !((S.user.role === 'user' && ev.canEdit) || S.user.role === 'planner'); const pane = form.querySelector('[data-pane="extras"]'); if (pane) { pane.innerHTML = paneExtras(ev, { readonly: exRO }); } } catch (e) {} };
   form.addEventListener('click', async e => {
+    const al = e.target.closest('[data-albaran-link]');
+    if (al) { e.preventDefault(); al.disabled = true;
+      try {
+        const r = await api('events/' + ev.id + '/albaran-link');
+        const link = location.origin + '/#/albaran?token=' + encodeURIComponent(r.token) + '&ev=' + ev.id;
+        const asunto = encodeURIComponent('Tu parte de trabajo · boda #' + ev.id);
+        const cuerpo = encodeURIComponent('Hola ' + (r.workerName || '') + ',\n\nLa boda ha finalizado. Entra en este enlace para rellenar tu parte de trabajo (entras directamente, sin contraseña):\n' + link + '\n\nGracias.');
+        modal('Enlace del parte de trabajo', `<p>Comparte este enlace con <b>${esc(r.workerName || 'el DJ')}</b>. Al abrirlo <b>entra directamente</b> (sin contraseña) a rellenar ${r.hourly ? 'su parte de horas' : 'su albarán'} de esta boda. Caduca en 7 días.</p>
+          <div class="field"><label>Enlace</label><input class="control" id="albLink" readonly value="${esc(link)}" onclick="this.select()"></div>
+          <div class="btn-row"><button type="button" class="btn btn--sm btn--primary" id="albCopy">Copiar enlace</button> <a class="btn btn--sm" href="mailto:?subject=${asunto}&body=${cuerpo}">Abrir en email</a></div>`, { okText: 'Cerrar' });
+        setTimeout(() => { const c = document.getElementById('albCopy'); if (c) c.onclick = () => { const i = document.getElementById('albLink'); i.select(); try { navigator.clipboard.writeText(i.value); } catch (x) { document.execCommand('copy'); } toast('Enlace copiado', 'ok'); }; }, 60);
+      } catch (err) { toast(err.message || 'No se pudo generar el enlace', 'err'); }
+      finally { al.disabled = false; }
+      return; }
     const sh = e.target.closest('[data-save-hours]');
     if (sh) { e.preventDefault();
       const inp2 = form.querySelector('#helperHours'); const msg = form.querySelector('#hoursMsg');
