@@ -199,14 +199,14 @@ async function usuariosPage(openId) {
   if (!requireAdmin()) return; loading(['Usuarios']);
   const { users } = await api('users');
   shell(`${pageHead('Usuarios', 'Cuentas con acceso al gestor. Invita, edita o da de baja.', `<button class="btn btn--primary" id="newUser">+ Crear usuario</button>`)}
-    <div class="panel"><div class="panel__body">${table('dtUsers', { rows: users, order: [0, 'desc'], filters: true, cols: [
+    <div class="panel"><div class="panel__body">${table('dtUsers', { rows: users, order: [0, 'desc'], len: 25, filters: true, cols: [
       { t: 'Id', get: u => u.id },
       { t: 'Rol', get: u => CS.roleLabel(u.role) },
       { t: 'Nombre', get: u => u.name, html: u => `<a data-edit="${u.id}">${esc(u.name || '—')}</a>` },
       { t: 'Email', get: u => u.email, html: u => esc((u.emailDuplicado ? u.emailOriginal : u.email) || '') },
       { t: 'Acceso', get: u => u.hasPassword ? 'Activo' : 'Sin activar', html: u => u.hasPassword ? '<span class="tag tag--green">Activo</span>' : '<span class="tag tag--grey">Sin activar</span>' },
       { t: 'TYC', get: u => u.role !== 'user' ? '—' : (u.tycSigned ? 'Firmado' : 'No firmado'), html: u => u.role !== 'user' ? '<span class="muted">—</span>' : (u.tycSigned ? `<a class="tyc-status tyc-status--ok" href="#/tyc-firma/${u.id}" title="Ver / descargar PDF firmado">✓ Firmado</a>` : '<span class="tyc-status tyc-status--no">✕ No firmado</span>') },
-      { t: '', nosort: true, nofilter: true, html: u => `<div class="row-actions">${u.role === 'user' ? `<button class="btn btn--icon" data-cal="${u.id}" title="${u.eventId ? 'Ver su boda' : 'Crear boda para este cliente'}">📅</button>` : ''}<button class="btn btn--sm" data-edit="${u.id}">Editar</button><button class="btn btn--sm btn--blue" data-invite="${u.id}" title="Reenviar mensaje de bienvenida">Reenviar</button><button class="btn btn--icon" data-del="${u.id}">🗑</button></div>` },
+      { t: '', nosort: true, nofilter: true, html: u => `<div class="row-actions">${u.role === 'user' ? `<button class="btn btn--icon" data-cal="${u.id}" title="${u.eventId ? 'Ver su boda' : 'Crear boda para este cliente'}">📅</button>` : ''}<button class="btn btn--icon" data-edit="${u.id}" title="Editar">${svg('edit')}</button><button class="btn btn--icon" data-invite="${u.id}" title="Reenviar mensaje de bienvenida">✉</button><button class="btn btn--icon" data-del="${u.id}" title="Dar de baja">🗑</button></div>` },
     ] })}</div></div>`, ['Usuarios']);
   el('newUser').onclick = () => userForm({}, users);
   bindTable('dtUsers', () => {
@@ -260,8 +260,8 @@ function userForm(u, all) {
     <div class="field"><label>Nombre</label>${inp('name', u.name)}</div>
     <div class="field"><label>Email</label>${inp('mail', u.emailDuplicado ? u.emailOriginal : u.email, { type: 'email' })}</div>
     ${!creating ? `<div class="field"><button type="button" class="btn btn--blue btn--sm" id="resendWelcome">✉ Reenviar mensaje de bienvenida</button> <span class="hint">El cliente recibe el enlace para crear su contraseña y entrar al gestor.</span></div>` : ''}
-    <div class="grid-2"><div class="field"><label>Rol</label>${sel('role', roles, u.role || 'user', 'id="uRole"')}</div>
-      <div class="field"><label>Color (agenda)</label>${inp('color', u.color, { ph: '#E82C88' })}</div></div>
+    <div class="field"><label>Rol</label>${sel('role', roles, u.role || 'user', 'id="uRole"')}</div>
+    <div class="field" id="colorBox" style="display:${(!creating && ['dj', 'planner', 'admin'].includes(u.role)) ? 'block' : 'none'}"><label>Color (agenda) <span class="hint">solo trabajadores</span></label>${inp('color', u.color, { ph: '#E82C88' })}</div>
     <div id="workerBox" style="display:${['dj', 'admin'].includes(u.role) ? 'block' : 'none'}">
       <div class="grid-2"><div class="field"><label>Tipo de trabajador</label>${sel('worker_type', [[0, 'Selecciona'], [1, 'Trabajador'], [2, 'Autónomo'], [3, 'Otros']], u.worker_type || 0)}</div>
       <div class="field"><label><input type="checkbox" name="vehicle_allowed" ${u.vehicle_allowed ? 'checked' : ''}> Puede coger vehículo</label></div></div>
@@ -297,7 +297,10 @@ function userForm(u, all) {
       } catch (e) { toast(e.message, 'err'); return true; }
     } });
   const rw = $('#resendWelcome', bg); if (rw) rw.onclick = async () => { try { const r = await api('users/' + u.id + '/invite', { method: 'POST' }); toast('Mensaje de bienvenida reenviado', 'ok'); showInvite(r.invite); } catch (e) { toast(e.message || 'No se pudo reenviar', 'err'); } };
-  const roleSel = $('#uRole', bg); roleSel.onchange = () => { $('#workerBox', bg).style.display = ['dj', 'admin'].includes(roleSel.value) ? 'block' : 'none'; };
+  const roleSel = $('#uRole', bg); roleSel.onchange = () => {
+    $('#workerBox', bg).style.display = ['dj', 'admin'].includes(roleSel.value) ? 'block' : 'none';
+    const cb = $('#colorBox', bg); if (cb) cb.style.display = (!creating && ['dj', 'planner', 'admin'].includes(roleSel.value)) ? 'block' : 'none';
+  };
   CS.momentHelpers.enhanceSearchSelects(bg);
   $('#addFinca', bg).onclick = () => { const box = $('#fincaBox', bg); box.insertAdjacentHTML('beforeend', fincaRow()); CS.momentHelpers.enhanceSearchSelects(box); };
   $('#addSvc', bg).onclick = () => { const box = $('#svcBox', bg); box.insertAdjacentHTML('beforeend', svcRow()); CS.momentHelpers.enhanceSearchSelects(box); };
