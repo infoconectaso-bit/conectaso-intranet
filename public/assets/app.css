@@ -231,6 +231,7 @@ table.dt tbody tr:hover td{background:#fdf0f7}
 .file-card__ic{font-size:26px;line-height:1}
 .file-card__meta{flex:1;min-width:0}
 .file-card__name{font-weight:800;font-size:14px;word-break:break-word}
+.file-moment{display:inline-block;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--blue,#31B9CB);background:rgba(49,185,203,.12);border:1px solid rgba(49,185,203,.35);border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:middle}
 .file-card__sub{font-size:12px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .file-card__act{display:flex;align-items:center;gap:8px;flex:none}
 .file-upload{border:2px dashed var(--line);border-radius:var(--radius);padding:16px;margin-top:8px}

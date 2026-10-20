@@ -12,6 +12,22 @@ const el = id => document.getElementById(id);
 // traductor por nodos no puede cubrir. Solo traduce para novios/wedding planner.
 // Trabajadores que cobran por horas (no por boda): ven un "parte de horas" en vez del albarán normal.
 const HOURLY_IDS = { 1251: true }; // Josep ayudante
+// Momentos para etiquetar los archivos subidos (valor guardado en castellano, etiqueta traducida).
+const FILE_MOMENTS = [
+  ['', ['Sin momento concreto', 'Sense moment concret', 'No specific moment', 'Aucun moment précis']],
+  ['Entrada ceremonia', ['Entrada ceremonia', 'Entrada cerimònia', 'Ceremony entrance', 'Entrée cérémonie']],
+  ['Anillos', ['Anillos', 'Anells', 'Rings', 'Alliances']],
+  ['Firmas', ['Firmas', 'Signatures', 'Signing', 'Signatures']],
+  ['Salida ceremonia', ['Salida ceremonia', 'Sortida cerimònia', 'Ceremony exit', 'Sortie cérémonie']],
+  ['Aperitivo', ['Aperitivo', 'Aperitiu', 'Aperitif', 'Apéritif']],
+  ['Entrada banquete', ['Entrada al banquete', 'Entrada al banquet', 'Banquet entrance', 'Entrée au banquet']],
+  ['Primer plato', ['Primer plato', 'Primer plat', 'First course', 'Entrée']],
+  ['Postre / Tarta', ['Postre / Tarta', 'Postres / Pastís', 'Dessert / Cake', 'Dessert / Gâteau']],
+  ['Regalo', ['Regalo / Sorpresa', 'Regal / Sorpresa', 'Gift / Surprise', 'Cadeau / Surprise']],
+  ['Baile nupcial', ['Baile nupcial', 'Ball nupcial', 'First dance', 'Danse nuptiale']],
+  ['Fiesta', ['Fiesta', 'Festa', 'Party', 'Fête']],
+  ['Otro', ['Otro', 'Altre', 'Other', 'Autre']],
+];
 const _tLang = () => (S.user && (S.user.role === 'user' || S.user.role === 'planner')) ? (S.lang || 'es') : 'es';
 const tt = (es, ca, en, fr) => ({ es: es, ca: ca || es, en: en || es, fr: fr || es }[_tLang()] || es);
 // la boda ha finalizado: a partir de las 00:00 del día siguiente a la fecha de la boda
@@ -1146,7 +1162,7 @@ async function loadFiles(ev) {
     const cards = (r.files || []).map(f => `<div class="file-card">
         <div class="file-card__main">
           <div class="file-card__ic">${isAudio(f) ? '🎵' : '📄'}</div>
-          <div class="file-card__meta"><div class="file-card__name">${esc(f.name)}</div>
+          <div class="file-card__meta"><div class="file-card__name">${esc(f.name)}${f.momento ? ` <span class="file-moment">${esc(f.momento)}</span>` : ''}</div>
             <div class="file-card__sub">${fsize(f.size)}${f.created_at ? ' · ' + slash(String(f.created_at).slice(0, 10)) : ''}</div></div>
           <div class="file-card__act">
             <a class="btn btn--sm" href="/api/files/${f.id}" target="_blank" download="${esc(f.name)}">Descargar</a>
@@ -1163,8 +1179,9 @@ async function loadFiles(ev) {
       ${canUpload ? `<div class="file-upload">
         <div class="form-grid" style="align-items:end">
           ${fg(tt('Archivo', 'Arxiu', 'File', 'Fichier'), `<input type="file" id="fileInput" class="control"><p class="hint">${tt('Máx. 60 MB por archivo.', 'Màx. 60 MB per arxiu.', 'Max 60 MB per file.', 'Max 60 Mo par fichier.')}</p>`)}
+          ${fg(tt('¿Para qué momento?', 'Per a quin moment?', 'For which moment?', 'Pour quel moment ?'), `<select id="fileMomento" class="control">${FILE_MOMENTS.map(m => `<option value="${esc(m[0])}">${esc(tt(m[1][0], m[1][1], m[1][2], m[1][3]))}</option>`).join('')}</select>`)}
         </div>
-        <button type="button" class="btn btn--primary btn--sm" id="fileBtn">Subir archivo</button>
+        <button type="button" class="btn btn--primary btn--sm" id="fileBtn">${tt('Subir archivo', 'Pujar arxiu', 'Upload file', 'Téléverser')}</button>
       </div>` : ''}`;
     if (canUpload) {
       el('fileBtn').onclick = async () => {
@@ -1172,6 +1189,7 @@ async function loadFiles(ev) {
         if (!file) { toast('Elige un archivo', 'err'); return; }
         if (file.size > 60 * 1048576) { toast('El archivo supera el límite de 60 MB', 'err'); return; }
         const fd = new FormData(); fd.append('file', file, file.name);
+        const mSel = el('fileMomento'); if (mSel && mSel.value) fd.append('momento', mSel.value);
         const btn = el('fileBtn'); btn.disabled = true; btn.textContent = 'Subiendo…';
         try { await api('files/events/' + ev.id, { method: 'POST', form: fd }); toast('Archivo subido', 'ok'); loadFiles(ev); }
         catch (err) { toast(err.message || 'No se pudo subir', 'err'); btn.disabled = false; btn.textContent = 'Subir archivo'; }

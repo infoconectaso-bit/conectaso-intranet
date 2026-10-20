@@ -829,6 +829,8 @@ async function filesApi(req, res, user, seg, method, url) {
     if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 404, 'Evento no encontrado');
     if (user.role === 'user' && !ev.editUser) return fail(res, 403, 'La edición no está habilitada.');
     const parts = await parseMultipart(req);
+    const momPart = parts.find(p => p.name === 'momento' && !p.filename);
+    const momento = momPart ? momPart.content.toString('utf8').trim().slice(0, 120) : '';
     const saved = [];
     for (const p of parts.filter(p => p.filename && p.content.length)) {
       if (p.content.length > MAX_UPLOAD) return fail(res, 413, 'Archivo demasiado grande');
@@ -836,9 +838,9 @@ async function filesApi(req, res, user, seg, method, url) {
       const dir = path.join(UPLOADS, 'boda-' + rid);
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, id + '-' + safeName(p.filename)), p.content);
-      db().prepare('INSERT INTO files (id, collection, record_id, name, mime, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(id, col, rid, p.filename, p.type || 'application/octet-stream', p.content.length, user.id);
-      saved.push({ id, name: p.filename, size: p.content.length });
+      db().prepare('INSERT INTO files (id, collection, record_id, name, description, mime, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(id, col, rid, p.filename, momento, p.type || 'application/octet-stream', p.content.length, user.id);
+      saved.push({ id, name: p.filename, size: p.content.length, momento });
     }
     store.audit(user.id, 'file-upload', col, rid);
     return ok(res, { files: saved });
@@ -846,7 +848,7 @@ async function filesApi(req, res, user, seg, method, url) {
   if (method === 'GET' && seg[1] === 'list') {
     const ev = store.get('events', +seg[2]);
     if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 404, 'No encontrado');
-    const rows = db().prepare('SELECT id, name, mime, size, created_at FROM files WHERE collection = ? AND record_id = ? ORDER BY created_at').all('events', +seg[2]);
+    const rows = db().prepare('SELECT id, name, description AS momento, mime, size, created_at FROM files WHERE collection = ? AND record_id = ? ORDER BY created_at').all('events', +seg[2]);
     return ok(res, { files: rows });
   }
   if (method === 'GET') {
