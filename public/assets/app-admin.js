@@ -29,7 +29,9 @@ on(/^#\/extras$/, () => solicitudesExtras());
 on(/^#\/extras-catalogo$/, () => extrasCatalogo());
 on(/^#\/papelera$/, () => papeleraEventos());
 async function papeleraEventos() {
-  if (!requireAdmin()) return; loading(['Papelera']);
+  if (!requireAdmin()) return;
+  if (!benefOk()) return benefGate('Papelera');   // protegida por Configuración avanzada
+  loading(['Papelera']);
   const { events } = await api('events/trash');
   shell(`${pageHead('Papelera de eventos', 'Eventos borrados. Puedes restaurarlos o eliminarlos definitivamente.')}
     <div class="panel"><div class="panel__body">
@@ -822,15 +824,16 @@ async function historyView(uid, admin) {
 /* beneficios (admin) — protegida con contraseña fija, solo administración */
 const BENEF_PASS = 'lamusica20';
 const benefOk = () => { try { return sessionStorage.getItem('conecta_benef_ok') === '1'; } catch (e) { return false; } };
-function benefGate() {
-  shell(`${pageHead('Beneficios', 'Sección protegida.')}
+function benefGate(label) {
+  label = label || 'Beneficios';
+  shell(`${pageHead(label, 'Sección protegida (Configuración avanzada).')}
     <div class="panel" style="max-width:480px"><div class="panel__body">
-      <p class="hint" style="margin-bottom:14px">🔒 Esta sección está protegida. Introduce la contraseña para ver los beneficios.</p>
+      <p class="hint" style="margin-bottom:14px">🔒 Esta sección está protegida. Introduce la contraseña (la encuentras también en <a href="#/cuenta">Mi cuenta → Configuración avanzada</a>).</p>
       <form id="benefForm"><div class="field"><label>Contraseña</label><input class="control" type="password" id="benefPass" autocomplete="off"></div>
         <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Entrar</button>
           <button type="button" class="btn btn--sm" id="benefForgot">¿Olvidaste la contraseña?</button></div></form>
       <p id="benefMsg" style="margin-top:12px;display:none;font-size:13px"></p>
-    </div></div>`, ['Beneficios']);
+    </div></div>`, [label]);
   $('#benefForm').onsubmit = e => { e.preventDefault(); const v = ($('#benefPass') || {}).value || ''; if (v === BENEF_PASS) { try { sessionStorage.setItem('conecta_benef_ok', '1'); } catch (x) {} if (CS.route) CS.route(); else location.reload(); } else { const m = $('#benefMsg'); m.style.display = 'block'; m.innerHTML = '<span style="color:#d9534f;font-weight:700">Contraseña incorrecta.</span>'; } };
   $('#benefForgot').onclick = () => { const m = $('#benefMsg'); m.style.display = 'block'; m.innerHTML = 'Te hemos enviado la contraseña a tu email de administración (<b>' + esc(S.user.email || 'tu email') + '</b>).<br><span class="muted">Nota demo: aún no hay envío de correo real. La contraseña es <b>lamusica20</b>.</span>'; };
 }
@@ -1037,6 +1040,19 @@ on(/^#\/mi-contrato$/, async () => {
    ========================================================================= */
 on(/^#\/cuenta$/, async () => {
   loading(['Mi cuenta']);
+  // Configuración avanzada: solo administración. Agrupa secciones de uso puntual (Papelera y
+  // Beneficios), protegidas con la contraseña de siempre. Se desbloquean una vez por sesión.
+  const adv = S.user.role === 'admin' ? `
+    <div class="panel" style="margin-top:4px"><div class="panel__head"><h3>⚙ Configuración avanzada</h3></div><div class="panel__body">
+      <p class="hint" style="margin-bottom:12px">Secciones de uso puntual, protegidas con contraseña.</p>
+      ${benefOk()
+      ? `<div class="btn-row"><a class="btn btn--primary" href="#/beneficios">€ Beneficios</a> <a class="btn" href="#/papelera">🗑 Papelera de eventos</a></div>
+         <p class="hint" style="margin-top:10px">Desbloqueado en este dispositivo durante esta sesión.</p>`
+      : `<form id="advForm" style="max-width:420px"><div class="field"><label>Contraseña</label><input class="control" type="password" id="advPass" autocomplete="off"></div>
+          <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Desbloquear</button>
+          <button type="button" class="btn btn--sm" id="advForgot">¿Olvidaste la contraseña?</button></div></form>
+         <p id="advMsg" style="margin-top:12px;display:none;font-size:13px"></p>`}
+    </div></div>` : '';
   shell(`${pageHead('Mi cuenta', 'Tus datos de acceso.')}
     <div class="grid-2">
       <div class="panel"><div class="panel__head"><h3>Datos</h3></div><div class="panel__body"><div class="form-grid">
@@ -1051,11 +1067,20 @@ on(/^#\/cuenta$/, async () => {
         <div id="pwErr" class="field-error" style="display:none"></div>
         <button class="btn btn--primary" type="submit" style="margin-top:12px">Actualizar</button>
       </form></div></div>
-    </div>`, ['Mi cuenta']);
+    </div>
+    ${adv}`, ['Mi cuenta']);
   el('pwForm').onsubmit = async e => {
     e.preventDefault(); const d = collectForm(e.target); const errEl = el('pwErr'); errEl.style.display = 'none';
     try { await api('auth/change-password', { method: 'POST', body: { current: d.current, password: d.password } }); toast('Contraseña actualizada', 'ok'); e.target.reset(); }
     catch (err) { errEl.textContent = err.message; errEl.style.display = 'block'; }
   };
+  const advForm = el('advForm');
+  if (advForm) advForm.onsubmit = e => {
+    e.preventDefault(); const v = (el('advPass') || {}).value || '';
+    if (v === BENEF_PASS) { try { sessionStorage.setItem('conecta_benef_ok', '1'); } catch (x) {} toast('Configuración avanzada desbloqueada', 'ok'); if (CS.route) CS.route(); else location.reload(); }
+    else { const m = el('advMsg'); m.style.display = 'block'; m.innerHTML = '<span style="color:#d9534f;font-weight:700">Contraseña incorrecta.</span>'; }
+  };
+  const advForgot = el('advForgot');
+  if (advForgot) advForgot.onclick = () => { const m = el('advMsg'); m.style.display = 'block'; m.innerHTML = 'Te hemos enviado la contraseña a tu email de administración (<b>' + esc(S.user.email || 'tu email') + '</b>).<br><span class="muted">Nota: aún no hay envío de correo real. La contraseña es <b>lamusica20</b>.</span>'; };
 });
 })();

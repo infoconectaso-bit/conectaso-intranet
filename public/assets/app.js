@@ -16,11 +16,28 @@ async function api(path, { method = 'GET', body, form } = {}) {
   const opt = { method, credentials: 'same-origin', headers: {} };
   if (form) opt.body = form;
   else if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-  const res = await fetch('/api/' + path, opt);
-  const ct = res.headers.get('content-type') || '';
-  const data = ct.includes('json') ? await res.json() : await res.text();
-  if (!res.ok) throw Object.assign(new Error((data && data.error) || ('Error ' + res.status)), { status: res.status, data });
-  return data;
+  // Las LECTURAS (GET) se reintentan automáticamente ante fallos transitorios (red caída,
+  // error 5xx del servidor, o respuesta no-JSON de un proxy). Es la causa del típico
+  // "nada por aquí" que al recargar ya mostraba los datos. Las escrituras NO se reintentan.
+  const isGet = method === 'GET';
+  const maxTries = isGet ? 3 : 1;
+  let lastErr;
+  for (let attempt = 0; attempt < maxTries; attempt++) {
+    if (attempt) await new Promise(r => setTimeout(r, 250 * attempt));
+    let res;
+    try { res = await fetch('/api/' + path, opt); }
+    catch (e) { lastErr = Object.assign(new Error('Sin conexión'), { status: 0 }); continue; }
+    const ct = res.headers.get('content-type') || '';
+    const data = ct.includes('json') ? await res.json().catch(() => null) : await res.text();
+    if (!res.ok) {
+      const err = Object.assign(new Error((data && data.error) || ('Error ' + res.status)), { status: res.status, data });
+      if (isGet && res.status >= 500) { lastErr = err; continue; } // 5xx transitorio → reintenta
+      throw err;
+    }
+    if (isGet && !ct.includes('json')) { lastErr = Object.assign(new Error('Respuesta vacía'), { status: 0 }); continue; } // cuerpo vacío/no-JSON → reintenta
+    return data;
+  }
+  throw lastErr || Object.assign(new Error('Error de red'), { status: 0 });
 }
 
 /* ---------- estado global ---------- */
@@ -372,11 +389,12 @@ function navFor(role) {
   if (role === 'admin') return [
     { s: 'Principal' }, { t: 'Inicio', i: 'home', h: '#/' },
     { s: 'Eventos' }, { t: 'Bodas pendientes', i: 'events', h: '#/eventos' }, { t: 'Bodas realizadas', i: 'events', h: '#/eventos/realizados' },
-    { t: 'Servicios extras', i: 'extras', h: '#/extras' }, { t: 'Papelera', i: 'events', h: '#/papelera' },
+    { t: 'Servicios extras', i: 'extras', h: '#/extras' },
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
     { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' },
-    { s: 'Negocio' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' }, { t: 'Beneficios', i: 'euro', h: '#/beneficios' },
+    { s: 'Negocio' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
     { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
+    // Papelera y Beneficios se han movido a "Mi cuenta → Configuración avanzada" (protegidos con contraseña).
   ];
   if (role === 'dj') {
     const tt = !!(S.user && S.user.time_tracking);     // solo quien tiene control horario habilitado

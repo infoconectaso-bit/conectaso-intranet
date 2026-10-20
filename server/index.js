@@ -626,7 +626,7 @@ async function events(req, res, user, seg, method, url) {
     const body = await readBody(req); const amount = Math.round(+body.amount || 0);
     if (!amount) return fail(res, 400, 'Indica un importe (puede ser positivo o negativo).');
     ev.plus = ev.plus || [];
-    ev.plus.push({ userId: body.userId ? +body.userId : null, amount, concept: body.concept || '', date: new Date().toISOString().slice(0, 10) });
+    ev.plus.push({ userId: body.userId ? +body.userId : null, amount, concept: body.concept || '', date: bizToday() });
     store.put('events', ev); store.audit(user.id, 'plus', 'events', id);
     const out = perm.sanitizeEvent(user, ev); enrichEvent(out, ev, user);
     out.factRows = fact.computeFact(ev); out.revRows = fact.computeRevenue(ev);
@@ -808,14 +808,14 @@ async function addAdjust(req, res, user) {
   const uid = +body.userId, amt = Math.round((+body.amount || 0) * 100) / 100;
   if (!uid) return fail(res, 400, 'Falta el trabajador.');
   if (!amt) return fail(res, 400, 'Indica un importe distinto de cero (positivo o negativo).');
-  const rec = { id: store.nextId('adjustments'), userId: uid, amount: amt, concept: String(body.concept || '').slice(0, 120), date: body.date || new Date().toISOString().slice(0, 10) };
+  const rec = { id: store.nextId('adjustments'), userId: uid, amount: amt, concept: String(body.concept || '').slice(0, 120), date: body.date || bizToday() };
   store.put('adjustments', rec);
   store.audit(user.id, 'adjust-add', 'adjustments', rec.id);
   return ok(res, { ok: true, adjustment: rec });
 }
 async function addPayment(req, res, user) {
   const body = await readBody(req);
-  const rec = store.put('payments', { userId: +body.userId, date: body.date || new Date().toISOString().slice(0, 10),
+  const rec = store.put('payments', { userId: +body.userId, date: body.date || bizToday(),
     amount: +body.amount || 0, description: body.description || '-' });
   store.audit(user.id, 'payment', 'payments', rec.id);
   return ok(res, { payment: rec });
@@ -826,6 +826,10 @@ function minutesOf(a) {
   return (a.slots || []).reduce((t, s) => { let d = toMin(s.out) - toMin(s.in); if (d < 0) d += 1440; return t + d; }, 0);
 }
 const toMin = s => { const [h, m] = String(s || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
+// Fecha de "hoy" en España (Europe/Madrid) como 'YYYY-MM-DD'. Se usa para no contar
+// como realizados/vencidos los eventos o vacaciones futuros. (Antes se llamaba en varios
+// sitios sin estar definida, lo que hacía fallar resumen, vehículos y las alertas del panel.)
+function bizToday() { return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }); }
 const ES_MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 function ymShift(ym, delta) { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 function ymLabel(ym) { const [y, m] = ym.split('-').map(Number); return ES_MONTHS[m - 1] + ' ' + y; }
@@ -1021,9 +1025,9 @@ async function collection(req, res, user, seg, method) {
       rec.urgency = prev ? prev.urgency : 'media';
       rec.status = prev ? prev.status : 'pendiente';
       rec.fixedAt = prev ? prev.fixedAt : null;
-      if (method === 'POST') rec.date = new Date().toISOString().slice(0, 10);
+      if (method === 'POST') rec.date = bizToday();
     }
-    if (col === 'maintenance' && user.role === 'admin' && method === 'PUT' && rec.status === 'completado' && !rec.fixedAt) rec.fixedAt = new Date().toISOString().slice(0, 10);
+    if (col === 'maintenance' && user.role === 'admin' && method === 'PUT' && rec.status === 'completado' && !rec.fixedAt) rec.fixedAt = bizToday();
     if (method === 'PUT' && policy.read === 'own' && user.role !== 'admin') {
       const cur = store.get(col, rec.id);
       if (!cur || +cur.userId !== +user.id) return fail(res, 403, 'Sin acceso');

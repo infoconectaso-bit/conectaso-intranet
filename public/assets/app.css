@@ -785,8 +785,11 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 /* botón Guardar más grande y, en móvil, centrado para encontrarlo fácil */
 .floatbar .btn--primary{padding:12px 32px;font-size:15px;min-width:170px}
 @media(max-width:600px){
-  .floatbar{justify-content:center;padding:14px 12px}
-  .floatbar .btn{flex:1;max-width:340px}
+  /* El padding del contenido en móvil es 8px, así que el margen negativo debe ser -8px
+     (antes -26px) o la barra se salía ~18px por lado provocando scroll horizontal. */
+  .floatbar{justify-content:center;padding:14px 12px;margin-left:-8px;margin-right:-8px}
+  .floatbar .btn{flex:1;max-width:340px;min-width:0}
+  .floatbar .btn--primary{min-width:0}
 }
 
 /* recomendaciones: playlists de propuestas por momento */
@@ -849,6 +852,12 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .ruta-deck .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
 .ruta-deck .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
 .ruta-deck .card{border:2px solid #ffffff2b;border-radius:16px;padding:16px 22px}
+/* Corte de palabra defensivo: evita que textos muy largos del usuario (nombres de novios,
+   fincas, canciones o enlaces sin espacios) rompan el layout o desborden en la web y el PDF. */
+.page-head h1,.page-head .lead,.crumbs,.crumbs b,.ev-cli-head h1,.ev-cli-sub,
+.ruta-deck h1,.ruta-deck .v,.ruta-deck .card,.ruta-deck .meta,.ruta-deck td,
+.mant-subj,.mant-desc,.mant-meta,.empty,.tl .notes,.timeline .notes,
+.pdf-page,.pdf-page h2,.pdf-page h3,.pdf-grid div,.pdf-head div{overflow-wrap:anywhere}
 .ruta-deck .card h3{font-size:18px;color:var(--cream);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;text-transform:uppercase}
 .ruta-deck .card .ic{font-size:22px}
 .ruta-deck .k{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:#9d97a4;margin-bottom:3px}

@@ -1303,14 +1303,16 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
     nm: extraName(s.servicio),
     resp: [s.resp, s.resp2].filter(Boolean).map(r => userName(r)).join(' · ') || 'Sin asignar',
   }));
-  const svcSlide = svcList.length ? `<section class="slide dark page slide--auto" style="min-height:auto">
+  // Numeración de páginas del PDF. pg() se evalúa en el ORDEN del documento, por eso svcSlide
+  // es una función que se llama en su posición dentro de la plantilla (no un const precalculado).
+  let pageNo = 1;
+  const pg = () => ('0' + (++pageNo)).slice(-2);
+  const svcSlide = () => !svcList.length ? '' : `<section class="slide dark page slide--auto" style="min-height:auto">
       <h2>Servicios y técnicos</h2>
       <p style="color:#b4aeb9;margin-bottom:18px">Quién se encarga de cada servicio en este evento.</p>
       <div class="svc-resp-grid">${svcList.map(s => `<div class="card"><h3>${esc(s.nm)} <span class="ic">🔧</span></h3><div class="v" style="font-size:19px">${esc(s.resp)}</div></div>`).join('')}</div>
       <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
-    </section>` : '';
-  let pageNo = 1;
-  const pg = () => ('0' + (++pageNo)).slice(-2);
+    </section>`;
   shell(`${pageHead('Hoja de ruta', 'Boda #' + ev.id)}
     <div class="pdf-toolbar"><a class="btn" href="#/eventos/${ev.id}">← Volver</a> <button class="btn btn--primary" onclick="window.print()">Imprimir / Guardar PDF</button></div>
     <div class="ruta-deck">
@@ -1387,7 +1389,7 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
         <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
       </section>` : ''}
 
-      ${svcSlide}
+      ${svcSlide()}
 
       ${escRows ? `<section class="slide light slide--auto" style="padding:48px 64px 40px">
         <h2 style="font-size:40px;margin-bottom:14px">Escaleta musical</h2>
