@@ -10,6 +10,8 @@ const isAdmin = () => S.user.role === 'admin';
 const el = id => document.getElementById(id);
 // Traducción directa de bloques largos del cliente (con negritas/importes), que el
 // traductor por nodos no puede cubrir. Solo traduce para novios/wedding planner.
+// Trabajadores que cobran por horas (no por boda): ven un "parte de horas" en vez del albarán normal.
+const HOURLY_IDS = { 1251: true }; // Josep ayudante
 const _tLang = () => (S.user && (S.user.role === 'user' || S.user.role === 'planner')) ? (S.lang || 'es') : 'es';
 const tt = (es, ca, en, fr) => ({ es: es, ca: ca || es, en: en || es, fr: fr || es }[_tLang()] || es);
 // la boda ha finalizado: a partir de las 00:00 del día siguiente a la fecha de la boda
@@ -287,14 +289,19 @@ function eventViewRole(ev) {
     ${simple ? '' : `<div data-pane="musica" style="display:none">${paneMusica(ev, canEditMusic)}</div>
     <div data-pane="extras" style="display:none">${paneExtras(ev, { readonly: !canEditMusic })}</div>`}
     ${role !== 'user' ? `<div data-pane="servicios" style="display:none">${paneServicios(ev, null, null, { readonly: true })}${(role === 'dj' && !simple) ? (eventFinished(ev)
-        ? `<div class="panel"><div class="panel__head"><h3>Albarán de trabajo</h3></div><div class="panel__body">
+        ? (HOURLY_IDS[S.user.id]
+          ? `<div class="panel"><div class="panel__head"><h3>Parte de horas</h3></div><div class="panel__body">
+              <p class="hint" style="margin-bottom:12px">La boda ha finalizado. Indica <b>cuántas horas has trabajado</b> y pulsa guardar. Se te sumarán a tu ficha para el cobro.</p>
+              <div class="form-grid"><div class="field"><label>Horas trabajadas</label><input class="control" type="number" min="0" step="0.5" id="helperHours" value="${ev.helperHours && ev.helperHours[S.user.id] != null ? esc(ev.helperHours[S.user.id]) : ''}" placeholder="p. ej. 13"></div></div>
+              <div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn--primary" data-save-hours>Guardar mis horas</button><span id="hoursMsg" class="muted" style="margin-left:10px"></span></div></div></div>`
+          : `<div class="panel"><div class="panel__head"><h3>Albarán de trabajo</h3></div><div class="panel__body">
             <p class="hint" style="margin-bottom:12px">La boda ha finalizado. Indica las horas extra realizadas, si hay que pedir opinión y tus observaciones.</p>
             <div class="form-grid">
               ${fg('Horas extra realizadas', sel('dj_assigned_overtime', [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas', '4 hora y media', '5 Horas'], ev.djOvertime))}
               ${fg('¿Pedir opinión a los novios?', sel('ask_for_opinion', [['', '—'], 'Si', 'No'], ev.opinion))}
             </div>
-            ${fg('Observaciones', ta('dj_observations', ev.obsDj, 'Notas tras el evento…'))}</div></div>`
-        : `<div class="panel"><div class="panel__body"><div class="alert alert--info">El <b>albarán de trabajo</b> (horas extra, opinión y observaciones) estará disponible para rellenar <b>cuando finalice la boda</b> (a partir del día siguiente). Recibirás un email como recordatorio.</div></div></div>`) : ''}</div>
+            ${fg('Observaciones', ta('dj_observations', ev.obsDj, 'Notas tras el evento…'))}</div></div>`)
+        : `<div class="panel"><div class="panel__body"><div class="alert alert--info">${HOURLY_IDS[S.user.id] ? 'Tu <b>parte de horas</b> estará disponible <b>cuando finalice la boda</b> (a partir del día siguiente).' : 'El <b>albarán de trabajo</b> (horas extra, opinión y observaciones) estará disponible para rellenar <b>cuando finalice la boda</b> (a partir del día siguiente). Recibirás un email como recordatorio.'}</div></div></div>`) : ''}</div>
       ${(role === 'dj' && !simple) ? `<div data-pane="ruta" style="display:none">${paneRuta(ev)}</div>` : ''}` : `<div data-pane="archivos" style="display:none"><div class="panel"><div class="panel__body" id="filesBox">Cargando…</div></div></div>`}`;
   const canSave = canEditMusic || role === 'dj';
   // porcentaje de música completada (también visible para los novios)
@@ -903,6 +910,16 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   // flujo de reserva de extras: confirmar disponibilidad / pagar reserva / ver aviso
   const reloadExtras = async () => { try { const r = await api('events/' + ev.id); ev.extraStatus = r.event.extraStatus || {}; const exRO = S.user.role === 'admin' ? false : !((S.user.role === 'user' && ev.canEdit) || S.user.role === 'planner'); const pane = form.querySelector('[data-pane="extras"]'); if (pane) { pane.innerHTML = paneExtras(ev, { readonly: exRO }); } } catch (e) {} };
   form.addEventListener('click', async e => {
+    const sh = e.target.closest('[data-save-hours]');
+    if (sh) { e.preventDefault();
+      const inp2 = form.querySelector('#helperHours'); const msg = form.querySelector('#hoursMsg');
+      const hours = parseFloat((inp2 || {}).value);
+      if (isNaN(hours) || hours < 0) { if (msg) { msg.textContent = 'Indica un número de horas válido.'; msg.style.color = '#d9534f'; } return; }
+      sh.disabled = true; if (msg) { msg.textContent = 'Guardando…'; msg.style.color = ''; }
+      try { await api('events/' + ev.id + '/mis-horas', { method: 'POST', body: { hours } }); if (msg) { msg.textContent = '✓ Horas guardadas'; msg.style.color = '#0B8043'; } toast('Horas guardadas', 'ok'); }
+      catch (err) { if (msg) { msg.textContent = err.message || 'Error al guardar'; msg.style.color = '#d9534f'; } }
+      finally { sh.disabled = false; }
+      return; }
     const cf = e.target.closest('[data-extra-confirm]');
     const pay = e.target.closest('[data-extra-pay]');
     const mail = e.target.closest('[data-extra-mail]');
