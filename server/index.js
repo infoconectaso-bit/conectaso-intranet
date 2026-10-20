@@ -451,21 +451,23 @@ function staffList() {
 }
 function meta(user) {
   const staffView = (user.role === 'admin' || user.role === 'dj');
+  const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'es', { sensitivity: 'base' });
   const m = {
     role: user.role,
     estados: store.setting('estados'),
     tipos: store.setting('tipos'),
     // admin/DJ reciben también los datos de desplazamiento (min/km/coordenadas) y la
     // dirección, que la hoja de ruta y el cálculo de kilómetros necesitan.
+    // Fincas, servicios, DJs/técnicos y planners van ORDENADOS alfabéticamente.
     locations: store.all('locations').map(l => staffView
       ? { id: l.id, name: l.name, colorHex: l.colorHex, direction: l.direction, directionLink: l.directionLink, lat: l.lat, lng: l.lng, travelMin: l.travelMin, travelKm: l.travelKm, travelApprox: l.travelApprox }
-      : { id: l.id, name: l.name, colorHex: l.colorHex }),
-    extras: store.all('extras'),
+      : { id: l.id, name: l.name, colorHex: l.colorHex }).sort(byName),
+    extras: store.all('extras').slice().sort(byName),
   };
   if (staffView) {
-    m.staff = staffList();
-    m.djs = users.all().filter(u => u.role === 'dj').map(u => ({ id: u.id, name: u.name }));
-    m.planners = users.all().filter(u => u.role === 'planner').map(u => ({ id: u.id, name: u.name }));
+    m.staff = staffList().slice().sort(byName);
+    m.djs = users.all().filter(u => u.role === 'dj').map(u => ({ id: u.id, name: u.name })).sort(byName);
+    m.planners = users.all().filter(u => u.role === 'planner').map(u => ({ id: u.id, name: u.name })).sort(byName);
   }
   return m;
 }
