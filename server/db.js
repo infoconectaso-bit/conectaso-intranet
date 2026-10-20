@@ -131,9 +131,14 @@ const stmts = {
 };
 const parse = r => (r ? JSON.parse(r.data) : null);
 
+// Caché en memoria de colecciones enteras: store.all() parseaba todos los registros
+// (p. ej. 2300+ eventos = ~140 ms) en cada llamada. Se invalida al escribir en esa colección.
+const _allCache = {};
+const invalidate = c => { delete _allCache[c]; };
+
 const store = {
   get: (c, id) => parse(stmts.get.get(c, +id)),
-  all: c => stmts.all.all(c).map(parse),
+  all: c => { if (!_allCache[c]) _allCache[c] = stmts.all.all(c).map(parse); return _allCache[c].slice(); },
   byOwner: (c, uid) => stmts.byOwner.all(c, +uid).map(parse),
   byStaff: (c, uid) => stmts.byStaff.all(c, `%,${+uid},%`).map(parse),
   byWp: (c, uid) => stmts.byWp.all(c, +uid).map(parse),
@@ -143,9 +148,10 @@ const store = {
     if (!rec.id) rec.id = store.nextId(c);
     const ix = indexCols(c, rec);
     stmts.upsert.run(c, +rec.id, JSON.stringify(rec), ix.owner_id, ix.dj_id, ix.wp_id, ix.staff, ix.date);
+    invalidate(c);
     return rec;
   },
-  del: (c, id) => stmts.del.run(c, +id).changes > 0,
+  del: (c, id) => { const r = stmts.del.run(c, +id).changes > 0; invalidate(c); return r; },
   setting: k => { const r = stmts.setting.get(k); return r ? JSON.parse(r.value) : null; },
   setSetting: (k, v) => stmts.setSetting.run(k, JSON.stringify(v)),
   audit: (uid, action, c, id) => { try { stmts.audit.run(uid || null, action, c || null, id ? +id : null); } catch (e) { /* no bloquear */ } },
