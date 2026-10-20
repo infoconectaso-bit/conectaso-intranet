@@ -320,6 +320,19 @@ function locForm(l) {
    ========================================================================= */
 // Los planos se guardan por PACK (el montaje depende del tipo de servicio), no por momento.
 const PLAN_ZONAS = [['recomendado', 'Recomendado'], ['fiesta', 'Pack fiesta'], ['bodorrio', 'Pack bodorrio'], ['tinglado', 'Pack tinglado']];
+// En RECOMENDADO el plano va por zonas del día; los packs de servicio llevan plano único.
+const RECO_ZONAS = [['ceremonia', 'Ceremonia'], ['aperitivo', 'Aperitivo'], ['banquete', 'Banquete'], ['fiesta', 'Fiesta']];
+const zonasForPack = pack => pack === 'recomendado' ? RECO_ZONAS : null;
+// Fincas que son la misma y comparten plano (Can Ribas: Oliveres 15 y Cirerers 14 usan el de Exclusivo 16)
+const PLANO_ALIAS = { '14': '16', '15': '16' };
+const planoLoc = id => PLANO_ALIAS[String(id)] || String(id);
+// Fincas recomendadas: su plano va solo por zonas (ceremonia/aperitivo/banquete/fiesta), nunca packs.
+const RECO_FINCAS = { '1': 1, '5': 1, '8': 1, '9': 1, '10': 1, '14': 1, '15': 1, '16': 1, '17': 1, '18': 1, '20': 1, '22': 1, '25': 1, '26': 1, '27': 1 };
+const isRecoFinca = id => !!RECO_FINCAS[String(id)];
+const zonaLabel = (pack, zona) => pack === 'recomendado' ? ((RECO_ZONAS.find(z => z[0] === zona) || [, zona])[1]) : ((PLAN_ZONAS.find(z => z[0] === pack) || [, pack])[1]);
+// Fincas que NO llevan plano en el pack Recomendado (el montaje es siempre el mismo).
+const NO_PLANO = { '9_recomendado': 1, '10_recomendado': 1, '12_recomendado': 1, '18_recomendado': 1 };
+const planoBlocked = (locId, pack) => !!NO_PLANO[locId + '_' + pack];
 const tipoToPack = tipo => { const t = (tipo || '').toLowerCase(); return /recomendad/.test(t) ? 'recomendado' : /fiesta/.test(t) ? 'fiesta' : /bodorrio/.test(t) ? 'bodorrio' : /tinglado/.test(t) ? 'tinglado' : null; };
 const PLAN_SYMS = {
   ctrl:   { g: 'Sonido', lab: 'Mesa de control', cls: 'pm-ctrl', txt: 'CTRL', rot: 1 },
@@ -353,14 +366,16 @@ const uidp = () => 'm' + Date.now().toString(36) + Math.random().toString(36).sl
 const clampp = v => Math.max(0, Math.min(100, v));
 
 on(/^#\/plano\/(\d+)(?:\/([a-z]+))?$/, m => planoPage(+m[1], m[2]));
-async function planoPage(locId, zona) {
+async function planoPage(locId, packArg) {
   const canEdit = isAdmin() || S.user.role === 'dj';
   if (!canEdit) { shell('<div class="empty">Sin acceso.</div>', ['Plano']); return; }
   loading(['Localizaciones', 'Plano']);
   const loc = (S.meta.locations || []).find(l => l.id == locId) || { id: locId, name: 'Finca #' + locId };
-  const z0 = PLAN_ZONAS.some(z => z[0] === zona) ? zona : 'recomendado';
-  PLAN = { locId, zona: z0, sel: null, img: null, marks: [], readOnly: false, loc };
-  shell(planoShell(loc), ['Localizaciones', 'Plano · ' + loc.name]);
+  let pack = PLAN_ZONAS.some(z => z[0] === packArg) ? packArg : 'recomendado';
+  if (isRecoFinca(locId)) pack = 'recomendado';   // finca recomendada: nunca packs de servicio
+  const zona = pack === 'recomendado' ? 'ceremonia' : pack;
+  PLAN = { locId, pack, zona, sel: null, img: null, marks: [], readOnly: false, loc, crumbs: ['Localizaciones', 'Plano · ' + loc.name] };
+  shell(planoShell(loc), PLAN.crumbs);
   planoBindStatic();
   await planoLoadZona();
 }
@@ -373,26 +388,24 @@ async function planoPageEvent(eventId) {
   if (!ev) { shell('<div class="empty">Evento no encontrado.</div>', ['Plano']); return; }
   const pack = tipoToPack(ev.tipo);
   if (!ev.lugar || !pack) { shell('<div class="empty">Este evento necesita una finca y un pack (tipo) con plano de montaje.</div>', ['Plano']); return; }
+  if (planoBlocked(ev.lugar, pack)) { shell(`<div class="empty"><span class="script">Sin plano</span>El pack <b>${esc(ev.tipo || '')}</b> no lleva plano de montaje en esta finca.</div>`, ['Plano']); return; }
   const loc = (S.meta.locations || []).find(l => l.id == ev.lugar) || { id: ev.lugar, name: 'Finca' };
-  try {
-    const d0 = await planoSrv.get('ev_' + eventId);
-    if (!d0.marks.length && !d0.hasImg) { // primera vez: se parte de la plantilla de la finca
-      const t = await planoSrv.get(ev.lugar + '_' + pack);
-      if (t.marks && t.marks.length) await planoSrv.putMarks('ev_' + eventId, t.marks.map(m => Object.assign({}, m)));
-      // la imagen de fondo: si la copia no tiene propia, se usa la de la plantilla al mostrarla
-    }
-  } catch (e) {}
-  PLAN = { locId: ev.lugar, eventId, zona: pack, mode: 'event', sel: null, img: null, marks: [], readOnly: false, loc };
-  shell(planoShell(loc), ['Eventos', '#' + eventId, 'Plano']);
+  const zona0 = pack === 'recomendado' ? 'ceremonia' : pack;
+  PLAN = { locId: ev.lugar, eventId, pack, zona: zona0, mode: 'event', sel: null, img: null, marks: [], readOnly: false, loc, crumbs: ['Eventos', '#' + eventId, 'Plano'] };
+  shell(planoShell(loc), PLAN.crumbs);
   planoBindStatic();
   await planoLoadZona();
 }
 function planoShell(loc) {
   const isEv = PLAN.mode === 'event';
-  const packLabel = (PLAN_ZONAS.find(z => z[0] === PLAN.zona) || [, '—'])[1];
+  const isReco = PLAN.pack === 'recomendado';
+  const curLabel = zonaLabel(PLAN.pack, PLAN.zona);
+  const recoOnly = !isEv && isRecoFinca(PLAN.locId); // finca recomendada → solo zonas, sin packs
+  const zoneTabs = isReco ? `<div class="plan-tabs plan-tabs--zonas">${RECO_ZONAS.map(z => `<button class="plan-tab${z[0] === PLAN.zona ? ' on' : ''}" data-z="${z[0]}">${z[1]}</button>`).join('')}</div>` : '';
+  const packTabs = recoOnly ? '' : `<div class="plan-tabs">${PLAN_ZONAS.map(z => `<button class="plan-tab${z[0] === PLAN.pack ? ' on' : ''}" data-pack="${z[0]}">${z[1]}</button>`).join('')}</div>`;
   const topBar = isEv
-    ? `<div class="plan-evbanner">✎ Estás editando una <b>copia para el evento #${PLAN.eventId}</b> (pack ${esc(packLabel)}). Los cambios <b>no afectan</b> a la plantilla de la finca. <button class="btn btn--sm" id="planUseTemplate" type="button">Descartar copia y usar la plantilla</button></div>`
-    : `<div class="plan-tabs">${PLAN_ZONAS.map(z => `<button class="plan-tab${z[0] === PLAN.zona ? ' on' : ''}" data-z="${z[0]}">${z[1]}</button>`).join('')}</div>`;
+    ? `<div class="plan-evbanner">✎ Estás editando una <b>copia para el evento #${PLAN.eventId}</b> (${esc(curLabel)}). Los cambios <b>no afectan</b> a la plantilla de la finca. <button class="btn btn--sm" id="planUseTemplate" type="button">Descartar copia y usar la plantilla</button></div>${zoneTabs}`
+    : `${packTabs}${zoneTabs}`;
   const backLink = isEv ? `<a class="btn btn--sm" href="#/eventos/${PLAN.eventId}">← Volver al evento</a>` : `<a class="btn btn--sm" href="#/localizaciones">← Localizaciones</a>`;
   const title = isEv ? ('Plano · ' + esc(loc.name) + ' · copia del evento #' + PLAN.eventId) : ('Plano de montaje · ' + esc(loc.name));
   const sub = isEv ? 'Copia de montaje solo para este evento (parte de la plantilla de la finca; edítala a tu gusto).' : 'Un montaje predefinido por pack de servicio. Coloca altavoces, truss, cables e iluminación sobre la vista aérea; se guarda por pack y por finca.';
@@ -432,15 +445,22 @@ function planoShell(loc) {
 }
 async function planoLoadZona() {
   PLAN.sel = null;
-  PLAN.keyBase = PLAN.mode === 'event' ? ('ev_' + PLAN.eventId) : (PLAN.locId + '_' + PLAN.zona);
+  const isReco = PLAN.pack === 'recomendado';
+  // plantilla de finca (con alias: Can Ribas Oliveres/Cirerers comparten el de Exclusivo)
+  const tplBase = isReco ? (planoLoc(PLAN.locId) + '_recomendado_' + PLAN.zona) : (planoLoc(PLAN.locId) + '_' + PLAN.pack);
+  PLAN.keyBase = PLAN.mode === 'event' ? ('ev_' + PLAN.eventId + (isReco ? ('_' + PLAN.zona) : '')) : tplBase;
   const d = await planoSrv.get(PLAN.keyBase);
   PLAN.marks = d.marks || [];
-  if (d.hasImg) PLAN.img = planoSrv.imgUrl(PLAN.keyBase, true);
-  else if (PLAN.mode === 'event') { // la copia del evento usa la imagen de la plantilla si no tiene propia
-    const t = await planoSrv.get(PLAN.locId + '_' + PLAN.zona);
-    PLAN.img = t.hasImg ? planoSrv.imgUrl(PLAN.locId + '_' + PLAN.zona, true) : null;
-  } else PLAN.img = null;
-  $$('.plan-tab').forEach(b => b.classList.toggle('on', b.dataset.z === PLAN.zona));
+  let imgKey = d.hasImg ? PLAN.keyBase : null;
+  // evento sin copia propia de esta zona: muestra la plantilla de la finca
+  if (PLAN.mode === 'event' && !imgKey && !PLAN.marks.length) {
+    const t = await planoSrv.get(tplBase);
+    PLAN.marks = t.marks || [];
+    if (t.hasImg) imgKey = tplBase;
+  }
+  PLAN.img = imgKey ? planoSrv.imgUrl(imgKey, true) : null;
+  $$('.plan-tab[data-z]').forEach(b => b.classList.toggle('on', b.dataset.z === PLAN.zona));
+  $$('.plan-tab[data-pack]').forEach(b => b.classList.toggle('on', b.dataset.pack === PLAN.pack));
   planoRenderStage();
 }
 async function planoSaveMarks() { await planoSrv.putMarks(PLAN.keyBase, PLAN.marks.map(m => Object.assign({}, m))); }
@@ -452,6 +472,10 @@ function planoMarkHTML(m) {
 }
 function planoRenderStage() {
   const st = el('planStage'); if (!st) return;
+  if (PLAN && PLAN.mode !== 'event' && planoBlocked(PLAN.locId, PLAN.pack)) {
+    st.innerHTML = '<div class="plan-drop"><div style="font-size:34px">🚫</div><div><b>Este pack no lleva plano en esta finca</b></div><div class="hint" style="max-width:36ch">El montaje del pack Recomendado es siempre el mismo aquí, así que no se define un plano propio.</div></div>';
+    return;
+  }
   const ro = PLAN.readOnly;
   let html = '';
   if (PLAN.img) html += `<img class="plan-img" src="${PLAN.img}" alt="">`;
@@ -469,8 +493,10 @@ function planoRenderStage() {
 }
 function planoPct(e) { const st = el('planStage'); const r = st.getBoundingClientRect(); return { x: clampp((e.clientX - r.left) / r.width * 100), y: clampp((e.clientY - r.top) / r.height * 100) }; }
 function planoRotate(d) { if (!PLAN.sel) return; const m = PLAN.marks.find(x => x.id === PLAN.sel); if (!m || m.t === 'line') return; m.rot = ((m.rot || 0) + d) % 360; planoRenderStage(); planoSaveMarks(); }
+function planoRerender() { shell(planoShell(PLAN.loc), PLAN.crumbs || ['Plano']); planoBindStatic(); return planoLoadZona(); }
 function planoBindStatic() {
-  $$('.plan-tab').forEach(b => b.onclick = async () => { PLAN.zona = b.dataset.z; await planoLoadZona(); });
+  $$('.plan-tab[data-z]').forEach(b => b.onclick = async () => { PLAN.zona = b.dataset.z; await planoLoadZona(); });
+  $$('.plan-tab[data-pack]').forEach(b => b.onclick = async () => { PLAN.pack = b.dataset.pack; PLAN.zona = PLAN.pack === 'recomendado' ? 'ceremonia' : PLAN.pack; await planoRerender(); });
   if (!PLAN.readOnly) {
     $$('.pal-item').forEach(b => b.onclick = () => { const n = PLAN.marks.filter(x => x.t !== 'line').length; const m = { id: uidp(), t: b.dataset.t, x: 44 + (n % 6) * 3, y: 40 + (n % 6) * 4, rot: 0 }; PLAN.marks.push(m); PLAN.sel = m.id; planoRenderStage(); planoSaveMarks(); });
     $$('.pal-line').forEach(b => b.onclick = () => { const m = { id: uidp(), t: 'line', sub: b.dataset.l, x1: 38, y1: 50, x2: 62, y2: 50 }; PLAN.marks.push(m); PLAN.sel = m.id; planoRenderStage(); planoSaveMarks(); });
@@ -532,24 +558,40 @@ async function planoPreviewByKey(keyBase) {
   h += `</div>`;
   return h;
 }
+// Planos de un evento, por zonas (recomendado) o único (packs). Usado por la hoja de ruta (deck).
+async function planoZonesForEvent(ev) {
+  const pack = tipoToPack(ev.tipo);
+  if (!ev.lugar || !pack || planoBlocked(ev.lugar, pack)) return [];
+  const out = [];
+  if (pack === 'recomendado') {
+    for (const z of RECO_ZONAS) {
+      let html = await planoPreviewByKey('ev_' + ev.id + '_' + z[0]);
+      if (!html) html = await planoPreviewByKey(planoLoc(ev.lugar) + '_recomendado_' + z[0]);
+      if (!html && z[0] === 'ceremonia') html = await planoPreviewByKey(planoLoc(ev.lugar) + '_recomendado');
+      if (html) out.push({ label: z[1], html });
+    }
+  } else {
+    let html = await planoPreviewByKey('ev_' + ev.id);
+    if (!html) html = await planoPreviewByKey(planoLoc(ev.lugar) + '_' + pack);
+    if (html) out.push({ label: zonaLabel(pack, pack), html });
+  }
+  return out;
+}
 async function loadRutaPlano(ev) {
   const box = el('rutaPlano'); if (!box) return;
   if (!ev.lugar) { box.innerHTML = ''; return; }
   const pack = tipoToPack(ev.tipo);
   if (!pack) { box.innerHTML = `<div class="panel ruta-plano-empty"><div class="panel__body"><p class="hint">El tipo "<b>${esc(ev.tipo || '—')}</b>" no tiene pack de montaje predefinido. <a href="#/plano/${ev.lugar}">Ver planos de la finca →</a></p></div></div>`; return; }
-  const packLabel = (PLAN_ZONAS.find(z => z[0] === pack) || [, '—'])[1];
-  const evD = await planoSrv.get('ev_' + ev.id);
-  const isCopy = (evD.marks && evD.marks.length) || evD.hasImg;
-  const h = isCopy ? await planoPreviewByKey('ev_' + ev.id) : await planoPreviewHTML(ev.lugar, pack);
-  const editBtn = `<a class="btn btn--sm btn--primary" href="#/plano-ev/${ev.id}">${isCopy ? 'Editar copia del evento' : 'Editar una copia para este evento'}</a>`;
-  const src = isCopy ? `${esc(packLabel)} · <span class="plan-src plan-src--copy">copia de este evento</span>` : `${esc(packLabel)} · <span class="plan-src">plantilla de la finca</span>`;
-  box.innerHTML = h
-    ? `<div class="panel ruta-plano-panel"><div class="panel__head"><h3>🗺️ Plano de montaje · ${src}</h3>${editBtn}</div><div class="panel__body"><div class="ruta-plano-single">${h}</div></div></div>`
-    : `<div class="panel ruta-plano-empty"><div class="panel__body"><p class="hint">Aún no hay plano de montaje para <b>${esc(packLabel)}</b> en esta finca. ${editBtn} · o define la <a href="#/plano/${ev.lugar}/${pack}">plantilla de la finca →</a></p></div></div>`;
+  if (planoBlocked(ev.lugar, pack)) { box.innerHTML = ''; return; }
+  const editBtn = `<a class="btn btn--sm btn--primary" href="#/plano-ev/${ev.id}">Editar plano del evento</a>`;
+  const zones = await planoZonesForEvent(ev);
+  if (!zones.length) { box.innerHTML = `<div class="panel ruta-plano-empty"><div class="panel__body"><p class="hint">Aún no hay plano de montaje para esta boda. ${editBtn} · o define la <a href="#/plano/${ev.lugar}">plantilla de la finca →</a></p></div></div>`; return; }
+  box.innerHTML = `<div class="panel ruta-plano-panel"><div class="panel__head"><h3>🗺️ Plano de montaje${zones.length > 1 ? ' · por zonas' : ''}</h3>${editBtn}</div><div class="panel__body">${zones.map(z => `<div class="ruta-plano-zone"><div class="rpz-lbl">${esc(z.label)}</div><div class="ruta-plano-single">${z.html}</div></div>`).join('')}</div></div>`;
 }
 window.loadRutaPlano = loadRutaPlano; // para que lo invoque app-pages.js al abrir la pestaña Ruta
 window.planoPreviewHTML = planoPreviewHTML;
 window.planoPreviewByKey = planoPreviewByKey;
+window.planoZonesForEvent = planoZonesForEvent; // lo usa la hoja de ruta (deck) en app-pages
 window.tipoToPack = tipoToPack;
 
 /* =========================================================================
