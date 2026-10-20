@@ -1016,8 +1016,13 @@ async function collection(req, res, user, seg, method) {
   const canWrite = policy.write.includes(user.role);
   if ((method === 'POST' || method === 'PUT') && canWrite) {
     const body = await readBody(req);
-    const rec = body.item || body;
-    if (method === 'PUT') rec.id = +seg[2];
+    let rec = body.item || body;
+    if (method === 'PUT') {
+      // Fusiona con el registro existente: un guardado parcial (p. ej. solo los datos de
+      // desplazamiento de una finca, sin el nombre) ya NO borra el resto de campos.
+      const cur = store.get(col, +seg[2]);
+      rec = Object.assign({}, cur || {}, rec, { id: +seg[2] });
+    }
     if (policy.ownWrite && policy.ownWrite.includes(user.role)) rec.userId = user.id; // el DJ solo escribe lo suyo
     if (col === 'maintenance' && user.role !== 'admin') {
       // El DJ no decide urgencia ni estado: los fija administración. Un parte nuevo nace pendiente.

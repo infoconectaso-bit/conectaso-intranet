@@ -130,7 +130,7 @@ function parseLatLng(s) {
 async function desplazamientosPage() {
   if (!requireAdmin()) return; loading(['Desplazamientos']);
   const { items } = await api('collections/locations');
-  const locs = items.slice().sort((a, b) => (a.travelMin ? 1 : 0) - (b.travelMin ? 1 : 0) || a.name.localeCompare(b.name, 'es'));
+  const locs = items.slice().sort((a, b) => (a.travelMin ? 1 : 0) - (b.travelMin ? 1 : 0) || (a.name || '').localeCompare(b.name || '', 'es'));
   const pend = locs.filter(l => !l.travelMin).length;
   const row = l => `<tr data-loc="${l.id}">
     <td><span class="color-dot" style="background:${l.colorHex || colorOf(l.id)}"></span> <b>${esc(l.name)}</b></td>
@@ -341,7 +341,7 @@ function locForm(l) {
     <div class="grid-2">${f('Precio ceremonia', 'ceremonyPrice', 'number')}${f('Precio hora extra', 'extraPrice', 'number')}</div>
     <p class="hint">El precio de hora extra de la finca se usa automáticamente en la facturación cuando el evento tiene horas extra.</p>
     <div class="field"><label>Comentarios</label>${ta('comments', l.comments)}</div></form>`,
-    { okText: 'Guardar', onOk: async () => { const d = collectForm($('#locForm')); await coll.save('locations', Object.assign({ id: l.id }, d)); await CS.loadContext(); toast('Guardada', 'ok'); location.hash = '#/localizaciones'; } });
+    { okText: 'Guardar', onOk: async () => { const d = collectForm($('#locForm')); if (!d.name || !d.name.trim()) { toast('Pon un nombre a la localización', 'err'); return true; } await coll.save('locations', Object.assign({ id: l.id }, d)); await CS.loadContext(); toast('Guardada', 'ok'); location.hash = '#/localizaciones'; } });
 }
 
 /* =========================================================================

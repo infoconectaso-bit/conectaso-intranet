@@ -220,8 +220,8 @@ on(/^#\/eventos\/(\d+)$/, async m => {
 /* ---- editor completo (admin) ---- */
 function eventEditorAdmin(ev) {
   const staffOpts = [['', 'Selecciona un usuario']].concat((S.meta.staff || []).map(u => [u.id, u.name]));
-  const svcOpts = [['', 'Selecciona un servicio']].concat((S.meta.extras || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'es')).map(x => [x.id, x.name]));
-  const locOpts = [[0, 'Selecciona un lugar']].concat((S.meta.locations || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'es')).map(l => [l.id, l.name])).concat([['otro', 'Otro']]);
+  const svcOpts = [['', 'Selecciona un servicio']].concat((S.meta.extras || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es')).map(x => [x.id, x.name]));
+  const locOpts = [[0, 'Selecciona un lugar']].concat((S.meta.locations || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es')).map(l => [l.id, l.name])).concat([['otro', 'Otro']]);
   const pend = (+ev.pagoCliente || 0) - (+ev.pagado || 0);
   const prog = eventProgress(ev);
   const shiftIso = (iso, n) => { const p = String(iso || '').slice(0, 10).split('-'); if (p.length < 3) return ''; const d = new Date(+p[0], +p[1] - 1, +p[2]); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
@@ -274,7 +274,7 @@ function eventViewRole(ev) {
   const isPlanner = role === 'planner';
   // el wedding planner puede editar música, extras y horarios (nunca finca ni fecha)
   const canEditMusic = (role === 'user' && ev.canEdit) || isPlanner;
-  const locOpts = [[0, 'Selecciona un lugar']].concat((S.meta.locations || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'es')).map(l => [l.id, l.name])).concat([['otro', 'Otro']]);
+  const locOpts = [[0, 'Selecciona un lugar']].concat((S.meta.locations || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es')).map(l => [l.id, l.name])).concat([['otro', 'Otro']]);
   let intro = '';
   if (role === 'user') {
     if (ev.canEdit) {
@@ -987,7 +987,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   form.addEventListener('click', e => {
     const add = e.target.closest('[data-add-opt]'); if (add) { const box = form.querySelector(`[data-sortbox="${add.dataset.addOpt}"]`); box.insertAdjacentHTML('beforeend', optRow({ sec: add.dataset.addOpt }, { readonly: false })); if (form._updProgress) form._updProgress(); }
     const delo = e.target.closest('[data-del-opt]'); if (delo) { delo.closest('[data-moment]').remove(); if (form._updProgress) form._updProgress(); }
-    if (e.target.id === 'addSvc') { const staffOpts = [['', 'Selecciona un usuario']].concat((S.meta.staff || []).map(u => [u.id, u.name])); const svcOpts = [['', 'Selecciona un servicio']].concat((S.meta.extras || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'es')).map(x => [x.id, x.name])); el('svcBox').insertAdjacentHTML('beforeend', svcRow({}, svcOpts, staffOpts)); enhanceSearchSelects(el('svcBox')); }
+    if (e.target.id === 'addSvc') { const staffOpts = [['', 'Selecciona un usuario']].concat((S.meta.staff || []).map(u => [u.id, u.name])); const svcOpts = [['', 'Selecciona un servicio']].concat((S.meta.extras || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es')).map(x => [x.id, x.name])); el('svcBox').insertAdjacentHTML('beforeend', svcRow({}, svcOpts, staffOpts)); enhanceSearchSelects(el('svcBox')); }
     const dsv = e.target.closest('[data-del-svc]'); if (dsv) dsv.closest('[data-svc]').remove();
     if (e.target.id === 'genPlaylist') { e.preventDefault(); showPlaylist(form); }
   });
