@@ -681,6 +681,9 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .ev-client .reorder-hint{font-size:10.5px}
 .ev-client .form-grid{gap:8px 14px}
 .ev-client .alert{padding:9px 12px;font-size:13px}
+/* campo musical obligatorio vacío → aviso en amarillo; al escribir vuelve al color base */
+.control.req-empty{background:rgba(240,196,32,.16);border-color:#e0a800}
+.control.req-empty:focus{background:#fffdf3;border-color:#c79000}
 
 /* recomendaciones: playlists de propuestas por momento */
 .recs-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}

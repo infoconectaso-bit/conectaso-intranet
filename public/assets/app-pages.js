@@ -274,7 +274,7 @@ function eventViewRole(ev) {
   // porcentaje de música completada (también visible para los novios)
   const prog = eventProgress(ev);
   const progHtml = (!simple && (role === 'user' || role === 'planner')) ? `<div class="cli-prog cli-prog--mini">
-      <div class="cli-prog__row"><span>Música completada</span><b>${prog}%</b></div>
+      <div class="cli-prog__row"><span>Música completada</span><b id="progPct">${prog}%</b></div>
       <div class="progress progress--green progress--mini"><div id="progBar" style="width:${prog}%"></div></div></div>` : '';
   const headHtml = (role === 'user')
     ? `<div class="ev-cli-head"><h1>${esc(ev.conyuges || ev.tipo || 'Mi boda')}</h1><div class="ev-cli-sub">${dmy(ev.fecha)}${ev.hora ? ' · ' + ev.hora : ''}</div></div>`
@@ -886,8 +886,8 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   form.addEventListener('click', e => { const t = e.target.closest('[data-cmt-toggle]'); if (!t) return; e.preventDefault(); const box = t.closest('[data-cmt]'); const body = box.querySelector('.cmt-body'); const open = box.classList.toggle('open'); body.style.display = open ? '' : 'none'; if (open) { const i = body.querySelector('input,textarea'); if (i) i.focus(); } });
   // añadir / quitar momentos · subir / bajar
   form.addEventListener('click', e => {
-    const add = e.target.closest('[data-add-opt]'); if (add) { const box = form.querySelector(`[data-sortbox="${add.dataset.addOpt}"]`); box.insertAdjacentHTML('beforeend', optRow({ sec: add.dataset.addOpt }, { readonly: false })); }
-    const delo = e.target.closest('[data-del-opt]'); if (delo) delo.closest('[data-moment]').remove();
+    const add = e.target.closest('[data-add-opt]'); if (add) { const box = form.querySelector(`[data-sortbox="${add.dataset.addOpt}"]`); box.insertAdjacentHTML('beforeend', optRow({ sec: add.dataset.addOpt }, { readonly: false })); if (form._updProgress) form._updProgress(); }
+    const delo = e.target.closest('[data-del-opt]'); if (delo) { delo.closest('[data-moment]').remove(); if (form._updProgress) form._updProgress(); }
     if (e.target.id === 'addSvc') { const staffOpts = [['', 'Selecciona un usuario']].concat((S.meta.staff || []).map(u => [u.id, u.name])); const svcOpts = [['', 'Selecciona un servicio']].concat((S.meta.extras || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'es')).map(x => [x.id, x.name])); el('svcBox').insertAdjacentHTML('beforeend', svcRow({}, svcOpts, staffOpts)); enhanceSearchSelects(el('svcBox')); }
     const dsv = e.target.closest('[data-del-svc]'); if (dsv) dsv.closest('[data-svc]').remove();
     if (e.target.id === 'genPlaylist') { e.preventDefault(); showPlaylist(form); }
@@ -917,20 +917,31 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
     form.addEventListener('input', updateProgress);
     updateProgress();
   } else if (role === 'user' || role === 'planner') {
-    // progreso en vivo para novios/planner (solo campos musicales, como eventProgress)
-    const bar = el('progBar');
-    if (bar) {
-      const upd = () => {
-        const songs = $$('[data-moment] input[name]', form).filter(i => /^(ceremony|aperitif|banquet|disco)_[a-z_]+$/.test(i.name) && !((i.closest('[data-moment]').querySelector('input[name^=check_]') || {}).checked));
-        const optVals = $$('[data-moment] [data-f=value]', form);
-        const playlist = form.querySelector('[name=link_playlist]');
-        const all = [...songs, ...optVals]; if (playlist) all.push(playlist);
-        const filled = all.filter(i => String(i.value || '').trim() !== '').length;
-        const pct = all.length ? Math.round(filled / all.length * 100) : 0;
-        bar.style.width = pct + '%'; bar.textContent = pct + '%';
-      };
-      form.addEventListener('input', upd);
-    }
+    // progreso en vivo para novios/planner: cuenta SOLO los campos musicales activos
+    // (los momentos desactivados no cuentan) y los personalizados añadidos. Los campos
+    // vacíos obligatorios se marcan en amarillo; al escribir pasan al color base.
+    const upd = () => {
+      const bar = el('progBar'); if (!bar) return;
+      // campo de canción de cada momento fijo que NO esté desactivado ("no se incluye")
+      const songs = $$('[data-moment] input[name]', form).filter(i => /^(ceremony|aperitif|banquet|disco)_[a-z_]+$/.test(i.name) && !((i.closest('[data-moment]').querySelector('input[name^=check_]') || {}).checked));
+      const optVals = $$('[data-moment][data-opt] [data-f=value]', form);  // personalizados añadidos
+      const playlist = form.querySelector('[name=link_playlist]');
+      const req = [...songs, ...optVals]; if (playlist) req.push(playlist);
+      $$('.control.req-empty', form).forEach(i => i.classList.remove('req-empty')); // limpiar
+      let filled = 0;
+      req.forEach(i => {
+        const ok = String(i.value || '').trim() !== '';
+        if (ok) filled++;
+        else i.classList.add('req-empty');   // obligatorio vacío → amarillo
+      });
+      const pct = req.length ? Math.round(filled / req.length * 100) : 0;
+      bar.style.width = pct + '%'; bar.textContent = pct + '%';
+      const num = el('progPct'); if (num) num.textContent = pct + '%';
+    };
+    form.addEventListener('input', upd);
+    form.addEventListener('change', upd);   // para las casillas de "no se incluye"
+    form._updProgress = upd;                // para llamarlo al añadir/quitar momentos
+    upd();
   }
   // reordenar arrastrando (ratón y táctil)
   initSortable(form);
