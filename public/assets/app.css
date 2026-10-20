@@ -676,6 +676,10 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .cli-contact{display:flex;align-items:center;gap:11px;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);text-decoration:none;font-size:13px;transition:.12s}
 .cli-contact:hover{border-color:var(--pink);transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.06)}
 .cli-contact__ic{font-size:22px;flex:none}
+.ig-follow{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:999px;font-weight:700;font-size:14px;color:#fff;text-decoration:none;background:linear-gradient(95deg,#f58529,#dd2a7b 45%,#8134af 75%,#515bd4);box-shadow:0 6px 18px rgba(221,42,123,.35);transition:.12s}
+.ig-follow:hover{transform:translateY(-1px);box-shadow:0 9px 24px rgba(221,42,123,.45)}
+.ig-follow__ic{font-size:18px}
+.ig-follow b{font-weight:800}
 .cli-contact b{font-size:13.5px}
 /* cabecera compacta de la boda (vista cliente) */
 .ev-cli-head{margin-bottom:14px}

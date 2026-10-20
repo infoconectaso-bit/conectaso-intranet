@@ -681,11 +681,12 @@ async function dashboardSimple() {
       </div>
       <div class="cli-welcome__contact">
         <h3>${T('¿Alguna duda? Hablamos', 'Algun dubte? En parlem', 'Any questions? Let us talk', 'Une question ? Parlons-en')}</h3>
+        <div style="text-align:center;margin-bottom:16px"><a class="ig-follow" href="${CS_CONTACT.ig}" target="_blank" rel="noopener"><span class="ig-follow__ic">📸</span> ${T('Seguir en Instagram', 'Segueix-nos a Instagram', 'Follow on Instagram', 'Suivez-nous sur Instagram')} <b>@conecta.so</b></a></div>
         <div class="cli-contact-grid">
           <a class="cli-contact" href="https://wa.me/${CS_CONTACT.wa}" target="_blank" rel="noopener"><span class="cli-contact__ic">💬</span><span><b>WhatsApp</b><br>${CS_CONTACT.phone}</span></a>
           <a class="cli-contact" href="tel:+${CS_CONTACT.wa}"><span class="cli-contact__ic">📞</span><span><b>${T('Teléfono', 'Telèfon', 'Phone', 'Téléphone')}</b><br>${CS_CONTACT.phone}</span></a>
           <a class="cli-contact" href="mailto:${CS_CONTACT.email}"><span class="cli-contact__ic">✉️</span><span><b>Email</b><br>${CS_CONTACT.email}</span></a>
-          <a class="cli-contact" href="${CS_CONTACT.ig}" target="_blank" rel="noopener"><span class="cli-contact__ic">📸</span><span><b>Instagram</b><br>${T('Ver publicaciones', 'Veure publicacions', 'See posts', 'Voir les publications')}</span></a>
+          <a class="cli-contact" href="${CS_CONTACT.ig}" target="_blank" rel="noopener"><span class="cli-contact__ic">📸</span><span><b>Instagram</b><br>@conecta.so</span></a>
           <a class="cli-contact" href="${CS_CONTACT.web}" target="_blank" rel="noopener"><span class="cli-contact__ic">🌐</span><span><b>${T('Nuestra web', 'El nostre web', 'Our website', 'Notre site')}</b><br>www.conectaso.es</span></a>
         </div>
       </div>
