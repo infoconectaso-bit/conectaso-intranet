@@ -511,7 +511,7 @@ function paneMusica(ev, canEdit) {
   const roS = readonly ? 'disabled' : '', ro = readonly ? { ro: true } : {};
   // cada apartado es una sección; luego se muestran como pestañas para no tener que hacer scroll
   // aviso específico de Can Oliver: el aperitivo no está incluido
-  const oliverAperitivo = isOliver(ev) ? `<div class="alert alert--warn"><b>El aperitivo no está incluido en Can Oliver.</b> Si lo queréis, tiene un coste de <b>170 €</b>. Debéis avisar a <b>Nandez</b> para contratarlo.</div>` : '';
+  const oliverAperitivo = isOliver(ev) ? `<div class="alert alert--warn"><b>La sonorización del aperitivo no está incluida en Can Oliver.</b> Si la queréis, tiene un coste extra de <b>170 €</b>. Para confirmarlo, avisad a <b>Nández</b> de que queréis el servicio.</div>` : '';
   const sections = musicAreasFor(ev).map(a => ({ key: a.key, label: a.title, body: (a.key === 'ceremony')
     ? `<div class="inner ceremony-inner${ev.ceremoniaFuera ? ' ceremony-out' : ''}">
         <div class="alert alert--warn ceremony-out-msg"><b>No realizamos la sonorización de ceremonia.</b> La ceremonia se celebra <b>fuera de la finca de la boda</b>, por lo que no se configura la música de ceremonia.</div>
