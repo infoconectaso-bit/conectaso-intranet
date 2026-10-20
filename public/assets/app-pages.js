@@ -330,7 +330,7 @@ function eventViewRole(ev) {
     : pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''));
   shell(`${headHtml}
     ${intro}${progHtml}<form id="evForm" class="${role === 'user' ? 'ev-client' : ''}" data-id="${ev.id}">${tabs}${panes}
-    ${canSave ? `<div class="floatbar"><button type="submit" class="btn btn--primary">Guardar</button></div>` : ''}</form>`, role === 'user' ? [esc(ev.conyuges || ev.tipo || 'Mi boda')] : ['Eventos', '#' + ev.id]);
+    ${canSave ? `<div class="floatbar"><button type="submit" class="btn btn--primary">Guardar</button></div>` : ''}</form>`, role === 'user' ? [tt('Mi boda', 'La meva boda', 'My wedding', 'Mon mariage')] : ['Eventos', '#' + ev.id]);
   wireEventForm(ev, { full: false, role, canEditMusic, canSave });
 }
 
