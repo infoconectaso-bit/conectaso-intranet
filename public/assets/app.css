@@ -664,6 +664,23 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .cli-hint{font-size:12.5px;margin:0 0 12px;padding:7px 11px;border-radius:9px;background:var(--cream,#f6f2ea);border:1px solid var(--line)}
 .cli-hint--warn{background:rgba(199,119,0,.10);border-color:rgba(199,119,0,.35);color:#8a5a00}
 .cli-hint--closed{background:rgba(213,0,0,.07);border-color:rgba(213,0,0,.3)}
+/* ---- vista cliente (novios): música más compacta y elegante ---- */
+.ev-client .tabs{gap:6px;margin-bottom:14px}
+.ev-client .tabs button{padding:6px 12px;font-size:13px}
+.ev-client .mtabs{gap:6px;margin-bottom:12px}
+.ev-client .mtab{padding:5px 11px;font-size:11px;letter-spacing:0}
+.ev-client .mblock{margin-bottom:12px}
+.ev-client .mblock > h4{padding:8px 12px;font-size:13px}
+.ev-client .mblock .inner{padding:7px 11px}
+.ev-client .moment{padding:3px 0}
+.ev-client .moment h5{font-size:12px;margin-bottom:2px}
+.ev-client .moment .mgrid{gap:3px 10px}
+.ev-client .moment .control{padding:4px 8px;font-size:13px}
+.ev-client .mlab{font-size:11px;margin-bottom:2px}
+.ev-client .m-grip{font-size:16px;padding:1px 3px}
+.ev-client .reorder-hint{font-size:10.5px}
+.ev-client .form-grid{gap:8px 14px}
+.ev-client .alert{padding:9px 12px;font-size:13px}
 
 /* recomendaciones: playlists de propuestas por momento */
 .recs-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
