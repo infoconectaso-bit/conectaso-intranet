@@ -702,14 +702,15 @@ on(/^#\/horario\/resumen$/, async () => {
     loading(['Control horario', 'Resumen']);
     const res = await api('attendance-summary' + (end ? '?end=' + encodeURIComponent(end) : ''));
     end = res.end;
-    shell(`${pageHead('Resumen mensual de horas', 'Horas por trabajador. Puedes retroceder todlos los meses que quieras.')}
-      <div class="panel"><div class="panel__head"><h3>${esc(res.months[2])} — ${esc(res.months[0])}</h3>
+    shell(`${pageHead('Resumen de horas (últimos 4 meses)', 'Horas por trabajador. Las vacaciones aprobadas cuentan como 8 h por día laborable, una vez llega el día. Puedes retroceder los meses que quieras.')}
+      <div class="panel"><div class="panel__head"><h3>${esc(res.months[3])} — ${esc(res.months[0])}</h3>
         <div class="btn-row"><button class="btn btn--sm" id="mPrev">‹ Meses anteriores</button><button class="btn btn--sm" id="mNext" ${res.next ? '' : 'disabled'}>Meses siguientes ›</button></div></div>
       <div class="panel__body">${table('dtSum', { rows: res.rows, order: [2, 'desc'], filters: true, cols: [
         { t: 'Id', get: w => w.id }, { t: 'Usuario', get: w => w.name },
         { t: res.months[0], get: w => w.m0, html: w => hm(w.m0) + ' h' },
         { t: res.months[1], get: w => w.m1, html: w => hm(w.m1) + ' h' },
         { t: res.months[2], get: w => w.m2, html: w => hm(w.m2) + ' h' },
+        { t: res.months[3], get: w => w.m3, html: w => hm(w.m3) + ' h' },
       ] })}</div></div>`, ['Control horario', 'Resumen']);
     el('mPrev').onclick = () => { end = res.prev; draw(); };
     const nx = el('mNext'); if (nx && res.next) nx.onclick = () => { end = res.next; draw(); };

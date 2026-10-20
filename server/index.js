@@ -139,7 +139,7 @@ async function api(req, res, url) {
   if (seg[0] === 'extra-requests') return extraRequestsApi(req, res, user);
 
   // --- control horario (resúmenes) ---
-  if (seg[0] === 'attendance-summary') return attendanceSummary(req, res, user, seg);
+  if (seg[0] === 'attendance-summary') return attendanceSummary(req, res, user, url);
 
   // --- archivos ---
   if (seg[0] === 'files') return filesApi(req, res, user, seg, method, url);
@@ -805,18 +805,48 @@ function minutesOf(a) {
   return (a.slots || []).reduce((t, s) => { let d = toMin(s.out) - toMin(s.in); if (d < 0) d += 1440; return t + d; }, 0);
 }
 const toMin = s => { const [h, m] = String(s || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
-function monthMinutes(uid, back) {
-  const d = new Date(); d.setMonth(d.getMonth() - back);
-  const pre = d.toISOString().slice(0, 7);
-  return store.byOwner('attendances', uid).filter(a => (a.date || '').startsWith(pre)).reduce((t, a) => t + minutesOf(a), 0);
+const ES_MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+function ymShift(ym, delta) { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function ymLabel(ym) { const [y, m] = ym.split('-').map(Number); return ES_MONTHS[m - 1] + ' ' + y; }
+// Minutos fichados de un trabajador en un mes concreto (YYYY-MM). No se toca (iba bien).
+function fichajeMinutesAt(uid, ym) {
+  return store.byOwner('attendances', uid).filter(a => (a.date || '').startsWith(ym)).reduce((t, a) => t + minutesOf(a), 0);
 }
-function attendanceSummary(req, res, user, seg) {
+// Minutos de vacaciones en un mes: cada día laborable (L-V) de una vacación APROBADA cuenta
+// como 8 h, pero SOLO una vez ha llegado ese día (no por adelantado aunque esté confirmada).
+function vacationMinutesAt(uid, ym) {
+  const today = bizToday();
+  let mins = 0;
+  store.all('vacations').forEach(v => {
+    if (v.userId != uid || v.status !== 'Aprobado' || !v.start || !v.end) return;
+    const end = new Date(v.end + 'T00:00:00');
+    let d = new Date(v.start + 'T00:00:00');
+    while (d <= end) {
+      const ds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      const dow = d.getDay();
+      if (ds.startsWith(ym) && ds <= today && dow >= 1 && dow <= 5) mins += 480;
+      d.setDate(d.getDate() + 1);
+    }
+  });
+  return mins;
+}
+function attendanceSummary(req, res, user, url) {
+  const curYm = new Date().toISOString().slice(0, 7);
+  let endYm = (url && url.searchParams && url.searchParams.get('end')) || curYm;
+  if (!/^\d{4}-\d{2}$/.test(endYm) || endYm > curYm) endYm = curYm;
+  const yms = [0, 1, 2, 3].map(i => ymShift(endYm, -i)); // m0 (reciente) .. m3 (antiguo)
+  const months = yms.map(ymLabel);
+  const total = (id, ym) => fichajeMinutesAt(id, ym) + vacationMinutesAt(id, ym);
+  const rowFor = id => ({ id, name: userName(id), m0: total(id, yms[0]), m1: total(id, yms[1]), m2: total(id, yms[2]), m3: total(id, yms[3]) });
+  const prev = ymShift(endYm, -4);
+  const next = endYm < curYm ? (ymShift(endYm, 4) > curYm ? curYm : ymShift(endYm, 4)) : null;
   if (user.role === 'admin') {
-    const ids = [...new Set(store.all('attendances').map(a => a.userId).filter(Boolean))];
-    const rows = ids.map(id => ({ id, name: userName(id), m0: monthMinutes(id, 0), m1: monthMinutes(id, 1), m2: monthMinutes(id, 2) }));
-    return ok(res, { rows });
+    const ids = [...new Set([].concat(store.all('attendances').map(a => a.userId), store.all('vacations').filter(v => v.status === 'Aprobado').map(v => v.userId)).filter(Boolean))];
+    const rows = ids.map(rowFor).filter(r => r.m0 || r.m1 || r.m2 || r.m3);
+    rows.sort((a, b) => (b.m0 + b.m1 + b.m2 + b.m3) - (a.m0 + a.m1 + a.m2 + a.m3));
+    return ok(res, { end: endYm, months, rows, prev, next });
   }
-  if (user.role === 'dj') return ok(res, { rows: [{ id: user.id, name: user.name, m0: monthMinutes(user.id, 0), m1: monthMinutes(user.id, 1), m2: monthMinutes(user.id, 2) }] });
+  if (user.role === 'dj') return ok(res, { end: endYm, months, rows: [rowFor(user.id)], prev, next });
   return fail(res, 403, 'Sin acceso');
 }
 const userName = id => (users.get(id) || {}).name || '';
