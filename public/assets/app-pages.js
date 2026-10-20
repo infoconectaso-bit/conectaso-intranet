@@ -596,7 +596,8 @@ function paneMusica(ev, canEdit) {
   const nav = `<div class="mtabs" data-mtabs role="tablist">${sections.map((s, i) => `<button type="button" class="mtab${i === 0 ? ' on' : ''}" data-mtab="${s.key}">${esc(s.label)}</button>`).join('')}</div>`;
   const panes = sections.map((s, i) => `<section class="mblock mpane${i === 0 ? ' on' : ''}" data-mpane="${s.key}"${i === 0 ? '' : ' style="display:none"'}><h4>${esc(s.label)}${s.key === 'extras' ? '' : reorderHint}</h4>${s.body}</section>`).join('');
   // si todos los momentos tienen enlace de Spotify, se ofrece abrir/crear la playlist
-  const spoti = allSpotify(ev) ? `<div class="spoti-bar"><button type="button" class="btn btn--spoti" id="openSpoti">🎵 Abre tu playlist de Spotify</button><span class="hint">Todos los momentos tienen enlace de Spotify, así que podemos montar tu playlist automáticamente.</span></div>` : '';
+  // El botón de abrir/montar la playlist solo lo ven el DJ y administración, no los novios.
+  const spoti = (allSpotify(ev) && (S.user.role === 'admin' || S.user.role === 'dj')) ? `<div class="spoti-bar"><button type="button" class="btn btn--spoti" id="openSpoti">🎵 Abre tu playlist de Spotify</button><span class="hint">Todos los momentos tienen enlace de Spotify, así que podemos montar la playlist automáticamente.</span></div>` : '';
   return `<div class="music-wrap">${spoti}${nav}${panes}</div>`;
 }
 // precio de reserva por servicio extra: 50€ + 21% IVA
