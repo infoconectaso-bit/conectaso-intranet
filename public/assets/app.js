@@ -127,6 +127,21 @@ const TR = {
   'Progreso': ['Progrés', 'Progress', 'Progression'],
   // avisos cliente
   'Rellena aquí la música y los detalles de tu boda. Recuerda Guardar al terminar.': ['Omple aquí la música i els detalls de la teva boda. Recorda Desar en acabar.', 'Fill in your wedding music and details here. Remember to Save when done.', 'Remplissez ici la musique et les détails de votre mariage. Pensez à enregistrer.'],
+  // datos / avisos del cliente
+  'La fecha solo la puede cambiar administración. Si necesitáis moverla, avisadnos y lo gestionamos nosotros.': ['La data només la pot canviar administració. Si necessiteu moure-la, aviseu-nos i ho gestionem nosaltres.', 'Only administration can change the date. If you need to move it, let us know and we will handle it.', "Seule l'administration peut changer la date. Si vous devez la déplacer, prévenez-nous et nous nous en occupons."],
+  'Rellena aquí la música y los detalles de tu boda. Recuerda guardar al terminar.': ['Omple aquí la música i els detalls de la teva boda. Recorda desar en acabar.', 'Fill in your wedding music and details here. Remember to save when done.', 'Remplissez ici la musique et les détails de votre mariage. Pensez à enregistrer.'],
+  // momentos musicales
+  'Momento personalizado': ['Moment personalitzat', 'Custom moment', 'Moment personnalisé'],
+  'Momento / destinatario': ['Moment / destinatari', 'Moment / recipient', 'Moment / destinataire'],
+  'Enlace (preferiblemente Spotify)': ['Enllaç (preferiblement Spotify)', 'Link (preferably Spotify)', 'Lien (de préférence Spotify)'],
+  'Arrastra ⠿ para ordenar': ['Arrossega ⠿ per ordenar', 'Drag ⠿ to reorder', 'Glissez ⠿ pour réordonner'],
+  'Música completada': ['Música completada', 'Music completed', 'Musique complétée'],
+  'Qué NO debe sonar': ['Què NO ha de sonar', 'What should NOT be played', 'Ce qui ne doit PAS être joué'],
+  'Lo que quieras contarnos': ['El que ens vulguis explicar', 'Anything you want to tell us', 'Ce que vous voulez nous dire'],
+  'Guardar': ['Desar', 'Save', 'Enregistrer'],
+  'Mi boda': ['La meva boda', 'My wedding', 'Mon mariage'],
+  '+ Añadir momento': ['+ Afegir moment', '+ Add moment', '+ Ajouter un moment'],
+  'Datos': ['Dades', 'Details', 'Détails'],
 };
 function translateNode(node, idx) { const raw = node.nodeValue; const k = raw.trim(); if (k && TR[k] && TR[k][idx]) node.nodeValue = raw.replace(k, TR[k][idx]); }
 let _translating = false;
