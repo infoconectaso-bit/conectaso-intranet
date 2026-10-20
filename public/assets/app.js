@@ -411,7 +411,7 @@ function shell(bodyHtml, crumbs) {
       ${(u.role === 'user' || u.role === 'planner') ? `<div class="langsel langsel--top" id="langsel">${LANGS.map(l => `<button type="button" data-lang="${l[0]}" class="${S.lang === l[0] ? 'on' : ''}" title="${l[1]}"><span class="flag">${l[2]}</span><span class="code">${l[1]}</span></button>`).join('')}</div>` : ''}
       <nav class="nav">${nav}</nav>
       <div class="nav__foot"><a href="#/cuenta" data-nav="#/cuenta">${svg('key')}<span>Mi cuenta</span></a>
-        <a href="#" id="nightToggle" class="night-toggle" title="Atenúa la intranet automáticamente a partir de las 21:00. Se recuerda en este dispositivo.">${svg('moon')}<span>Modo noche</span><b id="nightState" class="night-state"></b></a>
+        <a href="#" id="nightToggle" class="night-toggle" title="Modo noche: atenúa la intranet sola de noche (de 21:00 a 7:00) para reducir el impacto visual y no deslumbrar. Se guarda en este dispositivo.">${svg('moon')}<span>Modo noche</span><b id="nightState" class="night-state"></b></a>
         <a href="#" id="logoutLink">${svg('logout')}<span>Cerrar sesión</span></a></div>
     </aside>
     <div class="main">
@@ -454,7 +454,14 @@ function applyNight() {
   const st = document.getElementById('nightState'); if (st) st.textContent = nightEnabled() ? 'Activado' : 'Desactivado';
   const tg = document.getElementById('nightToggle'); if (tg) tg.classList.toggle('on', nightEnabled());
 }
-function toggleNight() { try { localStorage.setItem('conecta_night', nightEnabled() ? '0' : '1'); } catch (e) {} applyNight(); }
+function toggleNight() {
+  const willEnable = !nightEnabled();
+  try { localStorage.setItem('conecta_night', willEnable ? '1' : '0'); } catch (e) {}
+  applyNight();
+  if (typeof toast === 'function') toast(willEnable
+    ? 'Modo noche activado: la intranet se atenúa sola de noche (de 21:00 a 7:00) para reducir el impacto visual y no deslumbrar. Queda guardado en este dispositivo.'
+    : 'Modo noche desactivado.', 'ok');
+}
 if (!window.__nightInt) window.__nightInt = setInterval(applyNight, 60000); // revisa cada minuto para que entre solo a las 21:00
 // Título del contrato con el AÑO DE LA BODA (se actualiza según la fecha del evento).
 const tycTitleYear = (baseTitle, fechaBoda) => {
