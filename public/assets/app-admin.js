@@ -448,7 +448,7 @@ function planoMarkHTML(m) {
   const s = PLAN_SYMS[m.t] || { cls: '' };
   const sel = m.id === PLAN.sel ? ' sel' : '';
   const inner = s.txt ? `<span>${s.txt}</span>` : '';
-  return `<div class="pm ${s.cls}${sel}" data-id="${m.id}" style="left:${m.x}%;top:${m.y}%;transform:translate(-50%,-50%) rotate(${m.rot || 0}deg)">${inner}${m.label ? `<span class="pm-lbl">${esc(m.label)}</span>` : ''}</div>`;
+  return `<div class="pm ${s.cls}${sel}" data-id="${m.id}" style="left:${m.x}%;top:${m.y}%;transform:translate(-50%,-50%) rotate(${m.rot || 0}deg)">${inner}${m.label ? `<span class="pm-lbl" style="transform:translateX(-50%) rotate(${-(m.rot || 0)}deg)">${esc(m.label)}</span>` : ''}</div>`;
 }
 function planoRenderStage() {
   const st = el('planStage'); if (!st) return;
@@ -513,7 +513,7 @@ function planoUp() { if (DRAGP) { DRAGP = null; planoSaveMarks(); } }
 function planoMarkHTML2(m) {
   const s = PLAN_SYMS[m.t] || { cls: '' };
   const inner = s.txt ? `<span>${s.txt}</span>` : '';
-  return `<div class="pm ${s.cls}" style="left:${m.x}%;top:${m.y}%;transform:translate(-50%,-50%) rotate(${m.rot || 0}deg)">${inner}${m.label ? `<span class="pm-lbl">${esc(m.label)}</span>` : ''}</div>`;
+  return `<div class="pm ${s.cls}" style="left:${m.x}%;top:${m.y}%;transform:translate(-50%,-50%) rotate(${m.rot || 0}deg)">${inner}${m.label ? `<span class="pm-lbl" style="transform:translateX(-50%) rotate(${-(m.rot || 0)}deg)">${esc(m.label)}</span>` : ''}</div>`;
 }
 async function planoPreviewHTML(locId, zona) { return planoPreviewByKey(locId + '_' + zona); }
 async function planoPreviewByKey(keyBase) {
