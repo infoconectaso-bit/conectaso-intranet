@@ -24,7 +24,91 @@ async function api(path, { method = 'GET', body, form } = {}) {
 }
 
 /* ---------- estado global ---------- */
-const S = { user: null, meta: null, brand: null, mailEnabled: false, locById: {}, extraById: {}, staffById: {} };
+const S = { user: null, meta: null, brand: null, mailEnabled: false, locById: {}, extraById: {}, staffById: {}, lang: 'es' };
+try { S.lang = localStorage.getItem('conecta_lang') || 'es'; } catch (e) { S.lang = 'es'; }
+
+/* ============================ IDIOMAS (cliente / wedding planner) ============================
+ * La interfaz del cliente puede verse en Catalán, Inglés o Francés además de Español.
+ * TR[textoEspañol] = [catalán, inglés, francés]. El español es la base (sin traducir).
+ * Solo se traduce para roles 'user' y 'planner'; administración y técnicos siempre en español.
+ */
+const LANG_IDX = { ca: 0, en: 1, fr: 2 };
+const LANGS = [['ca', 'CAT'], ['es', 'ESP'], ['en', 'ENG'], ['fr', 'FRA']];
+const TR = {
+  // menú
+  'Principal': ['Principal', 'Main', 'Principal'], 'Inicio': ['Inici', 'Home', 'Accueil'], 'Mis bodas': ['Les meves bodes', 'My weddings', 'Mes mariages'],
+  'Mi evento': ['El meu esdeveniment', 'My event', 'Mon événement'], 'Mi boda': ['La meva boda', 'My wedding', 'Mon mariage'], 'Realizadas': ['Realitzades', 'Past', 'Passés'],
+  'Mis pagos': ['Els meus pagaments', 'My payments', 'Mes paiements'], 'Vehículos': ['Vehicles', 'Vehicles', 'Véhicules'], 'Mi cuenta': ['El meu compte', 'My account', 'Mon compte'],
+  'Cerrar sesión': ['Tancar sessió', 'Log out', 'Déconnexion'], 'Otros': ['Altres', 'Other', 'Autres'], 'Tiempo': ['Temps', 'Time', 'Temps'], 'Cliente': ['Client', 'Client', 'Client'],
+  'Ver todas': ['Veure totes', 'See all', 'Voir tout'],
+  // pestañas y secciones
+  'Datos': ['Dades', 'Details', 'Détails'], 'Música': ['Música', 'Music', 'Musique'], 'Extras': ['Extres', 'Extras', 'Extras'], 'Archivos': ['Arxius', 'Files', 'Fichiers'],
+  'Servicios': ['Serveis', 'Services', 'Services'], 'Ceremonia': ['Cerimònia', 'Ceremony', 'Cérémonie'], 'Aperitivo': ['Aperitiu', 'Aperitif', 'Apéritif'],
+  'Banquete': ['Banquet', 'Banquet', 'Banquet'], 'Entregas': ['Lliuraments', 'Gifts', 'Cadeaux'], 'Fiesta': ['Festa', 'Party', 'Fête'], 'Recomendaciones': ['Recomanacions', 'Recommendations', 'Recommandations'],
+  'Datos principales': ['Dades principals', 'Main details', 'Informations principales'], 'Datos de los cónyuges': ['Dades dels cònjuges', 'Spouses', 'Les mariés'],
+  'Momentos musicales': ['Moments musicals', 'Music moments', 'Moments musicaux'],
+  'Música de tu boda completada': ['Música de la teva boda completada', 'Your wedding music completed', 'Musique de votre mariage complétée'],
+  'Guardar': ['Desar', 'Save', 'Enregistrer'],
+  // datos
+  'Tipo de boda': ['Tipus de boda', 'Wedding type', 'Type de mariage'], 'Fecha': ['Data', 'Date', 'Date'], 'Hora de la ceremonia': ['Hora de la cerimònia', 'Ceremony time', 'Heure de la cérémonie'],
+  'Hora inicio aperitivo': ["Hora d'inici de l'aperitiu", 'Aperitif start time', "Heure de début de l'apéritif"], 'Lugar de la celebración': ['Lloc de la celebració', 'Venue', 'Lieu de la célébration'],
+  'Lugar de la ceremonia': ['Lloc de la cerimònia', 'Ceremony place', 'Lieu de la cérémonie'], 'Nº de invitados': ['Nº de convidats', 'Nº of guests', "Nb d'invités"],
+  'Nombre': ['Nom', 'Name', 'Nom'], 'Móvil': ['Mòbil', 'Mobile', 'Portable'], 'Dirección': ['Adreça', 'Address', 'Adresse'],
+  'Primer cónyuge': ['Primer cònjuge', 'First spouse', 'Premier marié'], 'Segundo cónyuge': ['Segon cònjuge', 'Second spouse', 'Second marié'],
+  // momentos
+  'Entrada primer cónyuge': ['Entrada primer cònjuge', 'First spouse entrance', 'Entrée du premier marié'], 'Entrada segundo cónyuge': ['Entrada segon cònjuge', 'Second spouse entrance', 'Entrée du second marié'],
+  'Anillos': ['Anells', 'Rings', 'Alliances'], 'Firmas': ['Signatures', 'Signing', 'Signatures'], 'Salida': ['Sortida', 'Exit', 'Sortie'], 'Lecturas': ['Lectures', 'Readings', 'Lectures'],
+  'Entrada vehículo 2º cónyuge': ['Entrada vehicle 2n cònjuge', '2nd spouse car entrance', 'Entrée voiture 2e marié'], 'Votos': ['Vots', 'Vows', 'Vœux'],
+  'Entrada de novios': ['Entrada dels nuvis', 'Couple entrance', 'Entrée des mariés'], 'Primer plato': ['Primer plat', 'First course', 'Premier plat'],
+  'Segundo plato': ['Segon plat', 'Second course', 'Plat principal'], 'Sorbete': ['Sorbet', 'Sorbet', 'Sorbet'], 'Postre': ['Postres', 'Dessert', 'Dessert'],
+  'Vino blanco': ['Vi blanc', 'White wine', 'Vin blanc'], 'Vino tinto': ['Vi negre', 'Red wine', 'Vin rouge'],
+  'Presentación tarta nupcial': ['Presentació pastís nupcial', 'Cake presentation', 'Présentation du gâteau'], 'Tarta nupcial': ['Pastís nupcial', 'Wedding cake', 'Gâteau de mariage'],
+  '1ª degustación': ['1a degustació', '1st tasting', '1re dégustation'], '2ª degustación': ['2a degustació', '2nd tasting', '2e dégustation'],
+  'Baile nupcial': ['Ball nupcial', 'First dance', 'Ouverture de bal'], 'Última canción de fiesta': ['Última cançó de festa', 'Last party song', 'Dernière chanson'],
+  'Artista · Canción': ['Artista · Cançó', 'Artist · Song', 'Artiste · Chanson'], 'Comentario (opcional)': ['Comentari (opcional)', 'Comment (optional)', 'Commentaire (facultatif)'],
+  '+ Añadir momento': ['+ Afegir moment', '+ Add moment', '+ Ajouter un moment'],
+  // fiesta
+  'Enlace a playlist': ['Enllaç a la playlist', 'Playlist link', 'Lien playlist'], 'Tipo de lista': ['Tipus de llista', 'List type', 'Type de liste'],
+  'Lista obligatoria': ['Llista obligatòria', 'Mandatory list', 'Liste obligatoire'], 'Lista orientativa': ['Llista orientativa', 'Suggested list', 'Liste indicative'],
+  '¿Se aceptan peticiones de invitados?': ["S'accepten peticions dels convidats?", 'Accept guest requests?', 'Accepter les demandes des invités ?'],
+  'Sí, todas': ['Sí, totes', 'Yes, all', 'Oui, toutes'], 'No, ninguna': ['No, cap', 'No, none', 'Non, aucune'], 'Sí, si son similares a nuestra playlist': ['Sí, si són semblants a la nostra playlist', 'Yes, if similar to our playlist', 'Oui, si similaires à notre playlist'],
+  'Restricciones': ['Restriccions', 'Restrictions', 'Restrictions'], 'Observaciones': ['Observacions', 'Notes', 'Remarques'], 'Logo para el fotomatón': ['Logo per al fotomató', 'Photo booth logo', 'Logo pour le photobooth'],
+  'Quitar': ['Treure', 'Remove', 'Retirer'],
+  // extras
+  'Servicios extras a contratar': ['Serveis extres a contractar', 'Extra services', 'Services supplémentaires'],
+  'Ver info': ['Veure info', 'View info', "Voir l'info"], '✓ Añadido': ['✓ Afegit', '✓ Added', '✓ Ajouté'], '✓ Incluido': ['✓ Inclòs', '✓ Included', '✓ Inclus'],
+  // reserva extras
+  '⏳ Pendiente de confirmación': ['⏳ Pendent de confirmació', '⏳ Awaiting confirmation', '⏳ En attente de confirmation'], '💳 Pendiente de pago': ['💳 Pendent de pagament', '💳 Awaiting payment', '💳 En attente de paiement'],
+  '✓ Reservado': ['✓ Reservat', '✓ Booked', '✓ Réservé'],
+  // pago
+  'Tu pago': ['El teu pagament', 'Your payment', 'Votre paiement'], 'Importe total': ['Import total', 'Total amount', 'Montant total'], 'Pagado': ['Pagat', 'Paid', 'Payé'], 'Pendiente': ['Pendent', 'Pending', 'En attente'],
+  // acceso
+  'Acceso a la boda': ["Accés a la boda", 'Wedding access', 'Accès au mariage'], '+ Invitar a otra persona': ['+ Convidar una altra persona', '+ Invite someone', '+ Inviter une autre personne'], 'Titular': ['Titular', 'Owner', 'Titulaire'],
+  // recomendaciones
+  'Ver propuestas ↗': ['Veure propostes ↗', 'View ideas ↗', 'Voir les idées ↗'],
+  // archivos y desplazamiento
+  'Subir archivo': ['Pujar arxiu', 'Upload file', 'Téléverser un fichier'], 'Momento del archivo': ["Moment de l'arxiu", 'File moment', 'Moment du fichier'], 'Archivo': ['Arxiu', 'File', 'Fichier'],
+  'Descargar': ['Descarregar', 'Download', 'Télécharger'], 'Sin archivos todavía.': ['Encara no hi ha arxius.', 'No files yet.', 'Aucun fichier pour le moment.'],
+  'Ver ruta en Google Maps ↗': ['Veure ruta a Google Maps ↗', 'View route on Google Maps ↗', "Voir l'itinéraire sur Google Maps ↗"],
+};
+function translateNode(node, idx) { const raw = node.nodeValue; const k = raw.trim(); if (k && TR[k] && TR[k][idx]) node.nodeValue = raw.replace(k, TR[k][idx]); }
+let _translating = false;
+function applyLang(root) {
+  if (S.lang === 'es' || LANG_IDX[S.lang] == null || !(S.user && (S.user.role === 'user' || S.user.role === 'planner'))) return;
+  const idx = LANG_IDX[S.lang]; root = root || document.body; _translating = true;
+  try {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); const ns = []; let n; while (n = w.nextNode()) ns.push(n);
+    ns.forEach(nd => translateNode(nd, idx));
+    (root.querySelectorAll ? root.querySelectorAll('[placeholder]') : []).forEach(e => { const k = (e.getAttribute('placeholder') || '').trim(); if (TR[k] && TR[k][idx]) e.setAttribute('placeholder', TR[k][idx]); });
+  } finally { _translating = false; }
+}
+let _langObs = false;
+function startLangObserver() {
+  if (_langObs) return; _langObs = true;
+  const mo = new MutationObserver(muts => { if (_translating || S.lang === 'es') return; const idx = LANG_IDX[S.lang]; if (idx == null) return; _translating = true; try { muts.forEach(m => m.addedNodes.forEach(nd => { if (nd.nodeType === 1) applyLang(nd); else if (nd.nodeType === 3) translateNode(nd, idx); })); } finally { _translating = false; } });
+  try { mo.observe(document.body, { childList: true, subtree: true }); } catch (e) {}
+}
+function setLang(l) { S.lang = l; try { localStorage.setItem('conecta_lang', l); } catch (e) {} if (typeof route === 'function') route(); setTimeout(() => applyLang(document.body), 0); }
 function rebuildMaps() {
   S.locById = {}; (S.meta.locations || []).forEach(l => S.locById[l.id] = l);
   S.extraById = {}; (S.meta.extras || []).forEach(x => S.extraById[x.id] = x);
@@ -200,7 +284,7 @@ function shell(bodyHtml, crumbs) {
       <div class="sidebar__logo"><img src="/assets/brand/logo-reducido-azul.svg" alt="">
         <div class="wm">CONECTA<small>Gestor de eventos</small></div></div>
       <nav class="nav">${nav}</nav>
-      <div class="nav__foot"><a href="#/cuenta" data-nav="#/cuenta">${svg('key')}<span>Mi cuenta</span></a>
+      <div class="nav__foot">${(u.role === 'user' || u.role === 'planner') ? `<div class="langsel" id="langsel">${LANGS.map(l => `<button type="button" data-lang="${l[0]}" class="${S.lang === l[0] ? 'on' : ''}">${l[1]}</button>`).join('')}</div>` : ''}<a href="#/cuenta" data-nav="#/cuenta">${svg('key')}<span>Mi cuenta</span></a>
         <a href="#" id="logoutLink">${svg('logout')}<span>Cerrar sesión</span></a></div>
     </aside>
     <div class="main">
@@ -224,6 +308,10 @@ function shell(bodyHtml, crumbs) {
     $('#mLogout', m).onclick = () => el('logoutLink').click();
     setTimeout(() => document.addEventListener('click', function h(ev) { if (!ev.target.closest('.menu,#userchip')) { m.remove(); document.removeEventListener('click', h); } }), 0);
   };
+  const ls = el('langsel');
+  if (ls) $$('button[data-lang]', ls).forEach(b => b.onclick = () => setLang(b.dataset.lang));
+  startLangObserver();
+  applyLang(app);
 }
 const roleLabel = r => ({ admin: 'Administración', dj: 'DJ / Técnico', planner: 'Wedding planner', user: 'Cliente' }[r] || r);
 function markActive() {
