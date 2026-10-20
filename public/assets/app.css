@@ -51,6 +51,10 @@ input,select,textarea,button{font-family:inherit;font-size:14px}
 .control[readonly]{background:#f1ede1;border-color:var(--line);box-shadow:none}
 textarea.control{min-height:92px;resize:vertical}
 .control--sm{padding:7px 10px;border-radius:8px}
+/* iOS/WebKit centra el valor de los inputs de fecha/hora: lo alineamos a la izquierda como el resto */
+input[type=date].control,input[type=time].control{text-align:left}
+input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left}
+input[type=date]::-webkit-datetime-edit,input[type=time]::-webkit-datetime-edit{text-align:left}
 .hint{font-size:12px;color:var(--muted);margin-top:5px}
 .hint--inline{display:inline;font-weight:400}
 .form-sub{margin:18px 0 10px;font-size:13px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:var(--onyx);border-bottom:2px solid var(--line);padding-bottom:6px}
