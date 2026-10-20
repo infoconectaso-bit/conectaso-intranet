@@ -572,16 +572,17 @@ function finance(req, res, user, seg, method) {
     if (seg[1] === 'beneficios' && method === 'GET') return ok(res, store.setting('beneficios') || {});
     if (seg[1] === 'history') {
       const id = +seg[2];
-      const h = store.get('history', id);
+      // facturación en vivo: histórico + eventos ya realizados (incluye precios recién puestos)
+      const h = fact.aggregateFor(id);
       if (method === 'GET') return ok(res, { history: h, payments: store.byOwner('payments', id) });
     }
     if (seg[1] === 'pay' && method === 'POST') return addPayment(req, res, user);
     return fail(res, 404, 'Ruta no encontrada');
   }
-  // DJ: solo su propio balance
+  // DJ: solo su propio balance (histórico + eventos realizados)
   if (user.role === 'dj') {
     if (seg[1] === 'me' && method === 'GET') {
-      return ok(res, { history: store.get('history', user.id), payments: store.byOwner('payments', user.id) });
+      return ok(res, { history: fact.aggregateFor(user.id), payments: store.byOwner('payments', user.id) });
     }
   }
   return fail(res, 403, 'Sin acceso');

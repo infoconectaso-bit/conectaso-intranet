@@ -15,7 +15,7 @@ const { store, users } = require('./db');
 const { evRealized, bizToday } = require('./time');
 
 const money = n => (Math.round((+n || 0) * 100) / 100).toFixed(2) + ' €';
-const OVERTIME = { 'Media Hora': 0.5, '1 Hora': 1, '1 hora y media': 1.5, '2 Horas': 2, '2 hora y media': 2.5, '3 Horas': 3, '3 hora y media': 3.5, '4 Horas': 4 };
+const OVERTIME = { 'Media Hora': 0.5, '1 Hora': 1, '1 hora y media': 1.5, '2 Horas': 2, '2 hora y media': 2.5, '3 Horas': 3, '3 hora y media': 3.5, '4 Horas': 4, '4 hora y media': 4.5, '5 Horas': 5 };
 const FIX_STAFF_NO_BASE = { '227': true, '276': true };
 const SUNDAY_ONLY_BASE = { '234': true };
 const HOURLY_RATE = { '1251': 10 };

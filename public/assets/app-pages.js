@@ -268,7 +268,7 @@ function eventViewRole(ev) {
         ? `<div class="panel"><div class="panel__head"><h3>Albarán de trabajo</h3></div><div class="panel__body">
             <p class="hint" style="margin-bottom:12px">La boda ha finalizado. Indica las horas extra realizadas, si hay que pedir opinión y tus observaciones.</p>
             <div class="form-grid">
-              ${fg('Horas extra realizadas', sel('dj_assigned_overtime', [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas'], ev.djOvertime))}
+              ${fg('Horas extra realizadas', sel('dj_assigned_overtime', [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas', '4 hora y media', '5 Horas'], ev.djOvertime))}
               ${fg('¿Pedir opinión a los novios?', sel('ask_for_opinion', [['', '—'], 'Si', 'No'], ev.opinion))}
             </div>
             ${fg('Observaciones', ta('dj_observations', ev.obsDj, 'Notas tras el evento…'))}</div></div>`
@@ -414,7 +414,7 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
   </div></div></div>
   ${isAdmin() ? `<div class="mblock"><h4>Asignaciones</h4><div class="inner"><div class="form-grid">
     ${fg('DJ asignado', sel('dj_vinculated', [['', 'Selecciona un DJ']].concat((S.meta.djs || []).map(u => [u.id, u.name])), ev.djId, 'data-search'))}
-    ${eventFinished(ev) ? fg('Horas extra DJ', sel('dj_assigned_overtime', [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas'], ev.djOvertime)) : fg('Horas extra DJ', '<div class="readbox"><span class="muted">Se rellena cuando finaliza la boda (el DJ lo indica en su albarán).</span></div>')}
+    ${eventFinished(ev) ? fg('Horas extra DJ', sel('dj_assigned_overtime', [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas', '4 hora y media', '5 Horas'], ev.djOvertime)) : fg('Horas extra DJ', '<div class="readbox"><span class="muted">Se rellena cuando finaliza la boda (el DJ lo indica en su albarán).</span></div>')}
     ${fg('Wedding planner', sel('wp_vinculated', [['', 'Selecciona un planner']].concat((S.meta.planners || []).map(u => [u.id, u.name])), ev.wpId, 'data-search'))}
   </div></div></div>` : ''}
   ${showSpouse ? `<div class="mblock"><h4>Datos de los cónyuges</h4><div class="inner"><div class="grid-2">
