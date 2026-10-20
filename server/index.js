@@ -210,14 +210,19 @@ function staffList() {
     .map(u => ({ id: u.id, name: u.name, role: u.role }));
 }
 function meta(user) {
+  const staffView = (user.role === 'admin' || user.role === 'dj');
   const m = {
     role: user.role,
     estados: store.setting('estados'),
     tipos: store.setting('tipos'),
-    locations: store.all('locations').map(l => ({ id: l.id, name: l.name, colorHex: l.colorHex })),
+    // admin/DJ reciben también los datos de desplazamiento (min/km/coordenadas) y la
+    // dirección, que la hoja de ruta y el cálculo de kilómetros necesitan.
+    locations: store.all('locations').map(l => staffView
+      ? { id: l.id, name: l.name, colorHex: l.colorHex, direction: l.direction, directionLink: l.directionLink, lat: l.lat, lng: l.lng, travelMin: l.travelMin, travelKm: l.travelKm, travelApprox: l.travelApprox }
+      : { id: l.id, name: l.name, colorHex: l.colorHex }),
     extras: store.all('extras'),
   };
-  if (user.role === 'admin' || user.role === 'dj') {
+  if (staffView) {
     m.staff = staffList();
     m.djs = users.all().filter(u => u.role === 'dj').map(u => ({ id: u.id, name: u.name }));
     m.planners = users.all().filter(u => u.role === 'planner').map(u => ({ id: u.id, name: u.name }));

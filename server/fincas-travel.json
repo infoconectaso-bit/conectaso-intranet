@@ -1,0 +1,227 @@
+[
+ {
+  "id": 12,
+  "travelMin": 70,
+  "travelKm": 80.4,
+  "travelApprox": false,
+  "lat": 41.640489,
+  "lng": 1.5645722,
+  "directionLink": "https://g.co/kgs/97Hpe34"
+ },
+ {
+  "id": 21,
+  "travelMin": 32,
+  "travelKm": 28.8,
+  "travelApprox": false,
+  "lat": 41.69,
+  "lng": 2.35,
+  "directionLink": ""
+ },
+ {
+  "id": 4,
+  "travelMin": 90,
+  "travelKm": 80.6,
+  "travelApprox": false,
+  "lat": 41.6742524,
+  "lng": 1.5643251,
+  "directionLink": "https://maps.app.goo.gl/svV7qAYzSqtgG2at9"
+ },
+ {
+  "id": 25,
+  "travelMin": 10,
+  "travelKm": 4.9,
+  "travelApprox": false,
+  "lat": 41.5378469,
+  "lng": 2.2642902,
+  "directionLink": "https://maps.app.goo.gl/Y3jmnwTGrpogq6J86"
+ },
+ {
+  "id": 26,
+  "travelMin": 10,
+  "travelKm": 4.9,
+  "travelApprox": false,
+  "lat": 41.5378469,
+  "lng": 2.2642902,
+  "directionLink": "https://maps.app.goo.gl/Y3jmnwTGrpogq6J86"
+ },
+ {
+  "id": 8,
+  "travelMin": 10,
+  "travelKm": 4.9,
+  "travelApprox": false,
+  "lat": 41.5378469,
+  "lng": 2.2642902,
+  "directionLink": "https://maps.app.goo.gl/Y3jmnwTGrpogq6J86"
+ },
+ {
+  "id": 27,
+  "travelMin": 10,
+  "travelKm": 4.9,
+  "travelApprox": false,
+  "lat": 41.5378469,
+  "lng": 2.2642902,
+  "directionLink": "https://maps.app.goo.gl/Y3jmnwTGrpogq6J86"
+ },
+ {
+  "id": 14,
+  "travelMin": 26,
+  "travelKm": 24.2,
+  "travelApprox": false,
+  "lat": 41.6702799,
+  "lng": 2.2070171,
+  "directionLink": "https://maps.app.goo.gl/tG18rmWo41CLCcQR7"
+ },
+ {
+  "id": 16,
+  "travelMin": 26,
+  "travelKm": 24.2,
+  "travelApprox": false,
+  "lat": 41.6702799,
+  "lng": 2.2070171,
+  "directionLink": "https://maps.app.goo.gl/tG18rmWo41CLCcQR7"
+ },
+ {
+  "id": 15,
+  "travelMin": 26,
+  "travelKm": 24.2,
+  "travelApprox": false,
+  "lat": 41.6702799,
+  "lng": 2.2070171,
+  "directionLink": "https://maps.app.goo.gl/tG18rmWo41CLCcQR7"
+ },
+ {
+  "id": 9,
+  "travelMin": 67,
+  "travelKm": 79.3,
+  "travelApprox": false,
+  "lat": 41.55945,
+  "lng": 1.52541,
+  "directionLink": "https://g.co/kgs/oRmRpVB"
+ },
+ {
+  "id": 18,
+  "travelMin": 23,
+  "travelKm": 20.9,
+  "travelApprox": false,
+  "lat": 41.6867006,
+  "lng": 2.2891135,
+  "directionLink": "https://maps.app.goo.gl/SRVsJ3DXuD9Sj5vB7"
+ },
+ {
+  "id": 20,
+  "travelMin": 20,
+  "travelKm": 17.5,
+  "travelApprox": false,
+  "lat": 41.6314,
+  "lng": 2.167,
+  "directionLink": ""
+ },
+ {
+  "id": 11,
+  "travelMin": 94,
+  "travelKm": 109.9,
+  "travelApprox": false,
+  "lat": 42.0876751,
+  "lng": 1.9597233,
+  "directionLink": "https://g.co/kgs/P7fF65o"
+ },
+ {
+  "id": 17,
+  "travelMin": 32,
+  "travelKm": 29.6,
+  "travelApprox": false,
+  "lat": 41.7210785,
+  "lng": 2.1573103,
+  "directionLink": "https://maps.app.goo.gl/XnN2VaARkT9L5eBD8"
+ },
+ {
+  "id": 1,
+  "travelMin": 94,
+  "travelKm": 75.3,
+  "travelApprox": false,
+  "lat": 41.8413925,
+  "lng": 2.4740388,
+  "directionLink": "https://g.co/kgs/Wv1N1cB"
+ },
+ {
+  "id": 22,
+  "travelMin": 11,
+  "travelKm": 5.9,
+  "travelApprox": false,
+  "lat": 41.50025,
+  "lng": 2.252335,
+  "directionLink": "https://maps.app.goo.gl/wz9ivQk3EW4WrkXu7"
+ },
+ {
+  "id": 24,
+  "travelMin": 17,
+  "travelKm": 8.7,
+  "travelApprox": false,
+  "lat": 41.54756,
+  "lng": 2.30057,
+  "directionLink": "https://www.google.com/maps/place/Mas+de+Sant+Lleí/@41.5476064,2.2973267,833m/data=!3m2!1e3!4b1!4m6!3m5!1s0x12a4b8395d0374cb:0x1ce2b635e2b1d59!8m2!3d41.5476024!4d2.2999016!16s%2Fg%2F1234w3b2w?entry=ttu&g_ep=EgoyMDI2MDUxNy4wIKXMDSoASAFQAw%3D%3D"
+ },
+ {
+  "id": 2,
+  "travelMin": 87,
+  "travelKm": 79.5,
+  "travelApprox": false,
+  "lat": 41.9255542,
+  "lng": 2.4287685,
+  "directionLink": "https://maps.app.goo.gl/PzkG5PKzC2fFCecV6"
+ },
+ {
+  "id": 10,
+  "travelMin": 61,
+  "travelKm": 67.1,
+  "travelApprox": false,
+  "lat": 41.5548048,
+  "lng": 1.6830515,
+  "directionLink": "https://maps.app.goo.gl/ksYXvCi4MKigBDkW6"
+ },
+ {
+  "id": 7,
+  "travelMin": 66,
+  "travelKm": 63.7,
+  "travelApprox": false,
+  "lat": 41.8385946,
+  "lng": 2.3997566,
+  "directionLink": "https://g.co/kgs/nrAaxWJ"
+ },
+ {
+  "id": 19,
+  "travelMin": 86,
+  "travelKm": 118.7,
+  "travelApprox": false,
+  "lat": 41.13424,
+  "lng": 1.17002,
+  "directionLink": "https://maps.apple.com/place?ull=41.5255012512207%2C2.243220329284668&place-id=IA3B2E0AE8F5A2DF1&address=Autovía+T-11%2C+Salida+12%2C+43110+Tarragona%2C+España&coordinate=41.1344639%2C1.1700064&name=La+Boella&_provider=9902"
+ },
+ {
+  "id": 5,
+  "travelMin": 9,
+  "travelKm": 4.5,
+  "travelApprox": false,
+  "lat": 41.50143,
+  "lng": 2.24081,
+  "directionLink": "https://g.co/kgs/bRNuatQ"
+ },
+ {
+  "id": 3,
+  "travelMin": 55,
+  "travelKm": 69.1,
+  "travelApprox": false,
+  "lat": 41.82079,
+  "lng": 1.90067,
+  "directionLink": "https://g.co/kgs/WFZWNzm"
+ },
+ {
+  "id": 6,
+  "travelMin": 60,
+  "travelKm": 68.6,
+  "travelApprox": false,
+  "lat": 41.9211915,
+  "lng": 2.0809544,
+  "directionLink": "https://g.co/kgs/Cf8Szvr"
+ }
+]

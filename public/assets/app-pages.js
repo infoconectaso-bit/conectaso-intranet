@@ -660,11 +660,11 @@ function paneServicios(ev, svcOpts, staffOpts, { readonly = false } = {}) {
   }
   const rows = (ev.services || []).map(s => svcRow(s, svcOpts, staffOpts)).join('');
   return `<div class="panel"><div class="panel__head"><h3>Servicios y responsables</h3><button type="button" class="btn btn--sm" id="addSvc">+ Añadir servicio</button></div>
-    <div class="panel__body"><div class="svc-head"><span>Servicio</span><span>Responsable</span><span>Responsable 2</span><span>Precio cliente</span><span></span></div><div id="svcBox">${rows}</div>
-    <p class="hint" style="margin-top:8px">El <b>precio cliente</b> es lo que pagan los novios por ese servicio (lo pones a mano); es lo que suma en PAGO NOVIOS de la facturación.</p></div></div>`;
+    <div class="panel__body"><div class="svc-head"><span>Servicio</span><span>Responsable</span><span>Responsable 2</span><span></span></div><div id="svcBox">${rows}</div>
+    <p class="hint" style="margin-top:8px">El importe que paga el cliente lo pones a mano arriba en <b>Pago cliente</b>; aquí solo se vincula el servicio con su técnico.</p></div></div>`;
 }
 function svcRow(s, svcOpts, staffOpts) {
-  return `<div class="svc-row" data-svc><div>${sel('', svcOpts, s.servicio, 'data-s="servicio" data-search')}</div><div>${sel('', staffOpts, s.resp, 'data-s="resp" data-search')}</div><div>${sel('', staffOpts, s.resp2, 'data-s="resp2" data-search')}</div><input class="control" data-s="precio" type="number" placeholder="€ cliente" value="${s.precio != null && s.precio !== '' ? s.precio : ''}"><button type="button" class="btn btn--icon" data-del-svc>✕</button></div>`;
+  return `<div class="svc-row" data-svc><div>${sel('', svcOpts, s.servicio, 'data-s="servicio" data-search')}</div><div>${sel('', staffOpts, s.resp, 'data-s="resp" data-search')}</div><div>${sel('', staffOpts, s.resp2, 'data-s="resp2" data-search')}</div><button type="button" class="btn btn--icon" data-del-svc>✕</button></div>`;
 }
 function paneFacturacion(ev) {
   const rows = (ev.factRows || []).map(r => { const mk = r[2] || ''; const cls = mk === 'h' ? 'fact-h' : mk === 's' ? 'fact-s' : mk === 't' ? 'fact-t' : ''; return `<tr class="${cls}"><td>${esc(r[0])}</td><td style="text-align:right">${esc(r[1] || '')}</td></tr>`; }).join('');

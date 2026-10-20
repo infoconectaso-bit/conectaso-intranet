@@ -199,4 +199,30 @@ function transaction(fn) {
   try { const r = fn(); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; }
 }
 
+/* ---------- migración: tiempos/km de desplazamiento de las fincas ----------
+ * Rellena travelMin/travelKm/lat/lng/directionLink en las fincas que aún no los
+ * tengan (valores de referencia desde Martorelles). Es idempotente: solo toca la
+ * finca a la que le falten los datos, así que respeta cualquier edición manual.
+ */
+function migrateFincasTravel() {
+  let data;
+  try { data = require('./fincas-travel.json'); } catch (e) { return; }
+  let n = 0;
+  for (const t of data) {
+    const loc = store.get('locations', t.id);
+    if (!loc) continue;
+    if (loc.travelKm != null && loc.travelMin != null && loc.lat != null) continue; // ya está
+    loc.travelMin = (loc.travelMin != null ? loc.travelMin : t.travelMin);
+    loc.travelKm = (loc.travelKm != null ? loc.travelKm : t.travelKm);
+    if (loc.travelApprox == null) loc.travelApprox = !!t.travelApprox;
+    if (loc.lat == null) loc.lat = t.lat;
+    if (loc.lng == null) loc.lng = t.lng;
+    if (!loc.directionLink && t.directionLink) loc.directionLink = t.directionLink;
+    store.put('locations', loc);
+    n++;
+  }
+  if (n) console.log('[migración] Desplazamientos de fincas rellenados en', n, 'fincas.');
+}
+try { migrateFincasTravel(); } catch (e) { console.error('[migración] fincas-travel:', e.message); }
+
 module.exports = { db, store, users, transaction, COLLECTIONS, DATA_DIR, DB_PATH };

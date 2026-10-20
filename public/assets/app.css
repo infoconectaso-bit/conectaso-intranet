@@ -241,8 +241,8 @@ table.dt tbody tr:hover td{background:#fdf0f7}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .mgrid .full{grid-column:1/-1}
 @media(max-width:640px){.mgrid{grid-template-columns:1fr}}
-.svc-row{display:grid;grid-template-columns:1.3fr 1fr 1fr 110px auto;gap:10px;align-items:center;margin-bottom:10px}
-.svc-head{display:grid;grid-template-columns:1.3fr 1fr 1fr 110px auto;gap:10px;font-size:10.5px;font-weight:700;color:#8a8494;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.svc-row{display:grid;grid-template-columns:1.3fr 1fr 1fr auto;gap:10px;align-items:center;margin-bottom:10px}
+.svc-head{display:grid;grid-template-columns:1.3fr 1fr 1fr auto;gap:10px;font-size:10.5px;font-weight:700;color:#8a8494;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
 @media(max-width:720px){.svc-row{grid-template-columns:1fr}.svc-head{display:none}}
 .extra-item{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line);align-items:flex-start}
 .extra-item input{margin-top:3px}
