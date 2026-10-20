@@ -1121,37 +1121,137 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
   const destName = loc ? loc.name : (ev.lugarOtro || '—');
   const mt = montajeInfo(ev);
   const target = _hm2min(ev.ceremoniaFuera ? ev.celebrationHour : ev.hora);
-  let timingHtml = '<p class="hint">Faltan datos para calcular los tiempos (hora de ceremonia/aperitivo y/o desplazamiento).</p>';
+  const fmtTravel = travel != null ? (travel + ' min' + (travelKm ? ' · ' + travelKm + ' km' : '')) : '—';
+  const fechaLarga = f => { if (!f) return '—'; const d = new Date(f + 'T00:00:00'); const dd = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']; const mm = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']; return `${dd[d.getDay()]}, ${d.getDate()} de ${mm[d.getMonth()]} de ${d.getFullYear()}`; };
+  let tlHtml = '<p style="color:#b4aeb9">Faltan datos para calcular los tiempos (hora y/o desplazamiento).</p>', salidaTxt = '';
   if (target != null && travel != null) {
     const listo = target, inicioMontaje = target - mt.min, llegada = inicioMontaje, salida = llegada - travel;
-    const hhmm = x => x < 0 ? _min2hm(x) + ' (día anterior)' : _min2hm(x);
-    const r = (t, time, sub) => `<div class="rd-row"><div class="rd-hh">${time}</div><div><div class="rd-t">${t}</div>${sub ? `<div class="rd-sub">${sub}</div>` : ''}</div></div>`;
-    timingHtml = `${r('Salida desde Martorelles', hhmm(salida), 'Desplazamiento ' + travel + ' min' + (travelKm ? ' · ' + travelKm + ' km' : ''))}
-      ${r('Llegada a ' + esc(destName), hhmm(llegada), 'Inicio del montaje')}
-      ${r('Montaje de equipo', hhmm(inicioMontaje) + '–' + hhmm(listo), esc(mt.regla) + ' · ' + mt.min + ' min')}
-      ${r('Todo listo', hhmm(listo), 'A la hora de ' + (ev.ceremoniaFuera ? 'inicio' : 'la ceremonia'))}
-      ${ev.ceremoniaFuera ? '' : r('Ceremonia', _min2hm(_hm2min(ev.hora)), '')}
-      ${(() => { const ap = ev.ceremoniaFuera ? _hm2min(ev.celebrationHour) : (_hm2min(ev.hora) != null ? _hm2min(ev.hora) + 60 : null); return ap != null ? r('Aperitivo', _min2hm(ap), ev.ceremoniaFuera ? '' : '1 h después de la ceremonia') : ''; })()}`;
+    const hhmm = x => _min2hm(x) + (x < 0 ? ' (día anterior)' : '');
+    const t = (time, lbl, sub) => `<div class="t"><span class="dot"></span><div class="hh">${time}</div><div><div class="lbl">${lbl}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div></div>`;
+    salidaTxt = hhmm(salida);
+    tlHtml = t(hhmm(salida), 'Salida', 'Martorelles · ' + fmtTravel)
+      + t(hhmm(llegada), 'Montaje', esc(mt.regla) + ' · ' + mt.min + ' min')
+      + t(hhmm(listo), 'Todo listo', 'A la hora de ' + (ev.ceremoniaFuera ? 'inicio' : 'la ceremonia'))
+      + (ev.ceremoniaFuera ? '' : t(_min2hm(_hm2min(ev.hora)), 'Ceremonia', 'En la finca'))
+      + (() => { const ap = ev.ceremoniaFuera ? _hm2min(ev.celebrationHour) : (_hm2min(ev.hora) != null ? _hm2min(ev.hora) + 60 : null); return ap != null ? t(_min2hm(ap), 'Aperitivo', ev.ceremoniaFuera ? '' : 'Ceremonia + 1 h') : ''; })();
   }
-  let planoHtml = '';
-  const pack = window.tipoToPack ? window.tipoToPack(ev.tipo) : null;
-  if (ev.lugar && pack) {
-    let evMk = null; try { evMk = await CS.fileIDB.getRaw('plan_mk_ev_' + ev.id); } catch (e) {}
-    try { planoHtml = (evMk != null) ? await window.planoPreviewByKey('ev_' + ev.id) : await window.planoPreviewHTML(ev.lugar, pack); } catch (e) { planoHtml = ''; }
-  }
-  const head = `<div class="pdf-head"><img src="assets/brand/logo-principal-azul.svg" alt="Conecta So"><div style="text-align:right;color:#777;font-size:10px">Hoja de ruta de montaje<br>${esc(ev.conyuges || '')}<br>${dmy(ev.fecha)}</div></div>`;
+  // plano(s) de montaje por zonas (si está disponible el módulo). Protegido: si falla, se omite.
+  let planoZones = [];
+  try { planoZones = window.planoZonesForEvent ? await window.planoZonesForEvent(ev) : []; } catch (e) { planoZones = []; }
+  const planoHtml = planoZones.length === 1 ? planoZones[0].html : '';
+  const escaleta = () => {
+    const secs = musicAreasFor(ev).filter(a => !(a.key === 'ceremony' && ev.ceremoniaFuera))
+      .map(a => ({ title: a.title, moments: a.moments.map(mm => [a.key + '_' + mm[0], mm[1]]) }));
+    secs.push({ title: 'Fiesta', moments: DISCO_MOMENTS.map(mm => ['disco_' + mm[0], mm[1]]) });
+    const pl = (ev.disco || {}).playlist;
+    let html = '', n = 0;
+    secs.forEach(s => {
+      const rows = s.moments.map(([k, def]) => {
+        const mu = (ev.music || {})[k] || {};
+        if (mu.on || (!mu.song && !mu.link)) return '';
+        const chip = mu.link ? '<span class="sp">Spotify</span>' : '<span class="warn">Sin enlace</span>';
+        return `<tr><td class="mic"><span class="box"></span></td><td class="mom">${esc(momentTitle(ev, k, def))}</td><td>${esc(mu.song || '')}</td><td class="notes">${chip}</td></tr>`;
+      }).filter(Boolean).join('');
+      if (!rows) return; n++;
+      html += `<tr class="sec"><td></td><td colspan="3" class="sname">${n} · ${esc(s.title)}</td></tr>` + rows;
+    });
+    if (pl) html += `<tr class="sec"><td></td><td colspan="3" class="sname">Playlist general</td></tr><tr><td class="mic"><span class="box"></span></td><td class="mom">Ambiente / fiesta</td><td>${esc(pl)}</td><td class="notes"><span class="sp">Spotify</span></td></tr>`;
+    return html;
+  };
+  const escRows = escaleta();
+  const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(destName + ' Barcelona');
+  // aviso (no el contenido) si hay observaciones ocultas
+  const obsAviso = (ev.obsPriv && String(ev.obsPriv).trim()) ? '<div class="note-tip" style="margin-top:12px">⚠ Este evento tiene <b>observaciones ocultas</b>. Entra en la intranet para leerlas (no se muestran aquí).</div>' : '';
+  let pageNo = 1;
+  const pg = () => ('0' + (++pageNo)).slice(-2);
   shell(`${pageHead('Hoja de ruta', 'Boda #' + ev.id)}
     <div class="pdf-toolbar"><a class="btn" href="#/eventos/${ev.id}">← Volver</a> <button class="btn btn--primary" onclick="window.print()">Imprimir / Guardar PDF</button></div>
-    <div class="pdf-page ruta-doc">${head}
-      <h2>Hoja de ruta · ${esc(ev.conyuges || ('Boda #' + ev.id))}</h2>
-      <div class="pdf-grid">
-        <div>Fecha : ${val(dmy(ev.fecha))}</div><div>Tipo : ${val(ev.tipo)}</div>
-        <div>Finca : ${val(destName)}</div><div>DJ / técnico : ${val(djOf(ev))}</div>
-        <div>Desplazamiento : ${travel != null ? travel + ' min' + (travelKm ? ' · ' + travelKm + ' km' : '') : '—'}</div><div>Montaje : ${esc(mt.regla)}</div>
-      </div>
-      <h3>Timing del día</h3><div class="rd-timeline">${timingHtml}</div>
-      ${planoHtml ? `<h3>Plano de montaje</h3><div class="rd-plano">${planoHtml}</div>` : ''}
+    <div class="ruta-deck">
+
+      <section class="slide dark cover">
+        <span class="stripe"></span>
+        <img src="/assets/brand/logo-principal-blanco.svg" class="logo" alt="Conecta So">
+        <div class="kick">Hoja de ruta · equipo</div>
+        <h1>${esc(ev.conyuges || ('Boda #' + ev.id))}</h1>
+        <div class="meta"><b>Boda #${ev.id}</b> · ${val(ev.tipo)}<br>${esc(fechaLarga(ev.fecha))} · <b>${esc(destName)}</b></div>
+        <img src="/assets/brand/el-vinilo.svg" class="vinilo" alt="">
+        <div class="pg">Conecta So</div>
+      </section>
+
+      <section class="slide dark page">
+        <h2 style="margin-bottom:14px">Resumen del evento</h2>
+        <div class="grid3" style="margin-bottom:14px">
+          <div class="card"><h3>Localización <span class="ic">📍</span></h3>
+            <div class="row"><div class="k">Finca</div><div class="v">${val(destName)}</div></div>
+            <div class="row"><div class="k">Hora ceremonia</div><div class="v sm">${val(ev.hora)}</div></div>
+          </div>
+          <div class="card"><h3>Equipo <span class="ic">🎧</span></h3>
+            <div class="row"><div class="k">DJ / Técnico</div><div class="v">${val(djOf(ev))}</div></div>
+            <div class="row"><div class="k">Tipo de servicio</div><div class="v sm">${val(ev.tipo)}</div></div>
+          </div>
+          <div class="card"><h3>Contacto <span class="ic">📞</span></h3>
+            <div class="row"><div class="k">Email</div><div class="v sm">info@conectaso.es</div></div>
+            <div class="row"><div class="k">Web</div><div class="v sm">conectaso.es</div></div>
+          </div>
+        </div>
+        <div class="resumen-2col">
+          <div class="card"><h3>Timing del día <span class="ic">⏱️</span></h3><div class="tl tl--compact">${tlHtml}</div></div>
+          <div class="card"><h3>Normativa interna <span class="ic">📋</span></h3>
+            <div class="norm-grid">
+              <div class="nvc"><b>Uniformidad</b><span>Ropa negra + camiseta/sudadera Conecta So, calzado cerrado. Nada de corto, chándal ni roturas.</span></div>
+              <div class="nvc"><b>Montaje y seguridad</b><span>Todo montado y recogido antes de la llegada de invitados. Cableado fijado y tapado. Altura: solo autorizados.</span></div>
+              <div class="nvc"><b>Conducta</b><span>No compartir fotos ni datos. Trato discreto y respetuoso. Sin alcohol ni tabaco en zonas visibles.</span></div>
+              <div class="nvc"><b>Material y cierre</b><span>Orden; cajas vacías ocultas. Averías: marcar "NO FUNCIONA". Revisar restos de cinta al cerrar.</span></div>
+            </div>
+            ${obsAviso}
+          </div>
+        </div>
+        <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
+      </section>
+
+      <section class="slide dark page">
+        <h2>Ubicación y acceso</h2>
+        <div class="grid2" style="height:460px">
+          <div>
+            <div class="card" style="margin-bottom:20px"><h3>Dirección del evento <span class="ic">📍</span></h3>
+              <div class="v" style="font-size:20px;line-height:1.3">${val(destName)}</div>
+              <div style="color:#b4aeb9;margin-top:6px">${esc(ev.lugarCeremonia ? ('Ceremonia: ' + ev.lugarCeremonia) : 'Zona Barcelona')}${travelKm ? ' · a ' + travelKm + ' km (' + travel + ' min) desde Martorelles' : ''}</div>
+              <a class="accent" style="display:inline-block;margin-top:12px;font-family:var(--disp);font-size:14px;text-decoration:none" href="${mapsUrl}" target="_blank" rel="noopener">▸ Ver ruta en Google Maps</a>
+            </div>
+            <div class="card"><h3>Desplazamiento <span class="ic">🚐</span></h3>
+              <div class="row"><div class="k">Tiempo estimado</div><div class="v">${travel != null ? travel + ' min' : '—'}</div></div>
+              <div class="row"><div class="k">Distancia</div><div class="v sm">${travelKm ? travelKm + ' km desde base (Martorelles)' : '—'}</div></div>
+              ${salidaTxt ? `<div class="note-tip">Salida recomendada con margen para montaje a las <b>${salidaTxt}</b>.</div>` : ''}
+            </div>
+          </div>
+          ${planoHtml
+            ? `<div class="card" style="display:flex;flex-direction:column"><h3>Plano de montaje <span class="ic">🗺️</span></h3><div class="deck-plano">${planoHtml}</div></div>`
+            : `<div class="mapbox"><div class="big">Vista satélite de la finca</div><div style="max-width:30ch">Sube la captura aérea de la finca en el plano de montaje y aparecerá aquí junto a los puntos de descarga y parking.</div></div>`}
+        </div>
+        <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
+      </section>
+
+      ${planoZones.length > 1 ? `<section class="slide dark page">
+        <h2>Planos de montaje</h2>
+        <div class="plano-zonas-grid">
+          ${planoZones.map(z => `<div class="card"><h3>${esc(z.label)} <span class="ic">🗺️</span></h3><div class="deck-plano">${z.html}</div></div>`).join('')}
+        </div>
+        <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
+      </section>` : ''}
+
+      ${escRows ? `<section class="slide light slide--auto" style="padding:48px 64px 40px">
+        <h2 style="font-size:40px;margin-bottom:14px">Escaleta musical</h2>
+        <table class="esc">
+          <thead><tr><th class="mic">Mic</th><th>Momento</th><th>Canción</th><th class="notes">Notas</th></tr></thead>
+          <tbody>${escRows}</tbody>
+        </table>
+        <div class="footnote">Nota: todos los momentos están sujetos a cambios según el desarrollo del evento.</div>
+      </section>` : ''}
+
     </div>`, ['Eventos', '#' + ev.id, 'Hoja de ruta']);
+  const fitDeck = () => { const deck = document.querySelector('.ruta-deck'); if (!deck) return; const avail = deck.clientWidth || (deck.parentElement ? deck.parentElement.clientWidth : 1280); const s = Math.min(1, avail / 1280); deck.querySelectorAll('.slide').forEach(sl => { sl.style.zoom = s; }); };
+  setTimeout(fitDeck, 30);
+  if (!window.__rutaFitBound) { window.__rutaFitBound = true; window.addEventListener('resize', () => { clearTimeout(window.__rutaFitT); window.__rutaFitT = setTimeout(fitDeck, 120); }); }
 });
 
 CS.momentHelpers = { MUSIC_AREAS, DISCO_MOMENTS, EXTRAS_CLIENTE, SEC_OF, fg, inp, sel, ta, collectForm, isAdmin, enhanceSearchSelects };

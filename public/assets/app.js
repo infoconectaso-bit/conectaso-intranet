@@ -316,6 +316,7 @@ function navFor(role) {
   ];
   return [ // user / cliente
     { s: 'Mi boda' }, { t: 'Inicio', i: 'home', h: '#/' }, { t: 'Mi evento', i: 'events', h: '#/eventos' },
+    { t: 'Mi contrato', i: 'doc', h: '#/mi-contrato' },
   ];
 }
 function shell(bodyHtml, crumbs) {

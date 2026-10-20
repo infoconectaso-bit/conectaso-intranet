@@ -843,6 +843,31 @@ on(/^#\/tyc-firma\/(\d+)$/, async m => {
       <div class="tyc-body" style="font-size:12px">${text}</div>${firma}</div>`, ['Usuarios', u.name]);
 });
 
+/* El cliente ve su propio contrato firmado (o el aviso de pendiente de firmar) */
+on(/^#\/mi-contrato$/, async () => {
+  if (S.user.role !== 'user') { shell('<div class="empty">Sin acceso.</div>', ['Contrato']); return; }
+  loading(['Mi contrato']);
+  const r = await api('tyc/current');
+  const a = r.autofill || {}, s = r.signature;
+  const fecha = a.fecha ? dmy(a.fecha) : '';
+  const text = (r.tyc.text || '').replace(/\{novios\}/g, `<b>${esc(a.novios || '—')}</b>`).replace(/\{finca\}/g, `<b>${esc(a.finca || '—')}</b>`).replace(/\{fecha\}/g, `<b>${esc(fecha || '—')}</b>`);
+  const head = `<div class="pdf-head"><img src="/assets/brand/logo-principal-azul.svg" alt="Conecta So"><div style="text-align:right;color:#777;font-size:10px">Contrato de servicio<br>${esc(a.novios || S.user.name || '')}</div></div>`;
+  const firma = s
+    ? `<div class="pdf-sign"><h3>Firma</h3><div class="pdf-grid">
+         <div>Firmado por: <b>${esc(s.name)}</b></div><div>Fecha de firma: <b>${esc(dmy((s.date || '').slice(0, 10)))}</b></div>
+         <div>DNI: <b>${esc(s.dni || a.dnis || '—')}</b></div>${s.dni2 ? `<div>DNI 2: <b>${esc(s.dni2)}</b></div>` : ''}
+         <div>Versión aceptada: <b>${esc(s.version || r.tyc.version || '—')}</b></div></div>
+       <p class="pdf-signline">✓ Documento aceptado y firmado electrónicamente por los contratantes.</p></div>`
+    : `<div class="pdf-notice">Todavía no has firmado el contrato.</div>`;
+  shell(`${pageHead('Mi contrato', s ? 'Contrato firmado' : 'Pendiente de firma')}
+    <div class="pdf-toolbar">${s ? '<button class="btn btn--primary" onclick="window.print()">Descargar / Imprimir PDF</button>' : ''}</div>
+    <div class="pdf-page">${head}<h2>${esc(r.tyc.title)}</h2>
+      <div class="pdf-grid" style="margin-bottom:12px">
+        <div>Contratantes: <b>${esc(a.novios || '—')}</b></div><div>DNI: <b>${esc(a.dnis || '—')}</b></div>
+        <div>Lugar de celebración: <b>${esc(a.finca || '—')}</b></div><div>Fecha del evento: <b>${esc(fecha || '—')}</b></div></div>
+      <div class="tyc-body" style="font-size:12px">${text}</div>${firma}</div>`, ['Mi contrato']);
+});
+
 /* =========================================================================
    MI CUENTA (todos)
    ========================================================================= */
