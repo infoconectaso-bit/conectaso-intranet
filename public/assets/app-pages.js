@@ -1004,7 +1004,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
       const filled = all.filter(i => String(i.value || '').trim() !== '').length;
       const pct = all.length ? Math.max(5, Math.round(filled / all.length * 100)) : 0;
       bar.style.width = pct + '%'; bar.textContent = pct + '%';
-      if (pct === 100) { const st = form.querySelector('[name=event_status]'); if (st && st.value !== '4') st.value = '4'; }
+      if (pct === 100) { const st = form.querySelector('[name=event_status]'); const compIdx = (S.meta.estados || []).findIndex(s => /completad/i.test(s.n)); if (st && compIdx >= 0 && st.value !== String(compIdx)) st.value = String(compIdx); }
     };
     form.addEventListener('input', updateProgress);
     updateProgress();

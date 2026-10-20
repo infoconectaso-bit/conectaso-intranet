@@ -264,4 +264,23 @@ function migrateTokensKind() {
 }
 try { migrateTokensKind(); } catch (e) { console.error('[migración] tokens-kind:', e.message); }
 
+// Elimina el estado "No contactado admin" (índice 0): los eventos que lo tenían pasan a
+// "No contactado dj". El resto de estados bajan un índice. Idempotente (solo corre si existe).
+function migrateRemoveAdminState() {
+  const estados = store.setting('estados');
+  if (!Array.isArray(estados) || !estados.length) return;
+  if (!/no\s+contactad[oa]\s+admin/i.test(estados[0].n || '')) return; // ya migrado
+  let n = 0;
+  ['events', 'events_trash'].forEach(col => {
+    store.all(col).forEach(ev => {
+      const old = +ev.estado || 0;
+      const neu = Math.max(0, old - 1);
+      if (neu !== old) { ev.estado = neu; store.put(col, ev); n++; }
+    });
+  });
+  store.setSetting('estados', estados.slice(1));
+  console.log('[migración] estado "No contactado admin" eliminado; ' + n + ' eventos remapeados a "No contactado dj".');
+}
+try { migrateRemoveAdminState(); } catch (e) { console.error('[migración] estados:', e.message); }
+
 module.exports = { db, store, users, transaction, COLLECTIONS, DATA_DIR, DB_PATH };
