@@ -202,6 +202,7 @@ const ICON = {
   plane: 'M2 12l20-8-8 20-2.5-9L2 12z', euro: 'M18 6a7 7 0 100 12M4 10h9M4 14h8', car: 'M5 13l2-6h10l2 6M5 13h14v5H5v-5zm2 5v2m10-2v2M7 16h.01M17 16h.01',
   doc: 'M14 3v5h5M8 13h8M8 17h8M8 9h3M7 3h8l5 5v11a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z',
   edit: 'M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z',
+  moon: 'M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z',
   logout: 'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9', key: 'M15 7a4 4 0 11-5.6 3.6L3 17v4h4l1-1h2v-2h2l1.4-1.4A4 4 0 0015 7z',
 };
 const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON[k]}"/></svg>`;
@@ -210,6 +211,7 @@ const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
    ARRANQUE
    ========================================================================= */
 async function boot() {
+  applyNight();  // aplica el modo noche cuanto antes (también en la pantalla de login)
   // Autologin del DJ por enlace mágico del albarán (antes de pedir login).
   if ((location.hash || '').startsWith('#/albaran')) return albaranAutologin();
   try {
@@ -409,6 +411,7 @@ function shell(bodyHtml, crumbs) {
       ${(u.role === 'user' || u.role === 'planner') ? `<div class="langsel langsel--top" id="langsel">${LANGS.map(l => `<button type="button" data-lang="${l[0]}" class="${S.lang === l[0] ? 'on' : ''}" title="${l[1]}"><span class="flag">${l[2]}</span><span class="code">${l[1]}</span></button>`).join('')}</div>` : ''}
       <nav class="nav">${nav}</nav>
       <div class="nav__foot"><a href="#/cuenta" data-nav="#/cuenta">${svg('key')}<span>Mi cuenta</span></a>
+        <a href="#" id="nightToggle" class="night-toggle" title="Atenúa la intranet automáticamente a partir de las 21:00. Se recuerda en este dispositivo.">${svg('moon')}<span>Modo noche</span><b id="nightState" class="night-state"></b></a>
         <a href="#" id="logoutLink">${svg('logout')}<span>Cerrar sesión</span></a></div>
     </aside>
     <div class="main">
@@ -421,6 +424,8 @@ function shell(bodyHtml, crumbs) {
       <div class="content">${bodyHtml}</div>
     </div></div>`;
   markActive();
+  applyNight();
+  const nt = el('nightToggle'); if (nt) nt.onclick = e => { e.preventDefault(); toggleNight(); };
   el('burger').onclick = () => document.body.classList.toggle('nav-open');
   $$('.nav a[data-nav], .nav__foot a[data-nav]').forEach(a => a.onclick = () => document.body.classList.remove('nav-open'));
   el('logoutLink').onclick = async e => { e.preventDefault(); await api('auth/logout', { method: 'POST' }); S.user = null; location.hash = '#/'; renderAuth(); };
@@ -438,6 +443,19 @@ function shell(bodyHtml, crumbs) {
   applyLang(app);
 }
 const roleLabel = r => ({ admin: 'Administración', dj: 'DJ / Técnico', planner: 'Wedding planner', user: 'Cliente' }[r] || r);
+// --- Modo noche automático: atenúa la intranet a partir de las 21:00 (hasta las 7:00).
+// Se guarda en el dispositivo (localStorage), así queda activado cada vez que entran. ---
+const NIGHT_START = 21, NIGHT_END = 7;
+function nightEnabled() { try { return localStorage.getItem('conecta_night') === '1'; } catch (e) { return false; } }
+function applyNight() {
+  const h = new Date().getHours();
+  const on = nightEnabled() && (h >= NIGHT_START || h < NIGHT_END);
+  document.documentElement.classList.toggle('night-dim', on);
+  const st = document.getElementById('nightState'); if (st) st.textContent = nightEnabled() ? 'Activado' : 'Desactivado';
+  const tg = document.getElementById('nightToggle'); if (tg) tg.classList.toggle('on', nightEnabled());
+}
+function toggleNight() { try { localStorage.setItem('conecta_night', nightEnabled() ? '0' : '1'); } catch (e) {} applyNight(); }
+if (!window.__nightInt) window.__nightInt = setInterval(applyNight, 60000); // revisa cada minuto para que entre solo a las 21:00
 // Título del contrato con el AÑO DE LA BODA (se actualiza según la fecha del evento).
 const tycTitleYear = (baseTitle, fechaBoda) => {
   const y = (fechaBoda && /^\d{4}/.test(String(fechaBoda))) ? String(fechaBoda).slice(0, 4) : String(new Date().getFullYear());

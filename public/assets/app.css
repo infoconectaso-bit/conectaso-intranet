@@ -51,6 +51,14 @@ input,select,textarea,button{font-family:inherit;font-size:14px}
 .control[readonly]{background:#f1ede1;border-color:var(--line);box-shadow:none}
 textarea.control{min-height:92px;resize:vertical}
 .control--sm{padding:7px 10px;border-radius:8px}
+/* Modo noche automático: atenúa toda la intranet con una capa cálida (no deslumbra). */
+.night-overlay{position:fixed;inset:0;background:rgba(28,18,2,.26);pointer-events:none;z-index:99998;display:none}
+html.night-dim .night-overlay{display:block}
+.nav__foot a{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;color:#d8d2c3;font-weight:600;text-decoration:none;margin-bottom:2px}
+.nav__foot a:hover{background:#ffffff14;color:#fff;text-decoration:none}
+.night-toggle.on{color:var(--pink)}
+.night-toggle.on svg{color:var(--pink)}
+.night-state{margin-left:auto;font-size:10.5px;font-weight:700;opacity:.7;text-transform:uppercase;letter-spacing:.04em}
 /* iOS/WebKit centra el valor de los inputs de fecha/hora: lo alineamos a la izquierda como el resto */
 input[type=date].control,input[type=time].control{text-align:left}
 input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left}
