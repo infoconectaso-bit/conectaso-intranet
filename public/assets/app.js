@@ -33,7 +33,7 @@ try { S.lang = localStorage.getItem('conecta_lang') || 'es'; } catch (e) { S.lan
  * Solo se traduce para roles 'user' y 'planner'; administración y técnicos siempre en español.
  */
 const LANG_IDX = { ca: 0, en: 1, fr: 2 };
-const LANGS = [['ca', 'CAT'], ['es', 'ESP'], ['en', 'ENG'], ['fr', 'FRA']];
+const LANGS = [['ca', 'CAT', '🏴󠁥󠁳󠁣󠁴󠁿'], ['es', 'ESP', '🇪🇸'], ['en', 'ENG', '🇬🇧'], ['fr', 'FRA', '🇫🇷']];
 const TR = {
   // menú
   'Principal': ['Principal', 'Main', 'Principal'], 'Inicio': ['Inici', 'Home', 'Accueil'], 'Mis bodas': ['Les meves bodes', 'My weddings', 'Mes mariages'],
@@ -90,6 +90,43 @@ const TR = {
   'Subir archivo': ['Pujar arxiu', 'Upload file', 'Téléverser un fichier'], 'Momento del archivo': ["Moment de l'arxiu", 'File moment', 'Moment du fichier'], 'Archivo': ['Arxiu', 'File', 'Fichier'],
   'Descargar': ['Descarregar', 'Download', 'Télécharger'], 'Sin archivos todavía.': ['Encara no hi ha arxius.', 'No files yet.', 'Aucun fichier pour le moment.'],
   'Ver ruta en Google Maps ↗': ['Veure ruta a Google Maps ↗', 'View route on Google Maps ↗', "Voir l'itinéraire sur Google Maps ↗"],
+  // navegación y cuenta del cliente
+  'Mi contrato': ['El meu contracte', 'My contract', 'Mon contrat'],
+  'Tu evento con Conecta So.': ['El teu esdeveniment amb Conecta So.', 'Your event with Conecta So.', 'Votre événement avec Conecta So.'],
+  'Tus eventos asignados.': ['Els teus esdeveniments assignats.', 'Your assigned events.', 'Vos événements assignés.'],
+  'Tus próximas bodas de un vistazo.': ['Les teves properes bodes d\'un cop d\'ull.', 'Your upcoming weddings at a glance.', 'Vos prochains mariages en un coup d\'œil.'],
+  // botones comunes
+  'Guardar boda': ['Desar boda', 'Save wedding', 'Enregistrer le mariage'],
+  'Guardar evento': ['Desar esdeveniment', 'Save event', 'Enregistrer l\'événement'],
+  'Cancelar': ['Cancel·lar', 'Cancel', 'Annuler'],
+  'Añadir': ['Afegir', 'Add', 'Ajouter'],
+  'Eliminar': ['Eliminar', 'Delete', 'Supprimer'],
+  'Volver': ['Tornar', 'Back', 'Retour'],
+  'Cerrar': ['Tancar', 'Close', 'Fermer'],
+  'Generar playlist': ['Generar playlist', 'Generate playlist', 'Générer la playlist'],
+  // contrato TyC (cliente)
+  'Contrato interno': ['Contracte intern', 'Internal contract', 'Contrat interne'],
+  'Contrato firmado': ['Contracte signat', 'Signed contract', 'Contrat signé'],
+  'Pendiente de firma': ['Pendent de signatura', 'Pending signature', 'En attente de signature'],
+  'Firmar y entrar': ['Signar i entrar', 'Sign and enter', 'Signer et entrer'],
+  'Salir': ['Sortir', 'Exit', 'Quitter'],
+  'He leído y acepto el contrato.': ['He llegit i accepto el contracte.', 'I have read and accept the contract.', 'J\'ai lu et j\'accepte le contrat.'],
+  'Descargar / Imprimir PDF': ['Descarregar / Imprimir PDF', 'Download / Print PDF', 'Télécharger / Imprimer le PDF'],
+  'Contratantes': ['Contractants', 'Contracting parties', 'Contractants'],
+  'Lugar de celebración': ['Lloc de celebració', 'Venue', 'Lieu de célébration'],
+  'Fecha del evento': ['Data de l\'esdeveniment', 'Event date', 'Date de l\'événement'],
+  // pago
+  'Método de pago': ['Mètode de pagament', 'Payment method', 'Mode de paiement'],
+  'Efectivo': ['Efectiu', 'Cash', 'Espèces'],
+  'Transferencia': ['Transferència', 'Bank transfer', 'Virement'],
+  // música / fiesta extra
+  'Canción': ['Cançó', 'Song', 'Chanson'],
+  'Enlace': ['Enllaç', 'Link', 'Lien'],
+  'Playlist': ['Playlist', 'Playlist', 'Playlist'],
+  'Sin enlace': ['Sense enllaç', 'No link', 'Sans lien'],
+  'Progreso': ['Progrés', 'Progress', 'Progression'],
+  // avisos cliente
+  'Rellena aquí la música y los detalles de tu boda. Recuerda Guardar al terminar.': ['Omple aquí la música i els detalls de la teva boda. Recorda Desar en acabar.', 'Fill in your wedding music and details here. Remember to Save when done.', 'Remplissez ici la musique et les détails de votre mariage. Pensez à enregistrer.'],
 };
 function translateNode(node, idx) { const raw = node.nodeValue; const k = raw.trim(); if (k && TR[k] && TR[k][idx]) node.nodeValue = raw.replace(k, TR[k][idx]); }
 let _translating = false;
@@ -328,8 +365,9 @@ function shell(bodyHtml, crumbs) {
     <aside class="sidebar">
       <div class="sidebar__logo"><img src="/assets/brand/logo-reducido-azul.svg" alt="">
         <div class="wm">CONECTA<small>Gestor de eventos</small></div></div>
+      ${(u.role === 'user' || u.role === 'planner') ? `<div class="langsel langsel--top" id="langsel">${LANGS.map(l => `<button type="button" data-lang="${l[0]}" class="${S.lang === l[0] ? 'on' : ''}" title="${l[1]}"><span class="flag">${l[2]}</span><span class="code">${l[1]}</span></button>`).join('')}</div>` : ''}
       <nav class="nav">${nav}</nav>
-      <div class="nav__foot">${(u.role === 'user' || u.role === 'planner') ? `<div class="langsel" id="langsel">${LANGS.map(l => `<button type="button" data-lang="${l[0]}" class="${S.lang === l[0] ? 'on' : ''}">${l[1]}</button>`).join('')}</div>` : ''}<a href="#/cuenta" data-nav="#/cuenta">${svg('key')}<span>Mi cuenta</span></a>
+      <div class="nav__foot"><a href="#/cuenta" data-nav="#/cuenta">${svg('key')}<span>Mi cuenta</span></a>
         <a href="#" id="logoutLink">${svg('logout')}<span>Cerrar sesión</span></a></div>
     </aside>
     <div class="main">
@@ -484,15 +522,24 @@ async function dashboardAdmin() {
     <div class="panel"><div class="panel__head"><h2>Próximas bodas</h2><a class="btn btn--sm" href="#/eventos">Ver todas</a></div>
       <div class="panel__body" style="padding:0">${eventMiniList(next)}</div></div>`, ['Inicio']);
   wirePriceAlerts();
+  wireDupAck();
 }
 /* Aviso: DJ/técnico asignado a 2+ bodas el mismo día (excepto quienes sí pueden). */
 function dupPanel(d) {
   if (!d || !d.total) return '';
   const rows = d.conflicts.map(c => `<div class="va-row">
       <span><b>${esc(c.workerName)}</b> en ${c.events.length} bodas el mismo día</span>
-      <span class="va-when">· ${dmy(c.date)} · ${c.events.map(e => `<a href="#/eventos/${e.id}">#${e.id}${e.conyuges ? ' (' + esc(e.conyuges) + ')' : ''}</a>`).join(' · ')}</span></div>`).join('');
+      <span class="va-when">· ${dmy(c.date)} · ${c.events.map(e => `<a href="#/eventos/${e.id}">#${e.id}${e.conyuges ? ' (' + esc(e.conyuges) + ')' : ''}</a>`).join(' · ')}</span>
+      <button class="btn btn--sm" data-dupack data-w="${c.workerId}" data-d="${c.date}" title="Ocultar este aviso (ya está avisado)">Marcar como avisado</button></div>`).join('');
   return `<div class="panel va-panel va-panel--alert"><div class="panel__head"><h2>🚨 DJ/técnico duplicado el mismo día</h2><span class="pa-sum">${d.total} aviso${d.total > 1 ? 's' : ''}</span></div>
-    <div class="panel__body"><p class="hint" style="margin-bottom:10px">Un mismo DJ o técnico está asignado a <b>más de una boda el mismo día</b>. Revisa las asignaciones.</p>${rows}</div></div>`;
+    <div class="panel__body"><p class="hint" style="margin-bottom:10px">Un mismo DJ o técnico está asignado a <b>más de una boda el mismo día</b>. Revisa las asignaciones. Si ese caso ya está avisado y es correcto, pulsa <b>Marcar como avisado</b> para ocultarlo.</p>${rows}</div></div>`;
+}
+function wireDupAck() {
+  $$('[data-dupack]').forEach(b => b.onclick = () => {
+    api('dup-ack', { method: 'POST', body: { workerId: +b.dataset.w, date: b.dataset.d } })
+      .then(() => { toast('Aviso ocultado', 'ok'); route(); })
+      .catch(() => toast('No se pudo', 'err'));
+  });
 }
 /* Aviso: boda próxima con alguien asignado que está de vacaciones ese día. */
 function vacationPanel(v) {

@@ -665,6 +665,14 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .langsel button{border:0;background:transparent;padding:5px 10px;font-size:11px;font-weight:800;letter-spacing:.03em;cursor:pointer;color:var(--muted)}
 .langsel button.on{background:var(--onyx,#130F17);color:#fff}
 @media(max-width:560px){.langsel button{padding:5px 7px}}
+/* selector de idioma arriba del menu (cliente / wedding planner), con banderas */
+.langsel--top{display:flex;margin:12px 14px 2px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.langsel--top button{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 2px;border:0;border-right:1px solid var(--line);background:transparent;cursor:pointer;color:var(--muted);transition:.1s}
+.langsel--top button:last-child{border-right:0}
+.langsel--top button .flag{font-size:16px;line-height:1}
+.langsel--top button .code{font-size:9px;font-weight:800;letter-spacing:.03em}
+.langsel--top button.on{background:var(--onyx,#130F17);color:#fff}
+.langsel--top button:not(.on):hover{background:var(--cream,#f6f2ea)}
 
 /* hoja de ruta por evento */
 .ruta{display:flex;flex-direction:column;gap:0;margin-top:6px}

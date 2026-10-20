@@ -132,7 +132,7 @@ async function api(req, res, url) {
   if (seg[0] === 'tyc') return tycApi(req, res, user, seg, method);
 
   // --- avisos del panel de inicio (admin) ---
-  if (['price-alerts', 'vacation-conflicts', 'itv-alerts', 'staff-conflicts', 'price-fix'].includes(seg[0])) return dashboardAlerts(req, res, user, seg, method);
+  if (['price-alerts', 'vacation-conflicts', 'itv-alerts', 'staff-conflicts', 'price-fix', 'dup-ack'].includes(seg[0])) return dashboardAlerts(req, res, user, seg, method);
 
   // --- control horario (resúmenes) ---
   if (seg[0] === 'attendance-summary') return attendanceSummary(req, res, user, seg);
@@ -282,8 +282,8 @@ async function changePassword(req, res, user) {
 
 /* ---------- avisos del panel de inicio (solo admin) ---------- */
 // Trabajadores que SÍ pueden hacer 2 bodas el mismo día (no se marcan como duplicado).
-// Nandez (713), Sergi Corcoy (276), DJ Gallego (850). (Ampliable.)
-const MULTI_SAMEDAY_OK = { '713': 1, '276': 1, '850': 1 };
+// Nandez (713) y DJ Gallego (850). (Ampliable; Corcoy NO es excepción.)
+const MULTI_SAMEDAY_OK = { '713': 1, '850': 1 };
 // Trabajadores que no se revisan en "precios por revisar" (gerencia / por horas / etc.).
 const PRICE_ALERT_SKIP = [227, 1095, 234, 292, 1813, 276, 713];
 const uName = id => (users.get(id) || {}).name || ('#' + id);
@@ -291,8 +291,10 @@ function onVacation(workerId, date) {
   if (!workerId || !date) return null;
   return store.all('vacations').find(v => v.userId == workerId && v.status !== 'Denegado' && v.start && v.end && date >= v.start && date <= v.end) || null;
 }
+const dupAckKey = (w, date) => String(w) + '@' + date;
 function staffConflicts() {
   const TODAY = bizToday(); const byDay = {};
+  const acked = new Set(store.setting('dupAck') || []);  // casos puntuales marcados como "ya avisado"
   store.all('events').forEach(e => {
     if (!(e.fecha && e.fecha >= TODAY)) return;
     const ws = new Set(); if (e.djId) ws.add(+e.djId);
@@ -301,7 +303,8 @@ function staffConflicts() {
   });
   const out = [];
   Object.keys(byDay).forEach(date => Object.keys(byDay[date]).forEach(w => {
-    if (MULTI_SAMEDAY_OK[String(w)]) return;
+    if (MULTI_SAMEDAY_OK[String(w)]) return;              // puede hacer 2/día siempre
+    if (acked.has(dupAckKey(w, date))) return;            // caso puntual ya avisado
     const evs = byDay[date][w]; if (evs.length >= 2) out.push({ date, workerId: +w, workerName: uName(+w), events: evs });
   }));
   out.sort((a, b) => a.date.localeCompare(b.date));
@@ -366,6 +369,16 @@ async function dashboardAlerts(req, res, user, seg, method) {
     r.services[sid] = amt;
     store.setSetting('djRates', rates);
     store.audit(user.id, 'price-fix');
+    return ok(res, { ok: true });
+  }
+  if (seg[0] === 'dup-ack' && method === 'POST') {
+    const body = await readBody(req);
+    if (!body.workerId || !body.date) return fail(res, 400, 'Faltan datos');
+    const acked = store.setting('dupAck') || [];
+    const key = dupAckKey(body.workerId, body.date);
+    if (!acked.includes(key)) acked.push(key);
+    store.setSetting('dupAck', acked);
+    store.audit(user.id, 'dup-ack');
     return ok(res, { ok: true });
   }
   return fail(res, 404, 'No encontrado');
