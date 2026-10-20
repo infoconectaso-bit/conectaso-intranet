@@ -134,6 +134,9 @@ async function api(req, res, url) {
   // --- avisos del panel de inicio (admin) ---
   if (['price-alerts', 'vacation-conflicts', 'itv-alerts', 'staff-conflicts', 'price-fix', 'dup-ack'].includes(seg[0])) return dashboardAlerts(req, res, user, seg, method);
 
+  // --- solicitudes de servicios extras (admin) ---
+  if (seg[0] === 'extra-requests') return extraRequestsApi(req, res, user);
+
   // --- control horario (resúmenes) ---
   if (seg[0] === 'attendance-summary') return attendanceSummary(req, res, user, seg);
 
@@ -421,6 +424,15 @@ function listEventsFor(user) {
   if (user.role === 'dj') return store.byStaff('events', user.id);
   return [];
 }
+// Listado global de solicitudes de extras (para la pestaña "Servicios extras" y el aviso de inicio).
+function extraRequestsApi(req, res, user) {
+  if (!user || user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+  const out = [];
+  store.all('events').forEach(e => { const st = e.extraStatus || {}; Object.keys(st).forEach(k => out.push({ evId: e.id, conyuges: e.conyuges || '', fecha: e.fecha || '', lugar: (store.get('locations', e.lugar) || {}).name || '', extraKey: k, estado: st[k] })); });
+  const rank = { solicitado: 0, pendiente_pago: 1, reservado: 2 };
+  out.sort((a, b) => (rank[a.estado] - rank[b.estado]) || (a.fecha || '').localeCompare(b.fecha || ''));
+  return ok(res, { requests: out, total: out.length, pending: out.filter(x => x.estado === 'solicitado').length });
+}
 // Añade al evento saneado los campos que calcula el servidor: si el cliente puede
 // editar (canEdit), días hasta la boda, personas con acceso y, para el cliente, su pago.
 function enrichEvent(out, ev, user) {
@@ -440,11 +452,43 @@ async function events(req, res, user, seg, method, url) {
     let list = listEventsFor(user).filter(e => (done ? evFinished(e) : !evFinished(e)));
     return ok(res, { events: list.map(e => perm.summarizeEvent(user, e)) });
   }
+  // /api/events  (crear una boda nueva; solo admin)
+  if (seg.length === 1 && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    const body = await readBody(req);
+    const rec = {
+      id: store.nextId('events'),
+      tipo: body.tipo || 'Recomendado',
+      conyuges: body.conyuges || '',
+      fecha: body.fecha || '',
+      hora: '00:01',            // hora de inicio por defecto en eventos nuevos
+      lugar: body.lugar || 0,
+      lugarOtro: '', ceremoniaFuera: false, estado: 0, metodo: '',
+      pagoCliente: 0, pagado: 0, pagoRestaurante: 0,
+      userId: body.userId ? +body.userId : null,
+      services: [], music: {}, extras: {}, spouses: [], labels: {},
+    };
+    store.put('events', rec);
+    store.audit(user.id, 'event-create', 'events', rec.id);
+    return ok(res, { event: rec });
+  }
   // /api/events/:id
   const id = +seg[1];
   if (!id) return fail(res, 404, 'Evento no encontrado');
   const ev = store.get('events', id);
   if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 404, 'Evento no encontrado');
+
+  // --- solicitudes de extras: aceptar (confirmar) / marcar pagado / declinar (solo admin) ---
+  if (seg[2] && method === 'POST' && ['extra-confirm', 'extra-pay', 'extra-decline'].includes(seg[2])) {
+    if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    const body = await readBody(req); const k = body.key;
+    const st = ev.extraStatus || (ev.extraStatus = {});
+    if (seg[2] === 'extra-confirm') { if (st[k] === 'solicitado') st[k] = 'pendiente_pago'; }
+    else if (seg[2] === 'extra-pay') { if (st[k] === 'pendiente_pago') st[k] = 'reservado'; }
+    else if (seg[2] === 'extra-decline') { if (ev.extras) delete ev.extras[k]; delete st[k]; }
+    store.put('events', ev); store.audit(user.id, seg[2], 'events', id);
+    return ok(res, { ok: true, extraStatus: ev.extraStatus });
+  }
 
   if (method === 'GET') {
     const out = perm.sanitizeEvent(user, ev);

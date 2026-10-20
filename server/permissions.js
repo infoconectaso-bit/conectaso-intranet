@@ -65,6 +65,14 @@ function mergeEventUpdate(user, current, incoming) {
   else throw httpError(403, 'Tu perfil solo puede consultar este evento.');
   const next = Object.assign({}, current);
   allowed.forEach(k => { if (incoming[k] !== undefined) next[k] = incoming[k]; });
+  // Al marcar un extra (novios o planner) se crea una solicitud: estado "solicitado".
+  // Si lo desmarca antes de confirmarse, se retira la solicitud.
+  if ((user.role === 'user' || user.role === 'planner') && incoming.extras !== undefined) {
+    const nx = incoming.extras || {}, st = Object.assign({}, current.extraStatus || {});
+    Object.keys(nx).forEach(k => { if (nx[k] && !st[k]) st[k] = 'solicitado'; });
+    Object.keys(st).forEach(k => { if (st[k] === 'solicitado' && !nx[k]) delete st[k]; });
+    next.extraStatus = st;
+  }
   if (user.role === 'user' && Array.isArray(incoming.spouses)) {
     // El cliente no puede borrar datos que no ve; se fusionan por posición
     next.spouses = incoming.spouses.slice(0, 2).map((s, i) => Object.assign({}, (current.spouses || [])[i] || {}, s));

@@ -691,6 +691,9 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .control.req-empty:focus{background:#fffdf3;border-color:#c79000}
 /* enlace de Spotify correcto → check verde antes del botón */
 .link-ok{color:#0B8043;font-weight:900;margin-right:5px;font-size:15px}
+/* aviso de solicitudes de extras en el inicio (clicable) */
+.extra-req-panel{display:block;text-decoration:none;color:inherit}
+.extra-req-panel:hover{box-shadow:4px 4px 0 var(--pink)}
 /* botón Guardar más grande y, en móvil, centrado para encontrarlo fácil */
 .floatbar .btn--primary{padding:12px 32px;font-size:15px;min-width:170px}
 @media(max-width:600px){

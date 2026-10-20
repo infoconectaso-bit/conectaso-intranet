@@ -513,18 +513,20 @@ on(/^#\/$/, async () => {
   return dashboardSimple();
 });
 async function dashboardAdmin() {
-  const [pend, alerts, vac, itv, dup] = await Promise.all([
+  const [pend, alerts, vac, itv, dup, exr] = await Promise.all([
     api('events'),
     api('price-alerts').catch(() => ({ groups: [], totalCombos: 0 })),
     api('vacation-conflicts').catch(() => ({ conflicts: [], total: 0 })),
     api('itv-alerts').catch(() => ({ vehicles: [], total: 0 })),
     api('staff-conflicts').catch(() => ({ conflicts: [], total: 0 })),
+    api('extra-requests').catch(() => ({ requests: [], pending: 0 })),
   ]);
   const upcoming = pend.events.filter(e => e.fecha >= ymd(TODAY)).sort((a, b) => a.fecha.localeCompare(b.fecha));
   const next = upcoming.slice(0, 8);
   const in7 = upcoming.filter(e => e.fecha <= ymd(addDays(TODAY, 7))).length;
   const sinDj = pend.events.filter(e => !djOf(e)).length;
   shell(`${pageHead('Hola, ' + (S.user.name || '').split(' ')[0], 'Tus próximas bodas de un vistazo.')}
+    ${extraReqPanel(exr)}
     ${dupPanel(dup)}
     ${vacationPanel(vac)}
     ${itvPanel(itv)}
@@ -538,6 +540,12 @@ async function dashboardAdmin() {
       <div class="panel__body" style="padding:0">${eventMiniList(next)}</div></div>`, ['Inicio']);
   wirePriceAlerts();
   wireDupAck();
+}
+/* Aviso: solicitudes de extras pendientes de aceptar/declinar (lo piden los novios). */
+function extraReqPanel(x) {
+  if (!x || !x.pending) return '';
+  return `<a class="panel va-panel va-panel--alert extra-req-panel" href="#/extras"><div class="panel__head"><h2>❗ Solicitudes de extras por revisar</h2><span class="pa-sum">${x.pending} pendiente${x.pending > 1 ? 's' : ''}</span></div>
+    <div class="panel__body"><p class="hint" style="margin:0">Los novios han solicitado <b>${x.pending}</b> servicio${x.pending > 1 ? 's' : ''} extra. Acéptalo o decláralo según disponibilidad. <b>Ir a Servicios extras →</b></p></div></a>`;
 }
 /* Aviso: DJ/técnico asignado a 2+ bodas el mismo día (excepto quienes sí pueden). */
 function dupPanel(d) {
