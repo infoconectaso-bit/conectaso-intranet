@@ -264,7 +264,8 @@ function userForm(u, all) {
     <div class="field" id="colorBox" style="display:${(!creating && ['dj', 'planner', 'admin'].includes(u.role)) ? 'block' : 'none'}"><label>Color (agenda) <span class="hint">solo trabajadores</span></label>${inp('color', u.color, { ph: '#E82C88' })}</div>
     <div id="workerBox" style="display:${['dj', 'admin'].includes(u.role) ? 'block' : 'none'}">
       <div class="grid-2"><div class="field"><label>Tipo de trabajador</label>${sel('worker_type', [[0, 'Selecciona'], [1, 'Trabajador'], [2, 'Autónomo'], [3, 'Otros']], u.worker_type || 0)}</div>
-      <div class="field"><label><input type="checkbox" name="vehicle_allowed" ${u.vehicle_allowed ? 'checked' : ''}> Puede coger vehículo</label></div></div>
+      <div class="field"><label><input type="checkbox" name="vehicle_allowed" ${u.vehicle_allowed ? 'checked' : ''}> Puede coger vehículo</label>
+        <label style="margin-top:6px"><input type="checkbox" name="time_tracking" ${u.time_tracking ? 'checked' : ''}> Tiene control horario (fichaje)</label></div></div>
       <h4 class="form-sub">Tarifas base por tipo de evento</h4>
       <div class="grid-2"><div class="field"><label>Recomendado</label>${inp('recomendado', p.recomendado, { ph: '€' })}</div>
       <div class="field"><label>Fiesta</label>${inp('fiesta', p.fiesta, { ph: '€' })}</div></div>
@@ -289,7 +290,7 @@ function userForm(u, all) {
       ['recomendado', 'fiesta', 'bodorrio', 'tinglado', 'fiesta_precio_extra', 'bodorrio_precio_extra', 'tinglado_precio_extra'].forEach(k => { if (d[k] !== undefined && d[k] !== '') prices[k] = d[k]; else delete prices[k]; });
       const djFincas = []; $$('[data-finca]', bg).forEach(r => { const g = k => r.querySelector('[data-f="' + k + '"]').value; const l = g('l'); if (!l) return; djFincas.push({ l: +l, b: g('b'), e: g('e'), h: g('h'), d: g('d'), c: g('c') }); });
       const djServices = []; $$('[data-svc]', bg).forEach(r => { const g = k => r.querySelector('[data-s="' + k + '"]').value; const s = g('s'), pp = g('p'); if (!s || pp === '') return; djServices.push({ s: +s, p: pp, h: g('h') || undefined }); });
-      const data = { color: d.color, worker_type: +d.worker_type || 0, vehicle_allowed: d.vehicle_allowed, prices, djFincas, djServices };
+      const data = { color: d.color, worker_type: +d.worker_type || 0, vehicle_allowed: d.vehicle_allowed, time_tracking: d.time_tracking, prices, djFincas, djServices };
       try {
         if (creating) { const r = await api('users', { method: 'POST', body: { email: d.mail, name: d.name, role: d.role, data } }); await CS.loadContext(); showInvite(r.invite); }
         else { await api('users/' + u.id, { method: 'PUT', body: { email: d.mail, name: d.name, role: d.role, data } }); await CS.loadContext(); toast('Guardado', 'ok'); }
@@ -625,6 +626,7 @@ window.tipoToPack = tipoToPack;
 const slotsTxt = a => (a.slots || []).map(s => `Entrada: ${s.in} · Salida: ${s.out}`).join('<br>');
 const attMin = a => (a.slots || []).reduce((t, s) => { let d = toMin(s.out) - toMin(s.in); if (d < 0) d += 1440; return t + d; }, 0);
 on(/^#\/horario$/, async () => {
+  if (S.user.role === 'dj' && !S.user.time_tracking) { shell('<div class="empty">No tienes control horario habilitado.</div>', ['Control horario']); return; }
   loading(['Control horario']);
   const items = await coll.list('attendances');
   const admin = isAdmin();
@@ -872,6 +874,7 @@ function chartSvg(data) {
    ========================================================================= */
 const fmtDT = iso => { if (!iso) return ''; const d = new Date(iso); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 on(/^#\/vehiculos$/, async () => {
+  if (S.user.role === 'dj' && !S.user.vehicle_allowed) { shell('<div class="empty">No tienes vehículo habilitado.</div>', ['Vehículos']); return; }
   loading(['Vehículos']);
   const [vehicles, usages] = await Promise.all([coll.list('vehicles'), coll.list('usages')]);
   const admin = isAdmin();

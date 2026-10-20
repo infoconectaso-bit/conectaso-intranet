@@ -283,4 +283,16 @@ function migrateRemoveAdminState() {
 }
 try { migrateRemoveAdminState(); } catch (e) { console.error('[migración] estados:', e.message); }
 
+// Activa el control horario (fichaje) a los DJs/técnicos que YA tienen fichajes registrados,
+// para que lo conserven. A partir de ahí lo decide el interruptor de su ficha. Idempotente.
+function migrateTimeTracking() {
+  if (store.setting('mig_time_tracking')) return;
+  const ids = [...new Set(store.all('attendances').map(a => +a.userId).filter(Boolean))];
+  let n = 0;
+  ids.forEach(id => { const uu = users.get(id); if (uu && uu.role === 'dj' && !uu.time_tracking) { users.update(id, { data: { time_tracking: true } }); n++; } });
+  store.setSetting('mig_time_tracking', true);
+  console.log('[migración] control horario habilitado para ' + n + ' DJs con fichajes previos.');
+}
+try { migrateTimeTracking(); } catch (e) { console.error('[migración] time-tracking:', e.message); }
+
 module.exports = { db, store, users, transaction, COLLECTIONS, DATA_DIR, DB_PATH };

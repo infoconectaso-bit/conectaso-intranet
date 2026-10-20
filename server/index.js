@@ -170,6 +170,8 @@ async function login(req, res) {
 function meView(u) {
   const out = { id: u.id, name: u.name, email: u.email, role: u.role };
   if (u.role === 'dj' || u.role === 'admin') out.color = u.color;
+  // Flags que controlan qué apartados ve el DJ/técnico en su menú.
+  if (u.role === 'dj') { out.vehicle_allowed = !!u.vehicle_allowed; out.time_tracking = !!u.time_tracking; }
   out.tycSigned = tycSignedBy(u);
   return out;
 }

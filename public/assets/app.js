@@ -375,12 +375,19 @@ function navFor(role) {
     { s: 'Negocio' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' }, { t: 'Beneficios', i: 'euro', h: '#/beneficios' },
     { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
   ];
-  if (role === 'dj') return [
-    { s: 'Mi trabajo' }, { t: 'Inicio', i: 'home', h: '#/' }, { t: 'Mis eventos', i: 'events', h: '#/eventos' },
-    { t: 'Realizados', i: 'events', h: '#/eventos/realizados' },
-    { s: 'Tiempo' }, { t: 'Mi control horario', i: 'clock', h: '#/horario' }, { t: 'Mis vacaciones', i: 'plane', h: '#/vacaciones' },
-    { s: 'Otros' }, { t: 'Mis pagos', i: 'euro', h: '#/mis-pagos' }, { t: 'Vehículos', i: 'car', h: '#/vehiculos' },
-  ];
+  if (role === 'dj') {
+    const tt = !!(S.user && S.user.time_tracking);     // solo quien tiene control horario habilitado
+    const veh = !!(S.user && S.user.vehicle_allowed);  // solo quien puede conducir furgoneta
+    return [
+      { s: 'Mi trabajo' }, { t: 'Inicio', i: 'home', h: '#/' }, { t: 'Mis eventos', i: 'events', h: '#/eventos' },
+      { t: 'Realizados', i: 'events', h: '#/eventos/realizados' },
+      { s: 'Tiempo' },
+      ...(tt ? [{ t: 'Mi control horario', i: 'clock', h: '#/horario' }] : []),
+      { t: 'Mis vacaciones', i: 'plane', h: '#/vacaciones' },
+      { s: 'Otros' }, { t: 'Mis pagos', i: 'euro', h: '#/mis-pagos' },
+      ...(veh ? [{ t: 'Vehículos', i: 'car', h: '#/vehiculos' }] : []),
+    ];
+  }
   if (role === 'planner') return [
     { s: 'Principal' }, { t: 'Inicio', i: 'home', h: '#/' }, { t: 'Mis bodas', i: 'events', h: '#/eventos' },
     { t: 'Realizadas', i: 'events', h: '#/eventos/realizados' },
