@@ -610,7 +610,17 @@ async function usersApi(req, res, user, seg, method) {
     if (seg[1] === 'me' && method === 'GET') return ok(res, { user: users.get(user.id) });
     return fail(res, 403, 'No tienes acceso a la gestión de usuarios.');
   }
-  if (seg.length === 1 && method === 'GET') return ok(res, { users: users.all().map(u => Object.assign({}, u, { tycSigned: tycSignedBy(u) })) });
+  if (seg.length === 1 && method === 'GET') {
+    // Índice de firmas por evento calculado UNA sola vez (antes se recorrían todos los
+    // eventos por cada usuario → O(usuarios×eventos), con ~2000 usuarios dejaba la página colgada).
+    const signedUserIds = new Set();
+    store.all('events').forEach(e => { if (e.tycSigned) { if (e.userId) signedUserIds.add(+e.userId); (e.coUsers || []).forEach(x => signedUserIds.add(+x)); } });
+    const list = users.all().map(u => {
+      const signed = u.role === 'user' && (!!(u.tycSign && u.tycSign.date) || signedUserIds.has(+u.id));
+      return Object.assign({}, u, { tycSigned: signed });
+    });
+    return ok(res, { users: list });
+  }
   if (seg.length === 1 && method === 'POST') {
     const body = await readBody(req);
     if (!body.email) return fail(res, 400, 'El email es obligatorio.');
@@ -651,10 +661,40 @@ function makeInvite(u) {
 }
 
 /* ---------- facturación ---------- */
+// Calcula los beneficios del negocio (facturado, gastos, beneficio) por mes y año,
+// a partir de las bodas ya realizadas. Facturado = ingresos finca + cliente.
+const BEN_MN = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+function computeBeneficios() {
+  const now = new Date(); const curY = now.getFullYear();
+  const months = {};
+  let yIng = 0, yCost = 0, yBen = 0;
+  store.all('events').forEach(ev => {
+    if (!evRealized(ev)) return;
+    const ym = String(ev.fecha || '').slice(0, 7); if (!/^\d{4}-\d{2}$/.test(ym)) return;
+    let t; try { t = fact.eventTotals(ev); } catch (e) { return; }
+    const m = months[ym] || (months[ym] = { ing: 0, cost: 0, ben: 0 });
+    m.ing += t.ingresos; m.cost += t.coste; m.ben += t.beneficio;
+    if (ym.slice(0, 4) === String(curY)) { yIng += t.ingresos; yCost += t.coste; yBen += t.beneficio; }
+  });
+  const chart = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(curY, now.getMonth() - i, 1);
+    const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const m = months[ym] || { ing: 0, cost: 0, ben: 0 };
+    chart.push([BEN_MN[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2), Math.round(m.ing), Math.round(m.cost), Math.round(m.ben)]);
+  }
+  const monthly = [];
+  for (let mo = 0; mo < 12; mo++) {
+    const ym = curY + '-' + String(mo + 1).padStart(2, '0');
+    const m = months[ym] || { ing: 0, cost: 0, ben: 0 };
+    monthly.push({ mes: BEN_MN[mo], facturado: Math.round(m.ing), gastos: Math.round(m.cost), beneficio: Math.round(m.ben) });
+  }
+  return { year: [Math.round(yIng), Math.round(yCost), Math.round(yBen)], chart, monthly, anio: curY };
+}
 function finance(req, res, user, seg, method) {
   if (user.role === 'admin') {
     if (seg[1] === 'workers' && method === 'GET') return ok(res, { workers: store.all('workers') });
-    if (seg[1] === 'beneficios' && method === 'GET') return ok(res, store.setting('beneficios') || {});
+    if (seg[1] === 'beneficios' && method === 'GET') return ok(res, computeBeneficios());
     if (seg[1] === 'history') {
       const id = +seg[2];
       // facturación en vivo: histórico + eventos ya realizados (incluye precios recién puestos)

@@ -27,6 +27,31 @@ const exName = k => ((CS.momentHelpers.EXTRAS_CLIENTE || []).find(e => e[0] === 
 const EX_STATE = { solicitado: ['⏳ Pendiente de confirmación', 'tag--yellow'], pendiente_pago: ['💳 Pendiente de pago', 'tag--blue'], reservado: ['✓ Reservado', 'tag--green'] };
 on(/^#\/extras$/, () => solicitudesExtras());
 on(/^#\/extras-catalogo$/, () => extrasCatalogo());
+on(/^#\/papelera$/, () => papeleraEventos());
+async function papeleraEventos() {
+  if (!requireAdmin()) return; loading(['Papelera']);
+  const { events } = await api('events/trash');
+  shell(`${pageHead('Papelera de eventos', 'Eventos borrados. Puedes restaurarlos o eliminarlos definitivamente.')}
+    <div class="panel"><div class="panel__body">
+      <p class="hint" style="margin-bottom:12px">Al borrar un evento se guarda aquí (no se pierde). <b>Restaurar</b> lo devuelve a su listado con todos sus datos y archivos. <b>Eliminar definitivamente</b> sí lo borra para siempre.</p>
+      ${table('dtTrash', { rows: events, order: [3, 'desc'], filters: true, empty: 'La papelera está vacía.', cols: [
+        { t: 'Nº', get: e => e.id },
+        { t: 'Tipo', get: e => e.tipo || '' },
+        { t: 'Evento', get: e => e.conyuges || e.tipo || '', html: e => `<b>${esc(e.conyuges || e.tipo || '—')}</b>` },
+        { t: 'Fecha boda', get: e => e.fecha || '', html: e => e.fecha ? dmy(e.fecha) : '—' },
+        { t: 'Lugar', get: e => e.lugar || '' },
+        { t: 'Borrado', get: e => e.deletedAt || '', html: e => e.deletedAt ? (dmy(e.deletedAt.slice(0,10)) + (e.deletedBy ? ' · ' + esc(e.deletedBy) : '')) : '—' },
+        { t: '', nosort: true, nofilter: true, html: e => `<div class="row-actions"><button class="btn btn--sm btn--primary" data-restore="${e.id}">Restaurar</button><button class="btn btn--icon" data-purge="${e.id}" title="Eliminar definitivamente">🗑</button></div>` },
+      ] })}
+    </div></div>`, ['Papelera']);
+  bindTable('dtTrash', () => {
+    $$('[data-restore]').forEach(b => b.onclick = async () => {
+      try { await api('events/trash/' + b.dataset.restore + '/restore', { method: 'POST' }); toast('Evento restaurado', 'ok'); papeleraEventos(); }
+      catch (e) { toast(e.message || 'No se pudo restaurar', 'err'); }
+    });
+    $$('[data-purge]').forEach(b => b.onclick = () => modal('Eliminar definitivamente', `¿Eliminar para siempre el evento #${b.dataset.purge}? Esta acción <b>no se puede deshacer</b>.`, { okText: 'Eliminar definitivamente', danger: true, onOk: async () => { await api('events/trash/' + b.dataset.purge, { method: 'DELETE' }); toast('Eliminado definitivamente', 'ok'); papeleraEventos(); } }));
+  });
+}
 async function solicitudesExtras() {
   if (!requireAdmin()) return; loading(['Solicitud de extras']);
   const { requests, pending } = await api('extra-requests');
@@ -798,11 +823,20 @@ on(/^#\/beneficios$/, async () => {
   if (!benefOk()) return benefGate();
   loading(['Beneficios']);
   const b = await api('finance/beneficios');
-  const y = b.year || [], chart = b.chart || [];
+  const y = b.year || [], chart = b.chart || [], monthly = b.monthly || [], anio = b.anio || new Date().getFullYear();
   const stat = (k, v, cls) => `<div class="stat ${cls || ''}"><div class="k">${k}</div><div class="v">${v != null ? fmtEur(v) : '—'}</div></div>`;
-  shell(`${pageHead('Beneficios', 'Ingresos, gastos y beneficio del negocio.')}
-    <div class="grid-3">${stat('Ingresos del año', y[0], 'stat--blue')}${stat('Gastos del año', y[1])}${stat('Beneficio del año', y[2], 'stat--pink')}</div>
-    <div class="panel"><div class="panel__head"><h3>Últimos 12 meses</h3></div><div class="panel__body">${chartSvg(chart)}</div></div>`, ['Beneficios']);
+  const curMes = monthly[new Date().getMonth()] || { facturado: 0, gastos: 0, beneficio: 0 };
+  const MESNOM = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][new Date().getMonth()];
+  shell(`${pageHead('Beneficios', 'Facturado, gastos y beneficio del negocio (bodas realizadas).')}
+    <h3 class="form-sub" style="margin:4px 0 10px">Año ${anio}</h3>
+    <div class="grid-3">${stat('Facturado del año', y[0], 'stat--blue')}${stat('Gastos del año', y[1], 'stat--yellow')}${stat('Beneficio del año', y[2], 'stat--pink')}</div>
+    <h3 class="form-sub" style="margin:18px 0 10px">${MESNOM} (mes actual)</h3>
+    <div class="grid-3">${stat('Facturado del mes', curMes.facturado, 'stat--blue')}${stat('Gastos del mes', curMes.gastos, 'stat--yellow')}${stat('Beneficio del mes', curMes.beneficio, 'stat--pink')}</div>
+    <div class="panel"><div class="panel__head"><h3>Evolución · últimos 12 meses</h3></div><div class="panel__body">${chartSvg(chart)}</div></div>
+    <div class="panel"><div class="panel__head"><h3>Desglose mensual ${anio}</h3></div><div class="panel__body"><div class="table-wrap"><table class="dt"><thead><tr><th>Mes</th><th style="text-align:right">Facturado</th><th style="text-align:right">Gastos</th><th style="text-align:right">Beneficio</th></tr></thead><tbody>
+      ${monthly.map(m => `<tr><td><b>${esc(m.mes)}</b></td><td style="text-align:right">${fmtEur(m.facturado)}</td><td style="text-align:right;color:#c77">${m.gastos ? '−' + fmtEur(m.gastos) : fmtEur(0)}</td><td style="text-align:right;font-weight:700;color:${m.beneficio >= 0 ? '#0B8043' : '#D50000'}">${fmtEur(m.beneficio)}</td></tr>`).join('')}
+      <tr style="border-top:2px solid var(--onyx)"><td><b>TOTAL ${anio}</b></td><td style="text-align:right"><b>${fmtEur(y[0] || 0)}</b></td><td style="text-align:right;color:#c77"><b>−${fmtEur(y[1] || 0)}</b></td><td style="text-align:right;font-weight:800;color:${(y[2] || 0) >= 0 ? '#0B8043' : '#D50000'}">${fmtEur(y[2] || 0)}</b></td></tr>
+    </tbody></table></div></div></div>`, ['Beneficios']);
 });
 function chartSvg(data) {
   if (!data.length) return '<div class="empty">Sin datos.</div>';
@@ -814,7 +848,7 @@ function chartSvg(data) {
   const labels = data.map((r, i) => `<text x="${x(i)}" y="${H - 12}" font-size="10" text-anchor="middle" fill="#6a6472">${esc(r[0].slice(0, 3))}</text>`).join('');
   return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:640px;font-family:var(--body)">
     ${line(1, '#31B9CB')}${line(2, '#E82C88')}${line(3, '#0B8043')}${labels}
-    <g transform="translate(${pad},12)" font-size="12"><rect width="12" height="12" fill="#31B9CB"/><text x="18" y="11">Ingresos</text>
+    <g transform="translate(${pad},12)" font-size="12"><rect width="12" height="12" fill="#31B9CB"/><text x="18" y="11">Facturado</text>
       <rect x="110" width="12" height="12" fill="#E82C88"/><text x="128" y="11">Gastos</text>
       <rect x="210" width="12" height="12" fill="#0B8043"/><text x="228" y="11">Beneficio</text></g></svg></div>`;
 }

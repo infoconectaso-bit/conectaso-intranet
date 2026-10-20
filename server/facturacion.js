@@ -134,6 +134,24 @@ function computeRevenue(ev) {
   rows.push(['BENEFICIO', money(ingresos - coste), 't']);
   return rows;
 }
+/** Totales numéricos de un evento: facturado (ingresos), coste de personal y beneficio. */
+function eventTotals(ev) {
+  refresh();
+  const loc = locById(ev.lugar) || {};
+  const isMasia = !!(ev.lugar && loc.id);
+  let fincaTot = 0, cliTot = 0;
+  if (isMasia) {
+    const wp = parseFloat(loc.weddingPrice) || 0, cpr = parseFloat(loc.ceremonyPrice) || 0, xp = parseFloat(loc.extraPrice) || 0, oh = OVERTIME[ev.djOvertime] || 0;
+    fincaTot += wp;
+    if (!ev.ceremoniaFuera && cpr > 0) fincaTot += cpr;
+    if (oh > 0) fincaTot += oh * xp;
+  }
+  (ev.services || []).forEach(s => { if (s.servicio == 42) return; const p = parseFloat(s.precio); if (!isNaN(p)) cliTot += p; });
+  const cliPlus = (ev.plus || []).filter(p => !p.userId).reduce((t, p) => t + (parseFloat(p.amount) || 0), 0);
+  cliTot += cliPlus;
+  const ingresos = fincaTot + cliTot, coste = factTotal(ev);
+  return { ingresos, coste, beneficio: ingresos - coste };
+}
 /** Rellena ev.factRows y ev.revRows (solo para vista de admin). No persiste. */
 function withFacturacion(ev) {
   try { ev.factRows = computeFact(ev); ev.revRows = computeRevenue(ev); } catch (e) { /* no romper la ficha */ }
@@ -159,4 +177,4 @@ function aggregateFor(uid) {
   return { cobrar: (snap.cobrar || 0) + extra, cobrado: (snap.cobrado || 0), rest: (snap.rest || 0) + extra, items: extraItems.concat(snap.items || []) };
 }
 
-module.exports = { computeFact, computeRevenue, factTotal, workerEarning, assignedWorkers, withFacturacion, aggregateFor, HOURLY_RATE, OVERTIME };
+module.exports = { computeFact, computeRevenue, factTotal, eventTotals, workerEarning, assignedWorkers, withFacturacion, aggregateFor, HOURLY_RATE, OVERTIME };
