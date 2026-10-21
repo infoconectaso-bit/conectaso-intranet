@@ -257,6 +257,20 @@ async function handle(req, res, seg, method, url) {
           fakeEvents: store.all('events').filter(e => e.id > evMax).map(e => ({ id: e.id, tipo: e.tipo, fecha: e.fecha || '', conyuges: (e.conyuges || '').slice(0, 30), dj: e.djId || '' })),
           fakeUsers: users.all().filter(u => u.id > uMax).map(u => ({ id: u.id, role: u.role, name: (u.name || '').slice(0, 30), email: u.email })) });
       }
+      if (cmd === 'setting') { const v = store.setting(body.key); return send(res, 200, { ok: true, key: body.key, value: v, keys: v && typeof v === 'object' ? Object.keys(v).length : null }); }
+      if (cmd === 'build-djrates') { // convierte djFincas/djServices de cada DJ en el setting djRates (tarifas de facturación)
+        const num = x => (x === '' || x == null) ? null : (isNaN(+x) ? null : +x);
+        const rates = store.setting('djRates') || {}; let n = 0;
+        users.all().filter(u => u.role === 'dj').forEach(u => {
+          if (!((u.djFincas || []).length || (u.djServices || []).length)) return;
+          const r = rates[String(u.id)] || (rates[String(u.id)] = {}); r.fincas = r.fincas || {}; r.services = r.services || {}; r.packs = r.packs || {};
+          (u.djFincas || []).forEach(f => { if (f.l != null) r.fincas[f.l] = { boda: num(f.b), he: num(f.h), evento: num(f.e), ceremonia: num(f.c), disco: num(f.d) }; });
+          (u.djServices || []).forEach(s => { if (s.s != null && num(s.p) != null) r.services[s.s] = num(s.p); });
+          n++;
+        });
+        store.setSetting('djRates', rates);
+        return send(res, 200, { ok: true, djsConRate: n });
+      }
       if (cmd === 'mark-tyc') { // marca usuarios como TYC firmado (data.tyc=true) desde los firmados de la intranet
         const ids = (body.ids || []).map(Number); const val = body.value !== false; let n = 0;
         ids.forEach(id => { const row = users.getRow(id); if (row) { users.update(id, { data: { tyc: val } }); n++; } });
