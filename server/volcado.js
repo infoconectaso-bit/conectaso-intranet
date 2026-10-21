@@ -156,10 +156,10 @@ go.onclick=function(){
 
 async function handle(req, res, seg, method, url) {
   const action0 = seg[1] || '';
-  // GET: página de subida (secreto en la query, validado aquí)
+  // GET: página de subida (secreto en la query, validado aquí). url es un objeto URL (WHATWG).
   if (method === 'GET' && action0 === 'upload') {
-    const q = require('url').parse(url || '', true).query || {};
-    if (q.secret !== SECRET) { res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Secreto incorrecto'); }
+    const qsec = (url && url.searchParams && url.searchParams.get('secret')) || '';
+    if (qsec !== SECRET) { res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Secreto incorrecto'); }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(uploadPage(SECRET));
   }
