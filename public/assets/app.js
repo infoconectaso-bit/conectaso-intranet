@@ -362,6 +362,10 @@ function renderForgot() {
 }
 async function renderActivate() {
   const token = new URLSearchParams(location.hash.split('?')[1] || '').get('token');
+  if (token === 'DEMO-TOKEN') {
+    app.innerHTML = authShell(`<h1>✅ El botón funciona</h1><div class="sub">Este es un <b>correo de prueba</b>, así que el enlace es de ejemplo y no crea ninguna contraseña. En un correo real (alta o restablecer), este mismo botón te abriría el formulario para crear tu contraseña.</div><a class="btn btn--dark btn--block" href="#/">Ir al inicio</a>`);
+    return;
+  }
   let info; try { info = await api('auth/invite-info?token=' + encodeURIComponent(token || '')); }
   catch (e) { app.innerHTML = authShell(`<h1>Enlace no válido</h1><div class="sub">Este enlace no es válido o ha caducado. Pide uno nuevo a administración.</div><a class="btn btn--dark btn--block" href="#/">Ir al inicio</a>`); return; }
   app.innerHTML = authShell(`
