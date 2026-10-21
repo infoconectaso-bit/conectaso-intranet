@@ -402,7 +402,7 @@ function renderAuth() {
     <div class="sub">Entra con tu cuenta de Conecta So.</div>
     <form id="loginForm">
       <div class="field"><label>Email</label><div class="input-icon"><input class="control" name="email" type="email" autocomplete="username" required>${svg('users')}</div></div>
-      <div class="field"><label>Contraseña</label><div class="input-icon"><input class="control" name="password" type="password" autocomplete="current-password" required>${svg('key')}</div></div>
+      <div class="field"><label>Contraseña</label><div class="pw-wrap"><input class="control" name="password" type="password" autocomplete="current-password" required><button type="button" class="pw-eye" data-pwtoggle aria-label="Mostrar u ocultar la contraseña">👁</button></div></div>
       <div id="loginErr" class="field-error" style="display:none"></div>
       <button class="btn btn--primary btn--block" type="submit">Entrar</button>
       <div style="margin-top:16px;text-align:center"><a href="#/recuperar">¿Olvidaste tu contraseña?</a></div>
@@ -450,14 +450,15 @@ async function renderActivate() {
     <h1>${info.kind === 'invite' ? '¡Bienvenido/a!' : 'Nueva contraseña'}</h1>
     <div class="sub">${esc(info.email)} — crea tu contraseña para ${info.kind === 'invite' ? 'activar tu cuenta' : 'volver a entrar'}.</div>
     <form id="aForm">
-      <div class="field"><label>Contraseña nueva</label><input class="control" name="password" type="password" autocomplete="new-password" required></div>
-      <div class="field"><label>Repite la contraseña</label><input class="control" name="password2" type="password" required></div>
-      <div class="hint">Mínimo 10 caracteres, con letras y números.</div>
+      <div class="field"><label>Contraseña nueva</label><div class="pw-wrap"><input class="control" name="password" type="password" autocomplete="new-password" required><button type="button" class="pw-eye" data-pwtoggle aria-label="Mostrar u ocultar la contraseña">👁</button></div></div>
+      <div class="field"><label>Repite la contraseña</label><div class="pw-wrap"><input class="control" name="password2" type="password" required><button type="button" class="pw-eye" data-pwtoggle aria-label="Mostrar u ocultar la contraseña">👁</button></div></div>
+      <div class="hint">Mínimo 6 caracteres.</div>
       <div id="aErr" class="field-error" style="display:none"></div>
       <button class="btn btn--primary btn--block" type="submit" style="margin-top:14px">Guardar y entrar</button>
     </form>`);
   $('#aForm').addEventListener('submit', async e => {
     e.preventDefault(); const f = e.target; const errEl = el('aErr'); errEl.style.display = 'none';
+    if ((f.password.value || '').length < 6) { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; errEl.style.display = 'block'; return; }
     if (f.password.value !== f.password2.value) { errEl.textContent = 'Las contraseñas no coinciden.'; errEl.style.display = 'block'; return; }
     try { await api('auth/activate', { method: 'POST', body: { token, password: f.password.value } }); location.hash = '#/'; await afterLogin(); }
     catch (err) { errEl.textContent = err.message; errEl.style.display = 'block'; }
@@ -661,6 +662,13 @@ function openLightbox(src) {
   document.body.appendChild(bg);
 }
 document.addEventListener('click', e => { const z = e.target.closest('[data-zoom]'); if (z) { e.preventDefault(); openLightbox(z.getAttribute('data-zoom')); } });
+// Ojito de contraseña: muestra/oculta lo escrito en el campo de contraseña de al lado.
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-pwtoggle]'); if (!t) return;
+  e.preventDefault();
+  const inp = t.parentElement.querySelector('input'); if (!inp) return;
+  const show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; t.textContent = show ? '🙈' : '👁';
+});
 
 /* chips reutilizables */
 const dot = (color, title) => `<span class="dot" style="background:${color}" title="${esc(title || '')}"></span>`;

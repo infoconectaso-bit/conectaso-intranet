@@ -760,6 +760,12 @@ async function events(req, res, user, seg, method, url) {
     const email = String(body.email || '').trim();
     if (!email || email.indexOf('@') < 0) return fail(res, 400, 'Indica un email válido');
     let u = users.byEmail(email);
+    // Límite: los novios pueden dar acceso a 2 personas como máximo (titular + 1). Para más, admin.
+    if (user.role !== 'admin') {
+      const access = new Set([ev.userId].concat(ev.coUsers || []).map(Number).filter(Boolean));
+      const alreadyIn = u && access.has(+u.id);
+      if (!alreadyIn && access.size >= 2) return fail(res, 400, 'Solo podéis dar acceso a 2 personas como máximo. Para añadir a más, escribidnos y lo gestionamos nosotros.');
+    }
     if (!u) u = users.create({ email, name: body.name || email.split('@')[0], role: 'user', data: {} });
     if (u.role !== 'user') return fail(res, 400, 'Ese email ya pertenece a una cuenta del equipo.');
     ev.coUsers = ev.coUsers || [];
@@ -883,12 +889,18 @@ async function usersApi(req, res, user, seg, method) {
     // Índice de firmas por evento calculado UNA sola vez (antes se recorrían todos los
     // eventos por cada usuario → O(usuarios×eventos), con ~2000 usuarios dejaba la página colgada).
     const signedUserIds = new Set();
-    store.all('events').forEach(e => { if (e.tycSigned) { if (e.userId) signedUserIds.add(+e.userId); (e.coUsers || []).forEach(x => signedUserIds.add(+x)); } });
+    const coUserIds = new Set();  // cotitulares (segundo/tercer acceso): su firma no es necesaria, ya firma el titular
+    store.all('events').forEach(e => {
+      if (e.tycSigned) { if (e.userId) signedUserIds.add(+e.userId); (e.coUsers || []).forEach(x => signedUserIds.add(+x)); }
+      (e.coUsers || []).forEach(x => { if (+x !== +e.userId) coUserIds.add(+x); });
+    });
     const list = users.all().map(u => {
       // Firmado si: firmó en la intranet nueva (tycSign), o en los datos del evento (ev.tycSigned),
       // o tiene el booleano "tyc" del sistema anterior puesto a true (así es como se guardaban las firmas antiguas).
       const signed = u.role === 'user' && (!!(u.tycSign && u.tycSign.date) || u.tyc === true || signedUserIds.has(+u.id));
-      return Object.assign({}, u, { tycSigned: signed });
+      // El cotitular (no es el titular de su evento) no firma: su pareja ya firmó por ambos.
+      const tycExempt = u.role === 'user' && !signed && coUserIds.has(+u.id);
+      return Object.assign({}, u, { tycSigned: signed, tycExempt });
     });
     return ok(res, { users: list });
   }

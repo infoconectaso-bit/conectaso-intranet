@@ -496,6 +496,7 @@ table.dt--dense .row-actions{flex-wrap:nowrap}
 .tyc-status{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:12px;padding:4px 10px;border-radius:999px;border:2px solid var(--onyx)}
 .tyc-status--ok{background:#e4f5ea;color:#0B8043}
 .tyc-status--no{background:#fde8e8;color:#D50000}
+.tyc-status--na{background:#eef0f3;color:#667085}
 a.tyc-status{text-decoration:none}
 a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .pdf-sign{margin-top:22px;border-top:2px dashed var(--onyx);padding-top:14px}
@@ -978,3 +979,9 @@ img.mant-thumb{cursor:zoom-in}
 .lightbox{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out}
 .lightbox img{max-width:95vw;max-height:90vh;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.6)}
 .lightbox__x{position:fixed;top:14px;right:18px;width:40px;height:40px;border:0;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;font-size:18px;cursor:pointer}
+
+/* Campo de contraseña con "ojito" para mostrar/ocultar */
+.pw-wrap{position:relative;display:flex;align-items:center}
+.pw-wrap input{flex:1;padding-right:40px}
+.pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;font-size:17px;line-height:1;padding:4px;opacity:.75}
+.pw-eye:hover{opacity:1}

@@ -23,8 +23,7 @@ function verifyPassword(pw, stored) {
 }
 function passwordProblem(pw) {
   pw = String(pw || '');
-  if (pw.length < 10) return 'La contraseña debe tener al menos 10 caracteres.';
-  if (!/[a-zA-Z]/.test(pw) || !/[0-9]/.test(pw)) return 'La contraseña debe combinar letras y números.';
+  if (pw.length < 6) return 'La contraseña debe tener al menos 6 caracteres.';
   return null;
 }
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');

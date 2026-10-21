@@ -351,7 +351,7 @@ function eventViewRole(ev) {
       <div class="cli-prog__row"><span>Música completada</span><b id="progPct">${prog}%</b></div>
       <div class="progress progress--green progress--mini"><div id="progBar" style="width:${prog}%"></div></div></div>` : '';
   const headHtml = (role === 'user')
-    ? `<div class="ev-cli-head"><h1>${esc(ev.conyuges || ev.tipo || 'Mi boda')}</h1><div class="ev-cli-sub">${dmy(ev.fecha)}${ev.hora ? ' · ' + ev.hora : ''}</div></div>`
+    ? `<div class="ev-cli-head"><h1>${esc(ev.conyuges || 'Mi boda')}</h1><div class="ev-cli-sub">${dmy(ev.fecha)}${ev.hora ? ' · ' + ev.hora : ''}</div></div>`
     : pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''));
   shell(`${headHtml}
     ${intro}${progHtml}<form id="evForm" class="${role === 'user' ? 'ev-client' : ''}" data-id="${ev.id}">${tabs}${role === 'dj' ? `<div class="panel dj-estado"><div class="panel__body"><div class="field evtop-estado"><label>Estado de contacto</label>${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div><p class="hint" style="margin-top:6px">Marca en qué punto estás con esta boda (contactado, meeting, etc.).</p></div></div>` : ''}${panes}
@@ -853,8 +853,13 @@ function clientPaymentBlock(ev) {
 function accessBlock(ev) {
   if (!(S.user.role === 'admin' || S.user.role === 'user')) return '';
   const users = ev.accessUsers || [];
-  return `<div class="panel access-block"><div class="panel__head"><h3>Acceso a la boda</h3><button type="button" class="btn btn--sm btn--blue" data-invite-user>+ Invitar a otra persona</button></div>
-    <div class="panel__body"><p class="hint" style="margin-bottom:10px">${tt('Novio y novia (o quien queráis) podéis tener cada uno vuestro acceso con vuestro propio email.', 'Els dos (o qui vulgueu) podeu tenir cadascú el vostre accés amb el vostre propi email.', 'Both of you (or whoever you like) can each have your own access with your own email.', 'Vous pouvez chacun (ou qui vous voulez) avoir votre propre accès avec votre propre email.')}</p>
+  const isAdm = S.user.role === 'admin';
+  // Los novios pueden dar acceso a 2 personas como máximo; admin no tiene límite.
+  const canInvite = isAdm || users.length < 2;
+  const inviteBtn = canInvite ? `<button type="button" class="btn btn--sm btn--blue" data-invite-user>+ Invitar a otra persona</button>` : '';
+  const limitNote = (!isAdm && users.length >= 2) ? `<p class="hint" style="margin-bottom:10px">Ya tenéis los <b>2 accesos</b> disponibles. Si necesitáis dar acceso a alguien más, <b>escribidnos</b> y lo gestionamos nosotros.</p>` : '';
+  return `<div class="panel access-block"><div class="panel__head"><h3>Acceso a la boda</h3>${inviteBtn}</div>
+    <div class="panel__body">${limitNote}<p class="hint" style="margin-bottom:10px">${tt('Novio y novia (o quien queráis) podéis tener cada uno vuestro acceso con vuestro propio email.', 'Els dos (o qui vulgueu) podeu tenir cadascú el vostre accés amb el vostre propi email.', 'Both of you (or whoever you like) can each have your own access with your own email.', 'Vous pouvez chacun (ou qui vous voulez) avoir votre propre accès avec votre propre email.')}</p>
       <ul class="access-list">${users.length ? users.map(u => `<li><b>${esc(u.name || u.email)}</b> <span class="muted">${esc(u.email)}</span> ${u.owner ? '<span class="tag tag--green">Titular</span>' : `<button type="button" class="btn btn--xs btn--red" data-rm-user="${u.id}">Quitar</button>`}</li>`).join('') : '<li class="muted">Sin accesos todavía.</li>'}</ul></div></div>`;
 }
 function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
