@@ -144,4 +144,61 @@ async function handle(req, res, seg, method) {
   return send(res, 404, { error: 'Acción desconocida' });
 }
 
-module.exports = { handle, mapEvent, SECRET, SRC_BASE, ESTADO_MAP };
+// Normaliza fechas a ISO YYYY-MM-DD desde DD/MM/YYYY, YYYY/MM/DD o ISO.
+function normDate(s) {
+  s = String(s || '').trim(); if (!s) return '';
+  let m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s); if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  m = /^(\d{4})[/-](\d{2})[/-](\d{2})/.exec(s); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return s;
+}
+
+/** Vehículo real -> nuestro esquema (casi 1:1). */
+function mapVehicle(raw) {
+  return {
+    id: +raw.vehicle_id || +raw.__id || undefined,
+    license_plate: raw.license_plate || '', brand: raw.brand || '', model: raw.model || '', color: raw.color || '',
+    itvDate: normDate(raw.itvDate || raw.itv), insuranceRenewal: normDate(raw.insuranceRenewal || raw.insurance_renewal),
+    observations: raw.observations || '',
+  };
+}
+
+/** Localización real -> nuestro esquema. MERGE conserva nuestros planos (se guardan aparte). */
+function mapLocation(raw) {
+  return {
+    id: +raw.location_id || +raw.__id || undefined,
+    name: raw.name || '', direction: raw.direction || '', directionLink: raw.directionLink || '',
+    responsable: raw.responsable || '', phone: raw.phone || '', colorHex: raw.colorHex || '', comments: raw.comments || '',
+    weddingPrice: raw.weddingPrice || '', eventPrice: raw.eventPrice || '', extraPrice: raw.extraPrice || '', ceremonyPrice: raw.ceremonyPrice || '',
+  };
+}
+
+/** Extra real -> nuestro esquema. */
+function mapExtra(raw) {
+  return { id: +raw.extra_id || +raw.__id || undefined, name: raw.name || '', allows_overtime: truthy(raw.allows_overtime) };
+}
+
+/** Usuario real -> nuestro esquema (shape del seed + pricing de DJ, que el seed original no traía). */
+function mapUser(raw) {
+  const roleRaw = raw.role__text || raw.role || 'user';
+  const role = ['admin', 'dj', 'planner', 'user'].includes(String(roleRaw).toLowerCase()) ? String(roleRaw).toLowerCase() : 'user';
+  const prices = {};
+  ['recomendado', 'fiesta', 'bodorrio', 'tinglado', 'fiesta_precio_extra', 'bodorrio_precio_extra', 'tinglado_precio_extra',
+    'precio_dos_serv_ext_dia', 'precio_tres_serv_ext_dia', 'precio_varios_serv_ext_dia'].forEach(k => { if (raw[k] !== undefined && raw[k] !== '') prices[k] = raw[k]; });
+  if (truthy(raw.checkbox_serv_ext_dia)) prices.checkbox_serv_ext_dia = true;
+  // Precios por finca (djFincas) y por servicio (djServices): se extraen de los campos numerados.
+  const djFincas = [], djServices = [];
+  for (const key of Object.keys(raw)) {
+    let m = key.match(/^location_(\d+)$/); if (m && raw[key]) { const i = m[1]; djFincas.push({ l: +raw['location_' + i] || +i, b: raw['precio_boda_' + i] || '', e: raw['precio_evento_' + i] || '', h: raw['precio_hora_extra_' + i] || '', d: raw['precio_discomovil_' + i] || '', c: raw['precio_ceremonia_' + i] || '' }); continue; }
+    m = key.match(/^extra_service_(\d+)$/); if (m && raw[key]) { const i = m[1]; djServices.push({ s: +raw['extra_service_' + i] || +i, p: raw['extra_price_' + i] || '', h: raw['extra_price_extra_' + i] || '' }); }
+  }
+  const u = {
+    id: +raw.__id || undefined, role, mail: raw.mail || '', name: raw.name || '',
+    tyc: truthy(raw.tyc), sending: raw.sending || 'Si', worker_type: +raw.worker_type || 0,
+    color: raw.color || '', vehicle_allowed: truthy(raw.vehicle_allowed), prices,
+  };
+  if (djFincas.length) u.djFincas = djFincas;
+  if (djServices.length) u.djServices = djServices;
+  return u;
+}
+
+module.exports = { handle, mapEvent, mapVehicle, mapLocation, mapExtra, mapUser, normDate, SECRET, SRC_BASE, ESTADO_MAP };
