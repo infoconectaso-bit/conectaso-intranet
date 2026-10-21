@@ -279,6 +279,8 @@ const ICON = {
   moon: 'M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z',
   wrench: 'M14.7 6.3a4 4 0 00-5.4 5.2L3 17.8 6.2 21l6.3-6.3a4 4 0 005.2-5.4l-2.7 2.7-2.1-.6-.6-2.1 2.7-2.7z',
   logout: 'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9', key: 'M15 7a4 4 0 11-5.6 3.6L3 17v4h4l1-1h2v-2h2l1.4-1.4A4 4 0 0015 7z',
+  mail: 'M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1zM3 6l9 7 9-7',
+  phone: 'M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z',
 };
 const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON[k]}"/></svg>`;
 
@@ -314,7 +316,9 @@ async function albaranAutologin() {
     S.user = r.user; S.mailEnabled = r.mailEnabled;
     await loadContext();
     if (S.user.role === 'user' && await tycGate()) return;  // los novios firman TyC la 1ª vez
-    location.hash = ev ? ('#/eventos/' + ev) : (S.user.role === 'user' ? '#/' : '#/eventos/realizados');
+    // El DJ llega desde el email del parte: lo llevamos directo a la pestaña del parte de ese evento.
+    if (S.user.role === 'dj' && ev) location.hash = '#/parte/' + ev;
+    else location.hash = ev ? ('#/eventos/' + ev) : (S.user.role === 'user' ? '#/' : '#/eventos/realizados');
     route();
   } catch (e) {
     app.innerHTML = authShell(`<h1>Enlace no válido</h1><div class="sub">${esc(e.message || 'El enlace ha caducado o no es válido. Pídele a administración uno nuevo.')}</div><a class="btn btn--dark btn--block" href="#/">Ir al inicio</a>`);
@@ -480,9 +484,7 @@ function navFor(role) {
     return [
       { s: 'Mi trabajo' }, { t: 'Inicio', i: 'home', h: '#/' }, { t: 'Mis eventos', i: 'events', h: '#/eventos' },
       { t: 'Realizados', i: 'events', h: '#/eventos/realizados' },
-      { s: 'Tiempo' },
-      ...(tt ? [{ t: 'Mi control horario', i: 'clock', h: '#/horario' }] : []),
-      { t: 'Mis vacaciones', i: 'plane', h: '#/vacaciones' },
+      ...(tt ? [{ s: 'Tiempo' }, { t: 'Mi control horario', i: 'clock', h: '#/horario' }, { t: 'Mis vacaciones', i: 'plane', h: '#/vacaciones' }] : []),
       { s: 'Otros' }, { t: 'Mis pagos', i: 'euro', h: '#/mis-pagos' },
       ...(veh ? [{ t: 'Vehículos', i: 'car', h: '#/vehiculos' }] : []),
       { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' },
@@ -632,6 +634,12 @@ document.addEventListener('click', e => {
   const w = e.target.closest('.dt'); if (!w || !TBL[w.id]) return; const st = TBL[w.id];
   const th = e.target.closest('th[data-sort]'); if (th && th.dataset.sort !== '') { const c = +th.dataset.sort; st.order = [c, st.order[0] === c && st.order[1] === 'asc' ? 'desc' : 'asc']; refreshTable(w.id); }
   const pg = e.target.closest('[data-pg]'); if (pg && !pg.disabled) { st.page = +pg.dataset.pg; refreshTable(w.id); }
+});
+// Toca CUALQUIER parte de un campo de fecha u hora para abrir su desplegable (no solo el iconito).
+document.addEventListener('click', e => {
+  const el = e.target.closest('input[type="date"], input[type="time"], input[type="datetime-local"]');
+  if (!el || el.readOnly || el.disabled) return;
+  if (typeof el.showPicker === 'function') { try { el.showPicker(); } catch (x) {} }
 });
 
 /* chips reutilizables */

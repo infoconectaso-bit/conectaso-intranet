@@ -17,8 +17,10 @@ const CLIENT_EDITABLE = ['music', 'optionals', 'disco', 'extras', 'spouses', 'gu
 // El wedding planner puede modificar lo mismo que el cliente (música, extras, horarios,
 // datos de la boda) EXCEPTO la fecha y el lugar, y sin el bloqueo de 7 días del cliente.
 const PLANNER_EDITABLE = CLIENT_EDITABLE;
-// Campos que el DJ puede modificar en sus eventos
-const DJ_EDITABLE = ['obsDj'];
+// Campos que el DJ puede modificar en sus eventos (su "parte de trabajo"): observaciones,
+// horas extra realizadas y si pide opinión. Solo tras celebrarse la boda (ver mergeEventUpdate).
+const DJ_EDITABLE = ['obsDj', 'djOvertime', 'opinion'];
+const { evRealized } = require('./time');
 
 // Días hasta la boda (0 = hoy). La edición del cliente se cierra 7 días antes,
 // salvo que administración la reabra con el toggle (editUser/editUnlock).
@@ -69,7 +71,10 @@ function mergeEventUpdate(user, current, incoming) {
     allowed = CLIENT_EDITABLE;
   } else if (user.role === 'planner') {
     allowed = PLANNER_EDITABLE;  // puede editar siempre; nunca fecha ni lugar (no están en la lista)
-  } else if (user.role === 'dj') allowed = DJ_EDITABLE;
+  } else if (user.role === 'dj') {
+    if (!evRealized(current)) throw httpError(403, 'Podrás rellenar el parte de trabajo cuando se haya celebrado la boda.');
+    allowed = DJ_EDITABLE;
+  }
   else throw httpError(403, 'Tu perfil solo puede consultar este evento.');
   const next = Object.assign({}, current);
   allowed.forEach(k => { if (incoming[k] !== undefined) next[k] = incoming[k]; });

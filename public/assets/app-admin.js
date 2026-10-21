@@ -735,6 +735,8 @@ on(/^#\/horario\/resumen$/, async () => {
    VACACIONES
    ========================================================================= */
 on(/^#\/vacaciones$/, async () => {
+  // Las vacaciones solo las ven/gestionan admin y trabajadores con control horario (fichaje).
+  if (!isAdmin() && !(S.user && S.user.time_tracking)) { shell('<div class="empty">Las vacaciones solo están disponibles para el personal con control horario.</div>', ['Vacaciones']); return; }
   loading(['Vacaciones']);
   const items = await coll.list('vacations');
   const admin = isAdmin();

@@ -966,3 +966,9 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 /* IDs de clientes vinculados a una boda (listado de eventos) */
 .cli-ids{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
 .cli-ids .co-id{font-size:12px;opacity:.85}
+
+/* Iconos monocromos en etiquetas de campo (Email, Móvil, …) */
+.fld-ic{display:inline-flex;align-items:center;width:14px;height:14px;margin-right:6px;vertical-align:-2px;opacity:.6}
+.fld-ic svg{width:14px;height:14px}
+/* Campos de fecha/hora: cursor de mano en toda la barra (se abre al tocar en cualquier parte) */
+input[type="date"]:not([readonly]),input[type="time"]:not([readonly]),input[type="datetime-local"]:not([readonly]){cursor:pointer}

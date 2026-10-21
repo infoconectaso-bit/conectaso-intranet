@@ -495,9 +495,9 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
     ${sp.slice(0, 2).map((s, i) => { const p = i === 0 ? 'first' : 'second'; return `<div><h5 style="margin-bottom:10px">${i === 0 ? 'Primer' : 'Segundo'} cónyuge</h5><div class="form-grid">
       ${fg('Nombre', inp(p + '_spouse', s.name, ro))}
       ${fg('DNI', inp(p + '_spouse_dni', s.dni, ro))}
-      ${fg('Email', inp(p + '_spouse_email', s.email, { type: 'email', ...ro }))}
-      ${fg('Móvil', inp(p + '_spouse_mobile', s.mobile, ro))}
-      ${i === 0 ? fg('Dirección <span class="hint">(normalmente viven juntos)</span>', inp(p + '_spouse_address', s.address, ro)) : ''}</div></div>`; }).join('')}
+      ${fg(`<span class="fld-ic">${svg('mail')}</span>Email`, inp(p + '_spouse_email', s.email, { type: 'email', ...ro }))}
+      ${fg(`<span class="fld-ic">${svg('phone')}</span>Móvil`, inp(p + '_spouse_mobile', s.mobile, ro))}
+      ${i === 0 ? fg('Dirección', inp(p + '_spouse_address', s.address, ro)) : ''}</div></div>`; }).join('')}
   </div></div></div>` : ''}`;
 }
 
@@ -1260,6 +1260,48 @@ async function loadFiles(ev) {
     $$('[data-del-file]', box).forEach(b => b.onclick = () => modal('Borrar archivo', '¿Eliminar este archivo?', { okText: 'Eliminar', danger: true, onOk: async () => { try { await api('files/' + b.dataset.delFile, { method: 'DELETE' }); } catch (e) {} loadFiles(ev); } }));
   } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
+
+/* =========================================================================
+   PARTE DE TRABAJO DEL DJ — pestaña única para rellenar DESPUÉS de la boda:
+   si pedir opinión, horas extra y observaciones. Es a donde llega el DJ desde
+   el email de recordatorio del parte (autologin). Solo editable tras celebrarse.
+   ========================================================================= */
+const OVERTIME_OPTS = [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas', '4 hora y media', '5 Horas'];
+on(/^#\/parte\/(\d+)$/, async m => {
+  loading(['Parte de trabajo']);
+  let ev;
+  try { ev = (await api('events/' + m[1])).event; } catch (e) { shell(`<div class="empty">No se pudo cargar la boda del parte.</div>`, ['Parte de trabajo']); return; }
+  // ¿ya se ha celebrado? comparamos fecha+hora con el momento actual (hora del navegador).
+  const hm = /^(\d{1,2}):(\d{2})/.exec(ev.hora || '');
+  const hhmm = hm ? (('0' + hm[1]).slice(-2) + ':' + hm[2]) : '00:00';
+  const now = new Date();
+  const nowISO = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + 'T' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  const realized = !!(ev.fecha) && (ev.fecha + 'T' + hhmm) <= nowISO;
+  const titulo = ev.conyuges || ('Boda #' + ev.id);
+  if (!realized) {
+    shell(`${pageHead('Parte de trabajo', esc(titulo))}
+      <div class="panel"><div class="panel__body">
+        <div class="alert alert--warn">Todavía no puedes rellenar el parte. Podrás hacerlo <b>cuando se haya celebrado la boda</b> (${esc(slash(ev.fecha))}${ev.hora ? ' · ' + esc(ev.hora) : ''}).</div>
+      </div></div>`, ['Parte de trabajo']);
+    return;
+  }
+  shell(`${pageHead('Parte de trabajo', esc(titulo))}
+    <div class="panel"><div class="panel__body">
+      <p class="hint" style="margin-bottom:14px">Rellena tu parte de esta boda y guarda. No hace falta que revises el resto del evento.</p>
+      <form id="parteForm" class="form-grid">
+        ${fg('¿Pedir opinión a los novios?', sel('opinion', [['', '—'], 'Si', 'No'], ev.opinion))}
+        ${fg('Horas extra realizadas', sel('djOvertime', OVERTIME_OPTS, ev.djOvertime))}
+        ${fg('Observaciones', ta('obsDj', ev.obsDj, 'Lo que quieras dejar anotado de la boda'))}
+      </form>
+      <div class="btn-row" style="margin-top:14px"><button type="button" class="btn btn--primary" id="parteSave">Guardar parte</button></div>
+    </div></div>`, ['Parte de trabajo']);
+  el('parteSave').onclick = async () => {
+    const f = el('parteForm');
+    const body = { opinion: f.querySelector('[name=opinion]').value, djOvertime: f.querySelector('[name=djOvertime]').value, obsDj: f.querySelector('[name=obsDj]').value };
+    try { await api('events/' + ev.id, { method: 'PUT', body }); toast('Parte guardado · ¡gracias!', 'ok'); }
+    catch (e) { toast(e.message || 'No se pudo guardar', 'err'); }
+  };
+});
 
 /* =========================================================================
    PDF — resumen musical (mismo formato que la intranet original)
