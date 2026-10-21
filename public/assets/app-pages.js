@@ -669,8 +669,8 @@ Acción: confirmar disponibilidad de material y técnicos. Después, escribir po
 function reservaFirstSpouseLine(ev) {
   const s = (ev.spouses || [])[0] || {};
   const name = (s.name || '').trim(), dni = (s.dni || '').trim();
-  if (name && dni) return `La factura irá a nombre de *${name}*, con DNI *${dni}*.`;
-  if (name) return `La factura irá a nombre de *${name}* (necesitaremos su DNI para emitirla).`;
+  if (name && dni) return `La factura irá a nombre de ${name}, con DNI ${dni}.`;
+  if (name) return `La factura irá a nombre de ${name} (necesitaremos su DNI para emitirla).`;
   return `La factura irá a nombre y DNI del primer cónyuge (completadlos en la intranet).`;
 }
 // Texto de WhatsApp de reserva: la administrativa lo copia y lo pega en el grupo de la pareja.
@@ -687,10 +687,10 @@ Hemos revisado la disponibilidad para vuestra boda del ${dmy(ev.fecha)} en ${ext
 
 ${lista}
 
-*¿Nos confirmáis que queréis reservarlos?* En cuanto nos lo digáis, os emitimos la *factura* (con el número de cuenta) por la reserva de *50 € + IVA por servicio*:
-*${n} ${n === 1 ? 'servicio' : 'servicios'} × ${fmtEur(RESERVA_TOTAL)} = ${fmtEur(n * RESERVA_TOTAL)}*
+¿Nos confirmáis que queréis reservarlos? En cuanto nos lo digáis, os emitimos la factura (con el número de cuenta) por la reserva de 50 € + IVA por servicio:
+${n} ${n === 1 ? 'servicio' : 'servicios'} × ${fmtEur(RESERVA_TOTAL)} = ${fmtEur(n * RESERVA_TOTAL)}
 
-${reservaFirstSpouseLine(ev)} Cuando recibamos el pago, quedan *reservados* ✅.
+${reservaFirstSpouseLine(ev)} Cuando recibamos el pago, quedan reservados ✅.
 
 Cualquier duda, aquí estamos 💛
 — Conecta So`;

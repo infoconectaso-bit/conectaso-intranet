@@ -1053,7 +1053,7 @@ on(/^#\/cuenta$/, async () => {
          <p class="hint" style="margin-top:10px">Desbloqueado en este dispositivo durante esta sesión.</p>
          <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
          <h4 style="margin:0 0 6px">✉️ Correos de prueba</h4>
-         <p class="hint" style="margin-bottom:12px">Envía una muestra de <b>todos</b> los correos de la intranet (alta, contraseña, aviso de extra y los 3 recordatorios) a una dirección, con datos de ejemplo. <b>No crea usuarios ni toca eventos</b>: solo sirve para revisarlos (p. ej. en tu bandeja de Mailtrap).</p>
+         <p class="hint" style="margin-bottom:12px">Envía una muestra de <b>todos</b> los correos de la intranet (alta, contraseña, aviso de extra y los 3 recordatorios) a una dirección, con datos de ejemplo. <b>No crea usuarios ni toca eventos</b>: solo sirve para revisarlos (p. ej. en tu bandeja de correo de pruebas).</p>
          <form id="testMailForm" style="max-width:460px"><div class="field"><label>Enviar a</label><input class="control" type="email" id="testMailTo" value="${esc(S.user.email || '')}" placeholder="tu-email@ejemplo.com"></div>
            <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Enviar correos de prueba</button></div></form>
          <div id="testMailMsg" style="margin-top:12px;display:none;font-size:13px"></div>`
@@ -1108,7 +1108,7 @@ on(/^#\/cuenta$/, async () => {
       try {
         const r = await api('test-emails', { method: 'POST', body: { to } });
         toast('Enviando correos de prueba…', 'ok');
-        const head = '📨 <b>Enviando ' + r.count + ' correos</b> a <b>' + esc(r.to) + '</b> (espaciados para no saturar Mailtrap, ~' + r.etaSeconds + ' s).';
+        const head = '📨 <b>Enviando ' + r.count + ' correos</b> a <b>' + esc(r.to) + '</b> (espaciados para no saturar el proveedor de correo, ~' + r.etaSeconds + ' s).';
         let tries = 0;
         const poll = async () => {
           try {

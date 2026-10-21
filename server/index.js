@@ -163,7 +163,7 @@ async function api(req, res, url) {
 }
 
 // Envía a UNA dirección una muestra de cada correo de la intranet, con datos de ejemplo.
-// No crea usuarios ni toca eventos: solo manda emails (pensado para revisarlos en Mailtrap).
+// No crea usuarios ni toca eventos: solo manda emails (pensado para revisarlos en la bandeja de pruebas).
 async function testEmails(req, res, user) {
   if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
   if (!mail.enabled()) return fail(res, 400, 'El correo no está activo todavía. Actívalo en el servidor (MAIL_DISABLED=false + SMTP) para poder enviar pruebas.');
@@ -191,8 +191,8 @@ async function testEmails(req, res, user) {
     ['Aviso de solicitud de extra', () => emails.extraRequestEmail(ev, ['Máquina de humo', 'Sparklers / chispas frías'], 'Can Oliver Carpa', evLink, base)],
   ];
 
-  // Mailtrap (plan gratis) limita los correos por segundo. Se envían ESPACIADOS y
-  // EN SEGUNDO PLANO, con REINTENTOS si Mailtrap frena ("too many per second").
+  // El proveedor de correo suele limitar los correos por segundo. Se envían ESPACIADOS y
+  // EN SEGUNDO PLANO, con REINTENTOS si el proveedor frena ("too many per second").
   // El progreso se guarda en lastTestRun para que la pantalla lo muestre en vivo (GET).
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const GAP = +(process.env.TEST_MAIL_GAP_MS || 6000);
