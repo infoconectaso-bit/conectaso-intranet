@@ -63,16 +63,41 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   '.webp': 'image/webp', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.otf': 'font/otf', '.ico': 'image/x-icon', '.pdf': 'application/pdf',
   '.webmanifest': 'application/manifest+json; charset=utf-8' };
 
+/* ---------- versión automática de assets (cache-busting sin tocar nada a mano) ----------
+   Cada /assets/… lleva ?v=<hash de su contenido>. El servidor reescribe index.html al
+   servirlo, así que al cambiar un JS/CSS su hash cambia solo y el navegador pide el nuevo.
+   Ya NO hay que subir el número de versión a mano (antes olvidarlo dejaba la app "rota"). */
+const _assetVer = new Map();
+function assetVersion(rel) {
+  try {
+    const full = path.join(PUBLIC, rel);
+    const st = fs.statSync(full);
+    const c = _assetVer.get(rel);
+    if (c && c.m === st.mtimeMs) return c.v;
+    const v = crypto.createHash('sha1').update(fs.readFileSync(full)).digest('hex').slice(0, 10);
+    _assetVer.set(rel, { m: st.mtimeMs, v });
+    return v;
+  } catch (e) { return String(Date.now()); }
+}
+function serveIndexHtml(res) {
+  fs.readFile(path.join(PUBLIC, 'index.html'), 'utf8', (e, html) => {
+    if (e) return fail(res, 404, 'No encontrado');
+    const out = html.replace(/(\/?assets\/[^"'?\s]+)\?v=[^"'\s]*/g, (m, p) => p + '?v=' + assetVersion(p.replace(/^\/+/, '')));
+    send(res, 200, out, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+  });
+}
+
 /* ---------- servir ficheros estáticos ---------- */
 function serveStatic(req, res, urlPath) {
   let rel = decodeURIComponent(urlPath.split('?')[0]).replace(/^\/+/, '');
   if (rel === '') rel = 'index.html';
+  if (rel === 'index.html') return serveIndexHtml(res);
   const full = path.normalize(path.join(PUBLIC, rel));
   if (!full.startsWith(PUBLIC)) return fail(res, 403, 'Prohibido');
   fs.stat(full, (err, stat) => {
     if (err || !stat.isFile()) {
-      // SPA: rutas del cliente devuelven index.html
-      if (!path.extname(rel)) return fs.readFile(path.join(PUBLIC, 'index.html'), (e, d) => e ? fail(res, 404, 'No encontrado') : send(res, 200, d, { 'Content-Type': 'text/html; charset=utf-8' }));
+      // SPA: rutas del cliente devuelven index.html (con versiones reescritas)
+      if (!path.extname(rel)) return serveIndexHtml(res);
       return fail(res, 404, 'No encontrado');
     }
     const ext = path.extname(full).toLowerCase();
@@ -1313,6 +1338,12 @@ async function collection(req, res, user, seg, method) {
   }
   return fail(res, 403, 'Sin permiso para esta acción');
 }
+
+/* ---------- paracaídas: un error inesperado en segundo plano NO debe tumbar el servidor ----------
+   Cada petición ya va protegida; esto cubre lo demás (temporizadores, streams, promesas sueltas):
+   se registra el error en el log y el servidor sigue en pie en vez de caerse. */
+process.on('uncaughtException', (e) => { console.error('[uncaughtException] el servidor sigue en pie:', e && e.stack || e); });
+process.on('unhandledRejection', (e) => { console.error('[unhandledRejection] el servidor sigue en pie:', e && e.stack || e); });
 
 /* ---------- servidor ---------- */
 const server = http.createServer(async (req, res) => {
