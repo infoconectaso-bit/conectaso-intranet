@@ -507,6 +507,40 @@ function enrichEvent(out, ev, user) {
   if (user.role === 'user') { const tot = +ev.pagoCliente || 0, pg = +ev.pagado || 0; out.pago = { total: tot, pagado: pg, pendiente: tot - pg, metodo: ev.metodo || '' }; }
   return out;
 }
+
+// --- Aviso por email a facturación cuando los novios solicitan un extra ---
+const FACT_EMAIL = 'facturacion@conectaso.es';
+const EXTRA_LABELS = {
+  extra_fotomaton: 'Fotomatón', extra_videomaton: 'Videomatón 360 grados', extra_hora_loca_animacion: 'Hora loca animación',
+  extra_pistola_co2: 'Pistolas CO₂', extra_maquinas_fuego_frio: '2 máquinas fuego frío', extra_maquinas_humo_vertical_led: '2 máquinas de humo vertical con led',
+  extra_photocall_sofa_chester_letras_led: 'Photocall sofá chester + letras led', extra_iluminacion_ambiental_led: 'Iluminación ambiental fachadas led colores',
+  extra_burbujas_humo_interior: 'Burbujas con humo en su interior', extra_confeti: 'Servicio de confeti', extra_servicio_de_tarima: 'Servicio de tarima',
+  extra_servicio_de_suelo_led: 'Servicio de suelo led', extra_servicio_de_proyeccion: 'Servicio de proyección', extra_humo_bajo: 'Humo bajo',
+  extra_lanzadores_humo_aereo: 'Lanzadores de humo aéreo',
+};
+const extraLabel = key => EXTRA_LABELS[key] || String(key).replace(/^extra_/, '').replace(/_/g, ' ');
+const slashDate = f => { const p = String(f || '').slice(0, 10).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (f || '—'); };
+// Compara el estado anterior y el nuevo del evento; si hay extras recién puestos en "solicitado"
+// (por un novio o wedding planner), avisa por email a facturación. Si el SMTP está apagado no envía nada.
+function notifyNewExtraRequests(user, oldEv, newEv) {
+  if (user.role !== 'user' && user.role !== 'planner') return;
+  const before = oldEv.extraStatus || {}, after = newEv.extraStatus || {};
+  const nuevos = Object.keys(after).filter(k => after[k] === 'solicitado' && before[k] !== 'solicitado');
+  if (!nuevos.length) return;
+  const finca = (store.get('locations', newEv.lugar) || {}).name || newEv.lugarOtro || '—';
+  const lista = nuevos.map(k => '• ' + extraLabel(k)).join('\n');
+  const subject = `Nueva solicitud de extra · Boda #${newEv.id}`;
+  const text = `La boda #${newEv.id}${newEv.conyuges ? ' (' + newEv.conyuges + ')' : ''} ha solicitado ${nuevos.length > 1 ? 'estos servicios extra' : 'el servicio extra'}:
+${lista}
+
+Fecha del evento: ${slashDate(newEv.fecha)}
+Lugar: ${finca}
+
+Entra en la intranet (Servicios extras) para revisar la disponibilidad y continuar con la reserva.`;
+  store.audit(user.id, 'extra-request', 'events', newEv.id);
+  if (mail.enabled()) { try { mail.sendMail({ to: FACT_EMAIL, subject, text }); } catch (e) { console.error('[aviso extra] email:', e.message); } }
+}
+
 async function events(req, res, user, seg, method, url) {
   // /api/events  (listado)
   if (seg.length === 1 && method === 'GET') {
@@ -657,6 +691,7 @@ async function events(req, res, user, seg, method, url) {
     try { next = perm.mergeEventUpdate(user, ev, body.event || body); }
     catch (e) { return fail(res, e.status || 400, e.message); }
     store.put('events', next);
+    try { notifyNewExtraRequests(user, ev, next); } catch (e) { /* no bloquear el guardado */ }
     store.audit(user.id, 'event-update', 'events', id);
     const saved = store.get('events', id);
     const out = perm.sanitizeEvent(user, saved);
