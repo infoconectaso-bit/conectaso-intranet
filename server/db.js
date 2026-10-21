@@ -104,8 +104,8 @@ function indexCols(collection, rec) {
     (rec.services || []).forEach(s => { if (s.resp) ids.add(+s.resp); if (s.resp2) ids.add(+s.resp2); });
     out.staff = ids.size ? ',' + [...ids].join(',') + ',' : null;
     out.date = rec.fecha || null;
-  } else if (['attendances', 'vacations', 'payments', 'usages'].includes(collection)) {
-    out.owner_id = rec.userId || null;
+  } else if (['attendances', 'vacations', 'payments', 'usages', 'maintenance'].includes(collection)) {
+    out.owner_id = rec.userId || null;   // maintenance incluido: así el DJ ve sus propios partes
     out.date = rec.date || rec.start || null;
   } else if (collection === 'history' || collection === 'workers') {
     out.owner_id = rec.id;
@@ -294,5 +294,16 @@ function migrateTimeTracking() {
   console.log('[migración] control horario habilitado para ' + n + ' DJs con fichajes previos.');
 }
 try { migrateTimeTracking(); } catch (e) { console.error('[migración] time-tracking:', e.message); }
+
+// Reindexa los partes de mantenimiento creados antes de indexar owner_id, para que el DJ
+// que los creó pueda verlos (byOwner usa owner_id). Idempotente (solo corre una vez).
+function migrateMaintenanceOwner() {
+  if (store.setting('mig_maint_owner')) return;
+  let n = 0;
+  store.all('maintenance').forEach(m => { store.put('maintenance', m); n++; }); // re-put → fija owner_id
+  store.setSetting('mig_maint_owner', true);
+  if (n) console.log('[migración] ' + n + ' partes de mantenimiento reindexados (owner_id).');
+}
+try { migrateMaintenanceOwner(); } catch (e) { console.error('[migración] maint-owner:', e.message); }
 
 module.exports = { db, store, users, transaction, COLLECTIONS, DATA_DIR, DB_PATH };
