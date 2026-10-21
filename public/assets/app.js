@@ -795,7 +795,8 @@ async function dashboardSimple() {
     return;
   }
   // Cliente (novios): pantalla de bienvenida con información y contacto antes de entrar a su boda.
-  const T = (es, ca, en, fr) => (typeof tt === 'function' ? tt(es, ca, en, fr) : es);
+  // Traduce según el idioma elegido (LANG_IDX: ca=0, en=1, fr=2; 'es' u otro → castellano).
+  const T = (es, ca, en, fr) => { const i = LANG_IDX[S.lang]; return i == null ? es : ([ca, en, fr][i] || es); };
   const first = (S.user.name || '').split(' ')[0];
   const enterBtns = list.length
     ? list.map(e => `<a class="btn btn--primary btn--lg" href="#/eventos/${e.id}">${T('Entrar en mi boda', 'Entrar a la meva boda', 'Enter my wedding', 'Entrer dans mon mariage')}${list.length > 1 ? ' · ' + esc(e.conyuges || dmy(e.fecha)) : ''}</a>`).join(' ')
