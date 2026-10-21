@@ -6,6 +6,7 @@
  */
 const net = require('net');
 const tls = require('tls');
+const https = require('https');
 
 // Configuración guardada desde el panel de admin (si existe); si no, se usa el .env.
 function saved() {
@@ -19,7 +20,34 @@ function cfg() {
     user: s.user || process.env.SMTP_USER,
     pass: s.pass || process.env.SMTP_PASS,
     from: s.from || process.env.MAIL_FROM || process.env.SMTP_USER || 'no-reply@conectaso.es',
+    fromName: s.fromName || 'Conecta Só',
+    // Clave API de Brevo (v3): si está, se envía por HTTPS (puerto 443) en vez de SMTP.
+    // Útil cuando el servidor tiene bloqueados los puertos de correo salientes.
+    apiKey: s.apiKey || process.env.BREVO_API_KEY,
   };
+}
+// Envío por la API HTTP de Brevo (https://api.brevo.com/v3/smtp/email). Puerto 443.
+function sendViaBrevoApi(c, { to, subject, text, html }) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({
+      sender: { email: c.from, name: c.fromName || 'Conecta Só' },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html || ('<pre>' + (text || '') + '</pre>'),
+      textContent: text || '',
+    });
+    const req = https.request('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': c.apiKey, 'content-type': 'application/json', accept: 'application/json', 'content-length': Buffer.byteLength(payload) },
+      timeout: 20000,
+    }, res => {
+      let b = ''; res.on('data', d => b += d);
+      res.on('end', () => (res.statusCode >= 200 && res.statusCode < 300) ? resolve({ ok: true }) : reject(new Error('Brevo API ' + res.statusCode + ': ' + b.slice(0, 200))));
+    });
+    req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error('Tiempo de espera de la API agotado')));
+    req.write(payload); req.end();
+  });
 }
 // Lista blanca de destinatarios (red de seguridad): del panel o del .env.
 function allowlist() {
@@ -34,7 +62,7 @@ function isDisabled() {
   if (typeof s.enabled === 'boolean') return !s.enabled;
   return process.env.MAIL_DISABLED !== 'false';
 }
-const enabled = () => !isDisabled() && !!cfg().host;
+const enabled = () => { const c = cfg(); return !isDisabled() && !!(c.host || c.apiKey); };
 const b64 = s => Buffer.from(String(s), 'utf8').toString('base64');
 const encHeader = s => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${b64(s)}?=`);
 
@@ -49,6 +77,8 @@ function sendMail({ to, subject, text, html }) {
     return Promise.resolve({ skipped: true });
   }
   const c = cfg();
+  // Si hay clave API de Brevo, se envía por HTTPS (evita el bloqueo de puertos SMTP del servidor).
+  if (c.apiKey) return sendViaBrevoApi(c, { to, subject, text, html });
   if (!c.host) return Promise.reject(new Error('SMTP no configurado'));
   const b64body = s => b64(s).replace(/(.{76})/g, '$1\r\n');
   const head = [

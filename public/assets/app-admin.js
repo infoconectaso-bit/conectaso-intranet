@@ -1060,6 +1060,7 @@ on(/^#\/cuenta$/, async () => {
            <div class="field"><label>Puerto</label><input class="control" id="mcPort" placeholder="587"></div>
            <div class="field"><label>Usuario / Login</label><input class="control" id="mcUser" placeholder="xxxxx@smtp-brevo.com"></div>
            <div class="field"><label>Contraseña / clave SMTP</label><input class="control" type="password" id="mcPass" autocomplete="off" placeholder="(pega aquí tu clave)"></div>
+           <div class="field"><label>Clave API de Brevo <span class="muted">(recomendado: envía por internet normal, evita bloqueos del servidor)</span></label><input class="control" type="password" id="mcApiKey" autocomplete="off" placeholder="(pega aquí tu clave API, empieza por xkeysib-)"></div>
            <div class="field"><label>Remitente — email del "De"</label><input class="control" id="mcFrom" placeholder="adriadeejay@gmail.com"></div>
            <div class="field"><label>Lista blanca de destinatarios <span class="muted">(solo estos reciben correos; déjalo vacío para enviar a todos — ¡úsalo en pruebas!)</span></label><input class="control" id="mcAllow" placeholder="correo1@x.com, correo2@y.com"></div>
            <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Guardar configuración</button></div>
@@ -1114,6 +1115,7 @@ on(/^#\/cuenta$/, async () => {
       if (el('mcPort')) el('mcPort').value = c.port || 587;
       if (el('mcUser')) el('mcUser').value = c.user || '';
       if (el('mcPass')) el('mcPass').placeholder = c.hasPass ? '•••••••• (guardada — déjalo vacío para no cambiarla)' : '(pega aquí tu clave)';
+      if (el('mcApiKey')) el('mcApiKey').placeholder = c.hasApiKey ? '•••••••• (guardada — déjalo vacío para no cambiarla)' : '(pega aquí tu clave API, empieza por xkeysib-)';
       if (el('mcFrom')) el('mcFrom').value = c.from || '';
       if (el('mcAllow')) el('mcAllow').value = c.allowlist || '';
     }).catch(() => {});
@@ -1123,9 +1125,10 @@ on(/^#\/cuenta$/, async () => {
       try {
         const r = await api('mail-config', { method: 'POST', body: {
           enabled: el('mcEnabled').checked, host: el('mcHost').value, port: el('mcPort').value,
-          user: el('mcUser').value, pass: el('mcPass').value, from: el('mcFrom').value, allowlist: el('mcAllow').value,
+          user: el('mcUser').value, pass: el('mcPass').value, apiKey: el('mcApiKey').value, from: el('mcFrom').value, allowlist: el('mcAllow').value,
         } });
         el('mcPass').value = ''; el('mcPass').placeholder = '•••••••• (guardada — déjalo vacío para no cambiarla)';
+        if (el('mcApiKey')) { el('mcApiKey').value = ''; el('mcApiKey').placeholder = '•••••••• (guardada — déjalo vacío para no cambiarla)'; }
         m.innerHTML = '✅ Guardado. El correo está ahora <b>' + (r.enabledNow ? 'activado' : 'desactivado') + '</b>.';
         toast('Configuración guardada', 'ok');
       } catch (err) { m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>'; toast('No se pudo guardar', 'err'); }

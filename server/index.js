@@ -164,8 +164,8 @@ async function api(req, res, url) {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     if (method === 'GET') {
       const c = store.setting('mailConfig') || {};
-      // Nunca se devuelve la contraseña; solo si hay una guardada.
-      return ok(res, { config: { host: c.host || '', port: c.port || 587, user: c.user || '', from: c.from || '', allowlist: c.allowlist || '', enabled: !!c.enabled, hasPass: !!c.pass }, enabledNow: mail.enabled() });
+      // Nunca se devuelven las claves; solo si hay una guardada.
+      return ok(res, { config: { host: c.host || '', port: c.port || 587, user: c.user || '', from: c.from || '', allowlist: c.allowlist || '', enabled: !!c.enabled, hasPass: !!c.pass, hasApiKey: !!c.apiKey }, enabledNow: mail.enabled() });
     }
     if (method === 'POST') {
       const b = await readBody(req);
@@ -177,8 +177,9 @@ async function api(req, res, url) {
         from: String(b.from || '').trim(),
         allowlist: String(b.allowlist || '').trim(),
         enabled: !!b.enabled,
-        // Conserva la clave guardada si el formulario la deja en blanco (no se reescribe).
+        // Conserva las claves guardadas si el formulario las deja en blanco (no se reescriben).
         pass: (b.pass != null && b.pass !== '') ? b.pass : cur.pass,
+        apiKey: (b.apiKey != null && b.apiKey !== '') ? String(b.apiKey).trim() : cur.apiKey,
       };
       store.setSetting('mailConfig', next);
       store.audit(user.id, 'mail-config-save');
