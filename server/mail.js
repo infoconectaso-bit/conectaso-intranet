@@ -26,6 +26,14 @@ const encHeader = s => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${b64(s)}?=`);
 /** Conversa con el servidor SMTP paso a paso. Resuelve al aceptarse el mensaje. */
 function sendMail({ to, subject, text, html }) {
   if (MAIL_DISABLED) { console.log('[CORREO DESACTIVADO] NO se envía →', to, '·', subject); return Promise.resolve({ disabled: true }); }
+  // RED DE SEGURIDAD (entornos de pruebas): si MAIL_ALLOWLIST está definida, SOLO se envía
+  // a esas direcciones; cualquier otra (p. ej. un cliente real) se bloquea. Así, en un
+  // servidor de pruebas con datos reales, nunca sale un correo a un novio o DJ de verdad.
+  const allow = String(process.env.MAIL_ALLOWLIST || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (allow.length && allow.indexOf(String(to).trim().toLowerCase()) < 0) {
+    console.log('[CORREO BLOQUEADO · fuera de MAIL_ALLOWLIST] NO se envía →', to, '·', subject);
+    return Promise.resolve({ skipped: true });
+  }
   const c = cfg();
   if (!c.host) return Promise.reject(new Error('SMTP no configurado'));
   const b64body = s => b64(s).replace(/(.{76})/g, '$1\r\n');
