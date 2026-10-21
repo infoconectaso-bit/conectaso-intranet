@@ -644,10 +644,10 @@ function paneExtras(ev, { readonly = false } = {}) {
       '<b>Note!</b> When you tick and save an extra service, the request is sent to Conecta So (<b>billing</b> and <b>sales</b>). To cancel it, contact us by email.',
       '<b>Attention !</b> En cochant et enregistrant un service supplémentaire, la demande est envoyée à Conecta So (<b>facturation</b> et <b>commercial</b>). Pour l\'annuler, contactez-nous par email.')}</p>
     <p style="margin:6px 0 0">${tt(
-      '<b>Cómo funciona:</b> 1) lo marcáis → <b>pendiente de confirmación</b>; 2) confirmamos disponibilidad y os llega un WhatsApp con el enlace de pago de la reserva (' + reserva + ' por servicio) → <b>pendiente de pago</b>; 3) al pagar queda <b>reservado</b>.',
-      '<b>Com funciona:</b> 1) ho marqueu → <b>pendent de confirmació</b>; 2) confirmem disponibilitat i us arriba un WhatsApp amb l\'enllaç de pagament de la reserva (' + reserva + ' per servei) → <b>pendent de pagament</b>; 3) en pagar queda <b>reservat</b>.',
-      '<b>How it works:</b> 1) you tick it → <b>awaiting confirmation</b>; 2) we confirm availability and you get a WhatsApp with the deposit payment link (' + reserva + ' per service) → <b>awaiting payment</b>; 3) once paid it is <b>booked</b>.',
-      '<b>Comment ça marche :</b> 1) vous cochez → <b>en attente de confirmation</b> ; 2) nous confirmons la disponibilité et vous recevez un WhatsApp avec le lien de paiement de l\'acompte (' + reserva + ' par service) → <b>en attente de paiement</b> ; 3) une fois payé, c\'est <b>réservé</b>.')}</p></div>`;
+      '<b>Cómo funciona:</b> 1) lo marcáis → <b>pendiente de confirmación</b>; 2) confirmamos disponibilidad y os escribimos por WhatsApp para que confirméis la reserva; al confirmar os emitimos la <b>factura</b> (con el número de cuenta, ' + reserva + ' por servicio) → <b>pendiente de pago</b>; 3) al pagar queda <b>reservado</b>.',
+      '<b>Com funciona:</b> 1) ho marqueu → <b>pendent de confirmació</b>; 2) confirmem disponibilitat i us escrivim per WhatsApp perquè confirmeu la reserva; en confirmar us emetem la <b>factura</b> (amb el número de compte, ' + reserva + ' per servei) → <b>pendent de pagament</b>; 3) en pagar queda <b>reservat</b>.',
+      '<b>How it works:</b> 1) you tick it → <b>awaiting confirmation</b>; 2) we confirm availability and message you on WhatsApp to confirm the booking; once you confirm we issue the <b>invoice</b> (with our bank account, ' + reserva + ' per service) → <b>awaiting payment</b>; 3) once paid it is <b>booked</b>.',
+      '<b>Comment ça marche :</b> 1) vous cochez → <b>en attente de confirmation</b> ; 2) nous confirmons la disponibilité et vous écrivons sur WhatsApp pour confirmer la réservation ; une fois confirmée, nous émettons la <b>facture</b> (avec le numéro de compte, ' + reserva + ' par service) → <b>en attente de paiement</b> ; 3) une fois payé, c\'est <b>réservé</b>.')}</p></div>`;
   return `<div class="panel"><div class="panel__head"><h3>Servicios extras a contratar</h3></div>
     <div class="panel__body">${avisos}<p class="hint" style="margin-bottom:12px">${readonly ? tt('Pulsa un servicio para ver la información.', 'Prem un servei per veure la informació.', 'Tap a service to see the information.', 'Appuyez sur un service pour voir les informations.') : tt('Pulsa un servicio para ver la información y añadirlo a tu boda.', 'Prem un servei per veure la informació i afegir-lo a la teva boda.', 'Tap a service to see the information and add it to your wedding.', "Appuyez sur un service pour voir les informations et l'ajouter à votre mariage.")}</p><div class="extra-tiles">${tiles}</div></div></div>`;
 }
@@ -663,16 +663,39 @@ Los novios de la boda #${ev.id}${ev.conyuges ? ' (' + ev.conyuges + ')' : ''} qu
 Lugar: ${extraFincaName(ev)}
 Fecha del evento: ${dmy(ev.fecha)}
 
-Acción: confirmar disponibilidad de material y técnicos. Al confirmar, la intranet enviará al cliente un WhatsApp con el enlace de pago de la reserva (${fmtEur(RESERVA_TOTAL)}).`;
+Acción: confirmar disponibilidad de material y técnicos. Después, escribir por WhatsApp a la pareja para que confirmen la reserva (${fmtEur(RESERVA_TOTAL)} por servicio) y emitir la factura con el número de cuenta.`;
 }
-function extraWhatsappText(ev, x) {
-  return `Hola! 👋 Tenemos disponibilidad para *${x[1]}* en vuestra boda del ${dmy(ev.fecha)} en ${extraFincaName(ev)}.
-
-Para reservarlo, abonad la reserva de *${fmtEur(RESERVA_TOTAL)}* (50 € + IVA) en este enlace de pago seguro:
-👉 [enlace de pago Holded]
-
-En cuanto recibamos el pago, el servicio quedará *reservado*. ¡Gracias! — Conecta So`;
+// Línea de la factura: usa el nombre del primer cónyuge si lo hay; si no, lo genérico.
+function reservaFirstSpouseLine(ev) {
+  const s = (ev.spouses || [])[0] || {};
+  const name = (s.name || '').trim(), dni = (s.dni || '').trim();
+  if (name && dni) return `La factura irá a nombre de *${name}*, con DNI *${dni}*.`;
+  if (name) return `La factura irá a nombre de *${name}* (necesitaremos su DNI para emitirla).`;
+  return `La factura irá a nombre y DNI del primer cónyuge (completadlos en la intranet).`;
 }
+// Texto de WhatsApp de reserva: la administrativa lo copia y lo pega en el grupo de la pareja.
+// El total se calcula solo según cuántos servicios haya solicitado (50 € + IVA por servicio).
+function reservaWhatsappText(ev, keys) {
+  keys = (keys && keys.length) ? keys : Object.keys(ev.extraStatus || {}).filter(k => ev.extraStatus[k] === 'solicitado');
+  if (!keys.length) keys = [];
+  const novios = ev.conyuges || (ev.spouses || []).map(s => s.name).filter(Boolean).join(' y ') || 'pareja';
+  const lista = keys.map(k => '• ' + _exRow(k)[1]).join('\n');
+  const n = keys.length || 1;
+  return `¡Hola, ${novios}! 👋
+
+Hemos revisado la disponibilidad para vuestra boda del ${dmy(ev.fecha)} en ${extraFincaName(ev)} y tenemos buenas noticias 🎉 Podemos ofreceros los servicios que habéis solicitado:
+
+${lista}
+
+*¿Nos confirmáis que queréis reservarlos?* En cuanto nos lo digáis, os emitimos la *factura* (con el número de cuenta) por la reserva de *50 € + IVA por servicio*:
+*${n} ${n === 1 ? 'servicio' : 'servicios'} × ${fmtEur(RESERVA_TOTAL)} = ${fmtEur(n * RESERVA_TOTAL)}*
+
+${reservaFirstSpouseLine(ev)} Cuando recibamos el pago, quedan *reservados* ✅.
+
+Cualquier duda, aquí estamos 💛
+— Conecta So`;
+}
+CS.reservaWhatsappText = reservaWhatsappText;
 // detalle desplegable de un servicio extra (info + imagen); la foto real se añadirá más adelante
 function openExtraDetail(key, form) {
   const x = EXTRAS_CLIENTE.find(e => e[0] === key); if (!x) return;
@@ -964,9 +987,13 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
     const cf = e.target.closest('[data-extra-confirm]');
     const pay = e.target.closest('[data-extra-pay]');
     const mail = e.target.closest('[data-extra-mail]');
-    if (cf) { e.preventDefault(); e.stopPropagation(); const key = cf.dataset.extraConfirm; const x = EXTRAS_CLIENTE.find(y => y[0] === key);
-      modal('Confirmar disponibilidad · ' + x[1], `<p>Al confirmar, la intranet enviará este <b>WhatsApp</b> a los novios con el enlace de pago de la reserva:</p>
-        <pre class="msg-preview">${esc(extraWhatsappText(ev, x))}</pre>`, { okText: 'Confirmar y enviar', onOk: () => { api('events/' + ev.id + '/extra-confirm', { method: 'POST', body: { key } }).then(() => { toast('Disponibilidad confirmada · WhatsApp enviado', 'ok'); reloadExtras(); }).catch(err => toast(err.message || 'Error', 'err')); } });
+    if (cf) { e.preventDefault(); e.stopPropagation(); const key = cf.dataset.extraConfirm;
+      const waTxt = reservaWhatsappText(ev);
+      modal('Confirmar disponibilidad', `<p>Copia este mensaje y pégalo en el grupo de WhatsApp de los novios:</p>
+        <pre class="msg-preview">${esc(waTxt)}</pre>
+        <div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn--sm btn--primary" id="waCopy">📋 Copiar texto</button></div>`,
+        { okText: 'Marcar como confirmada', onOk: () => { api('events/' + ev.id + '/extra-confirm', { method: 'POST', body: { key } }).then(() => { toast('Disponibilidad confirmada', 'ok'); reloadExtras(); }).catch(err => toast(err.message || 'Error', 'err')); } });
+      setTimeout(() => { const c = document.getElementById('waCopy'); if (c) c.onclick = () => { try { navigator.clipboard.writeText(waTxt); } catch (x2) { try { document.execCommand('copy'); } catch (x3) {} } toast('Texto copiado', 'ok'); }; }, 60);
       return; }
     if (pay) { e.preventDefault(); e.stopPropagation(); const key = pay.dataset.extraPay; const x = EXTRAS_CLIENTE.find(y => y[0] === key); const admin = S.user.role === 'admin';
       modal(admin ? 'Marcar reserva pagada' : 'Pagar reserva · ' + x[1], admin

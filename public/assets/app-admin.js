@@ -57,11 +57,9 @@ async function papeleraEventos() {
 async function solicitudesExtras() {
   if (!requireAdmin()) return; loading(['Solicitud de extras']);
   const { requests, pending } = await api('extra-requests');
-  const waText = r => `Hola! 👋 Tenemos disponibilidad para *${exName(r.extraKey)}* en vuestra boda del ${dmy(r.fecha)} en ${r.lugar || ''}.\n\nPara reservarlo, abonad la reserva de *${fmtEur(RESERVA_EUR)}* (50 € + IVA) en este enlace de pago:\n👉 [enlace de pago Holded]\n\nEn cuanto recibamos el pago quedará *reservado*. ¡Gracias! — Conecta So`;
-  window.__WA = r => waText(r);
-  shell(`${pageHead('Solicitud de extras', 'Servicios que los novios quieren reservar. Acepta (envía WhatsApp con enlace de pago) o declina.', `<button class="btn" id="catBtn">Ver catálogo de servicios</button>`)}
+  shell(`${pageHead('Solicitud de extras', 'Servicios que los novios quieren reservar. Confírmalos y copia el WhatsApp para enviarlo a la pareja, o declínalos.', `<button class="btn" id="catBtn">Ver catálogo de servicios</button>`)}
     <div class="panel"><div class="panel__body">
-      <p class="hint" style="margin-bottom:12px">${pending} pendiente${pending === 1 ? '' : 's'} de confirmar. Al <b>aceptar</b>, se envía al cliente un WhatsApp con el enlace de pago de la reserva (${fmtEur(RESERVA_EUR)}).</p>
+      <p class="hint" style="margin-bottom:12px">${pending} pendiente${pending === 1 ? '' : 's'} de confirmar. Al <b>aceptar</b> podrás <b>copiar el texto de WhatsApp</b> (con el total de la reserva) para pegarlo en el grupo de la pareja.</p>
       ${table('dtReq', { rows: requests.map((r, i) => Object.assign({ _i: i }, r)), order: [2, 'asc'], filters: true, cols: [
         { t: 'Evento', get: r => r.evId, html: r => `<a href="#/eventos/${r.evId}">#${r.evId}</a>${r.conyuges ? ' · ' + esc(r.conyuges) : ''}` },
         { t: 'Servicio', get: r => exName(r.extraKey), html: r => `<b>${esc(exName(r.extraKey))}</b>` },
@@ -78,9 +76,14 @@ async function solicitudesExtras() {
   el('catBtn').onclick = () => location.hash = '#/extras-catalogo';
   const splitD = v => { const i = v.indexOf(':'); return [v.slice(0, i), v.slice(i + 1)]; };
   bindTable('dtReq', () => {
-    $$('[data-acc]').forEach(b => b.onclick = () => { const [ev, k] = splitD(b.dataset.acc); const r = requests.find(x => x.evId == ev && x.extraKey === k);
-      modal('Aceptar y enviar WhatsApp', `<p>Al aceptar <b>${esc(exName(k))}</b> (boda #${ev}) se enviará este WhatsApp al cliente con el enlace de pago:</p><pre class="msg-preview">${esc(window.__WA(r))}</pre>`,
-        { okText: 'Aceptar y enviar', onOk: async () => { await api('events/' + ev + '/extra-confirm', { method: 'POST', body: { key: k } }); toast('Aceptado · WhatsApp enviado', 'ok'); solicitudesExtras(); } }); });
+    $$('[data-acc]').forEach(b => b.onclick = async () => { const [ev, k] = splitD(b.dataset.acc);
+      let evObj; try { evObj = (await api('events/' + ev)).event; } catch (e) { toast('No se pudo cargar el evento', 'err'); return; }
+      const waTxt = CS.reservaWhatsappText(evObj);
+      modal('Reserva de extras · Boda #' + ev, `<p>Copia este mensaje y pégalo en el grupo de WhatsApp de la pareja:</p>
+        <pre class="msg-preview">${esc(waTxt)}</pre>
+        <div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn--sm btn--primary" id="waCopyA">📋 Copiar texto</button></div>`,
+        { okText: 'Marcar como confirmada', onOk: async () => { await api('events/' + ev + '/extra-confirm', { method: 'POST', body: { key: k } }); toast('Confirmada', 'ok'); solicitudesExtras(); } });
+      setTimeout(() => { const c = document.getElementById('waCopyA'); if (c) c.onclick = () => { try { navigator.clipboard.writeText(waTxt); } catch (x) { try { document.execCommand('copy'); } catch (y) {} } toast('Texto copiado', 'ok'); }; }, 60); });
     $$('[data-dec]').forEach(b => b.onclick = () => { const [ev, k] = splitD(b.dataset.dec);
       modal('Declinar solicitud', `¿Declinar <b>${esc(exName(k))}</b> de la boda #${ev}? Se quitará de su evento.`, { okText: 'Declinar', danger: true, onOk: async () => { await api('events/' + ev + '/extra-decline', { method: 'POST', body: { key: k } }); toast('Solicitud declinada', 'ok'); solicitudesExtras(); } }); });
     $$('[data-paid]').forEach(b => b.onclick = async () => { const [ev, k] = splitD(b.dataset.paid); await api('events/' + ev + '/extra-pay', { method: 'POST', body: { key: k } }); toast('Marcado como pagado · reservado', 'ok'); solicitudesExtras(); });
