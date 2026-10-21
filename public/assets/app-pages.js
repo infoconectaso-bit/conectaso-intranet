@@ -531,7 +531,7 @@ function momentRow(ev, key, title, { readonly }) {
   const m = (ev.music || {})[key] || {};
   const t = momentTitle(ev, key, (ev.labels && ev.labels[key]) || title);
   const ro = readonly ? 'readonly' : '';
-  return `<div class="moment" data-moment data-key="${esc(key)}" data-deftitle="${esc(title)}">
+  return `<div class="moment${m.on ? ' moment--off' : ''}" data-moment data-key="${esc(key)}" data-deftitle="${esc(title)}">
     <h5>${toolsHtml(readonly, false)}<span data-mtitle><span class="m-ic">${momentIcon(key)}</span> ${esc(t)}</span><label class="switch switch--incl" style="margin-left:auto" title="Verde = activado (se incluye) · Rojo = desactivado (no se incluye)"><input type="checkbox" name="check_${key}" ${m.on ? 'checked' : ''} ${readonly ? 'disabled' : ''}><span class="track"></span><span class="switch-state">${m.on ? 'Desactivado' : 'Activado'}</span></label></h5>
     <div class="mgrid">
       <div><label class="mlab">Artista · Canción</label><input class="control" name="${key}" value="${esc(m.song || '')}" placeholder="Artista - Canción" ${ro}></div>
@@ -950,7 +950,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   if (enTog) enTog.addEventListener('change', () => { const st = enTog.closest('.switch--onoff').querySelector('.switch-state'); if (st) st.textContent = enTog.checked ? 'Activado' : 'Desactivado'; });
   // tarjetas de servicios extra: marcar/desmarcar en vivo
   form.addEventListener('change', e => {
-    const sw = e.target.closest('.switch--incl'); if (sw && e.target.matches('input[type=checkbox]')) { const st = sw.querySelector('.switch-state'); if (st) st.textContent = e.target.checked ? 'Desactivado' : 'Activado'; }
+    const sw = e.target.closest('.switch--incl'); if (sw && e.target.matches('input[type=checkbox]')) { const st = sw.querySelector('.switch-state'); if (st) st.textContent = e.target.checked ? 'Desactivado' : 'Activado'; const mo = e.target.closest('[data-moment]'); if (mo) mo.classList.toggle('moment--off', e.target.checked); }
   });
   // ceremonia fuera del lugar: activa el mensaje en Música → Ceremonia en vivo
   const cOut = form.querySelector('[name=ceremony_outside]');
