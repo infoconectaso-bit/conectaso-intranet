@@ -778,7 +778,7 @@ on(/^#\/facturacion$/, async () => {
   if (!requireAdmin()) return; loading(['Facturación']);
   const { workers } = await api('finance/workers');
   shell(`${pageHead('Facturación del equipo', 'Pendiente de pago por trabajador.')}
-    <div class="panel"><div class="panel__body">${table('dtWork', { rows: workers, order: [1, 'asc'], filters: true, cols: [
+    <div class="panel"><div class="panel__body">${table('dtWork', { rows: workers, order: [2, 'desc'], filters: true, cols: [
       { t: 'Id', get: w => w.id }, { t: 'Nombre', get: w => w.name, html: w => `<a href="#/facturacion/${w.id}">${esc(w.name)}</a>` },
       { t: 'Pendiente de pago', get: w => w.pend, html: w => fmtEur(w.pend) },
       { t: 'Último movimiento', get: w => w.last || '', html: w => w.last ? dmy(w.last) : '—' },
