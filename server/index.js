@@ -183,11 +183,18 @@ async function testEmails(req, res, user) {
     ['Recordatorio 7 días (música)', () => emails.coupleMusicEmail(ev, evLink, base)],
     ['Parte del DJ (boda finalizada)', () => emails.djAlbaranEmail(uDj, ev, evLink, base)],
   ];
+  // Se envían espaciados: Mailtrap (y muchos SMTP) limitan los correos por segundo,
+  // así que una pausa entre cada uno evita el "Too many emails per second".
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const GAP = +(process.env.TEST_MAIL_GAP_MS || 2000);
   const results = [];
+  let first = true;
   for (const [label, build] of jobs) {
+    if (!first) await sleep(GAP); first = false;
     try { const em = build(); await mail.sendMail({ to, subject: '[PRUEBA] ' + em.subject, text: em.text, html: em.html }); results.push({ label, ok: true }); }
     catch (e) { results.push({ label, ok: false, error: e.message }); }
   }
+  await sleep(GAP);
   try { await mail.sendMail({ to, subject: '[PRUEBA] Nueva solicitud de extra · Boda #0', text: extraText }); results.push({ label: 'Aviso de solicitud de extra', ok: true }); }
   catch (e) { results.push({ label: 'Aviso de solicitud de extra', ok: false, error: e.message }); }
   store.audit(user.id, 'test-emails');
