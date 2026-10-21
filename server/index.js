@@ -196,7 +196,8 @@ async function testEmails(req, res, user) {
   // El progreso se guarda en lastTestRun para que la pantalla lo muestre en vivo (GET).
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const GAP = +(process.env.TEST_MAIL_GAP_MS || 6000);
-  const retryable = msg => /5\.7\.0|too many|rate|\b4\d\d\b|timeout|tiempo de espera/i.test(String(msg || ''));
+  // Reintenta solo errores transitorios (límite por segundo), NO cupo agotado / cuenta.
+  const retryable = msg => { msg = String(msg || ''); return /too many|per second|rate limit|\b421\b|timeout|tiempo de espera/i.test(msg) && !/limit is reached|upgrade|quota|\b535\b/i.test(msg); };
   lastTestRun = { to, total: jobs.length, startedAt: Date.now(), running: true, results: jobs.map(j => ({ label: j[0], status: 'pendiente' })) };
   const run = lastTestRun;
   store.audit(user.id, 'test-emails');
