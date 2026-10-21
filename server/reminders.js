@@ -9,6 +9,9 @@
 const { store, users } = require('./db');
 const mail = require('./mail');
 const emails = require('./emails');
+const auth = require('./auth');
+// Enlace mágico de autologin para un usuario (novio o DJ) que lleva a su evento.
+const magicLink = (base, uid, kind, evId) => base + '/#/albaran?token=' + auth.createToken(uid, kind) + '&ev=' + evId;
 
 const APP_URL = () => (process.env.APP_URL || '').replace(/\/$/, '');
 const bizToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
@@ -59,11 +62,11 @@ function assignedStaff(ev) {
   (ev.services || []).forEach(s => { if (s.resp) ids.add(+s.resp); if (s.resp2) ids.add(+s.resp2); });
   return [...ids];
 }
-// Correos de los titulares de la boda (titular + co-titulares), sin repetir.
-function coupleEmails(ev) {
+// Titulares de la boda (titular + co-titulares), sin repetir, como objetos de usuario.
+function coupleUsers(ev) {
   const ids = [ev.userId].concat(ev.coUsers || []).filter(Boolean);
   const seen = new Set(), out = [];
-  ids.forEach(id => { const u = users.get(id); if (u && u.email && !seen.has(u.email.toLowerCase())) { seen.add(u.email.toLowerCase()); out.push(u.email); } });
+  ids.forEach(id => { const u = users.get(id); if (u && u.email && !seen.has(u.email.toLowerCase())) { seen.add(u.email.toLowerCase()); out.push(u); } });
   return out;
 }
 const sent = (ev, key) => !!(ev.reminders && ev.reminders[key]);
@@ -77,20 +80,19 @@ function runReminders() {
   store.all('events').forEach(ev => {
     if (!ev.fecha) return;
     const d = daysUntil(ev.fecha, today);
-    const link = base + '/#/eventos/' + ev.id;
-    // 15 días antes → recordatorio general a los novios
+    // 15 días antes → recordatorio general a los novios (enlace que les autologuea a su boda)
     if (d === 15 && !sent(ev, 'd15')) {
-      coupleEmails(ev).forEach(to => send(to, emails.coupleReminderEmail(ev, link, base)));
+      coupleUsers(ev).forEach(u => send(u.email, emails.coupleReminderEmail(ev, magicLink(base, u.id, 'magic', ev.id), base)));
       markSent(ev, 'd15'); n++;
     }
     // 7 días antes → solo si la música no está al 100%
     if (d === 7 && !sent(ev, 'd7')) {
-      if (musicProgress(ev) < 100) coupleEmails(ev).forEach(to => send(to, emails.coupleMusicEmail(ev, link, base)));
+      if (musicProgress(ev) < 100) coupleUsers(ev).forEach(u => send(u.email, emails.coupleMusicEmail(ev, magicLink(base, u.id, 'magic', ev.id), base)));
       markSent(ev, 'd7'); n++;
     }
-    // boda finalizada en los últimos 7 días → aviso al DJ/técnicos (parte de trabajo)
+    // boda finalizada en los últimos 7 días → aviso al DJ/técnicos (autologin a su parte)
     if (d <= -1 && d >= -7 && !sent(ev, 'albaran')) {
-      assignedStaff(ev).forEach(id => { const u = users.get(id); if (u && u.email) send(u.email, emails.djAlbaranEmail(u, ev, link, base)); });
+      assignedStaff(ev).forEach(id => { const u = users.get(id); if (u && u.email) send(u.email, emails.djAlbaranEmail(u, ev, magicLink(base, id, 'albaran', ev.id), base)); });
       markSent(ev, 'albaran'); n++;
     }
   });

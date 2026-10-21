@@ -202,6 +202,7 @@ async function testEmails(req, res, user) {
   const link = (base || '') + '/#/activar?token=DEMO-TOKEN';
   const resetLink = (base || '') + '/#/activar?token=DEMO-TOKEN';
   const evLink = (base || '') + '/#/eventos/0';
+  const demoMagic = (base || '') + '/#/albaran?token=DEMO-TOKEN&ev=0';   // autologin de ejemplo
   const ev = { id: 0, conyuges: 'Laura & Marc (prueba)', fecha: '2026-11-08', lugar: 0, hora: '17:30' };
   const uUser = { name: 'Laura & Marc', email: to, role: 'user' };
   const uPlanner = { name: 'Wedding Planner (prueba)', email: to, role: 'planner' };
@@ -213,9 +214,9 @@ async function testEmails(req, res, user) {
     ['Alta · DJ', () => emails.inviteEmail(uDj, link, base)],
     ['Alta · administración', () => emails.inviteEmail(uAdmin, link, base)],
     ['Restablecer contraseña', () => emails.resetEmail(uUser, resetLink, base)],
-    ['Recordatorio 15 días', () => emails.coupleReminderEmail(ev, evLink, base)],
-    ['Recordatorio 7 días (música)', () => emails.coupleMusicEmail(ev, evLink, base)],
-    ['Parte del DJ (boda finalizada)', () => emails.djAlbaranEmail(uDj, ev, evLink, base)],
+    ['Recordatorio 15 días', () => emails.coupleReminderEmail(ev, demoMagic, base)],
+    ['Recordatorio 7 días (música)', () => emails.coupleMusicEmail(ev, demoMagic, base)],
+    ['Parte del DJ (boda finalizada)', () => emails.djAlbaranEmail(uDj, ev, demoMagic, base)],
     ['Aviso de solicitud de extra', () => emails.extraRequestEmail(ev, ['Máquina de humo', 'Sparklers / chispas frías'], 'Can Oliver Carpa', evLink, base)],
   ];
 
@@ -412,7 +413,8 @@ async function activate(req, res) {
 async function albaranLogin(req, res) {
   const { token } = await readBody(req);
   const t = auth.checkToken(token);
-  if (!t || t.kind !== 'albaran') return fail(res, 404, 'El enlace no es válido o ha caducado.');
+  // 'albaran' = DJ/técnico para su parte; 'magic' = autologin de los novios desde sus correos.
+  if (!t || (t.kind !== 'albaran' && t.kind !== 'magic')) return fail(res, 404, 'El enlace no es válido o ha caducado.');
   const u = users.get(t.user_id);
   if (!u || !u.active) return fail(res, 403, 'La cuenta no está activa.');
   auth.createSession(req, res, t.user_id);

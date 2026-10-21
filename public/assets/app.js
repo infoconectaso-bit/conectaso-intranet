@@ -301,12 +301,17 @@ async function boot() {
 async function albaranAutologin() {
   const qs = new URLSearchParams((location.hash.split('?')[1]) || '');
   const token = qs.get('token'), ev = qs.get('ev');
+  if (token === 'DEMO-TOKEN') {
+    app.innerHTML = authShell(`<h1>✅ El botón funciona</h1><div class="sub">Este es un <b>correo de prueba</b>, así que el enlace es de ejemplo. En un correo real, este botón te llevaría directamente a tu espacio (sin tener que iniciar sesión).</div><a class="btn btn--dark btn--block" href="#/">Ir al inicio</a>`);
+    return;
+  }
   window.addEventListener('hashchange', route);
   try {
     const r = await api('auth/albaran-login', { method: 'POST', body: { token } });
     S.user = r.user; S.mailEnabled = r.mailEnabled;
     await loadContext();
-    location.hash = ev ? ('#/eventos/' + ev) : '#/eventos/realizados';
+    if (S.user.role === 'user' && await tycGate()) return;  // los novios firman TyC la 1ª vez
+    location.hash = ev ? ('#/eventos/' + ev) : (S.user.role === 'user' ? '#/' : '#/eventos/realizados');
     route();
   } catch (e) {
     app.innerHTML = authShell(`<h1>Enlace no válido</h1><div class="sub">${esc(e.message || 'El enlace ha caducado o no es válido. Pídele a administración uno nuevo.')}</div><a class="btn btn--dark btn--block" href="#/">Ir al inicio</a>`);
@@ -633,8 +638,14 @@ function pagoChip(ev) {
 const routes = [];
 const on = (re, fn) => routes.push([re, fn]);
 function route() {
+  // Enlaces de los correos: funcionan SIEMPRE, aunque ya haya una sesión abierta
+  // (p. ej. un admin probando). Crear/restablecer contraseña y autologin mágico.
+  const hraw = location.hash || '#/';
+  if (hraw.startsWith('#/activar')) return renderActivate();
+  if (hraw.startsWith('#/recuperar')) return renderForgot();
+  if (hraw.startsWith('#/albaran')) return albaranAutologin();
   if (!S.user) return renderAuth();
-  const h = (location.hash || '#/').split('?')[0];
+  const h = hraw.split('?')[0];
   const r = routes.find(([re]) => re.test(h));
   markActive();
   if (!r) return shell(`<div class="empty"><span class="script">Nada por aquí</span>Esa página no existe. <a href="#/">Volver al inicio</a></div>`, ['No encontrado']);
