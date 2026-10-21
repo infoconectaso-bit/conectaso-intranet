@@ -699,16 +699,17 @@ function wirePriceAlerts() {
 }
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 async function dashboardDj() {
+  const tt = !!(S.user && S.user.time_tracking);  // solo quien ficha horas ve "Horas este mes"
   const [ev, bal] = await Promise.all([api('events'), api('finance/me').catch(() => ({}))]);
   const next = ev.events.sort((a, b) => a.fecha.localeCompare(b.fecha)).slice(0, 8);
   shell(`${pageHead('Hola, ' + (S.user.name || '').split(' ')[0], 'Tus próximos eventos y tu actividad.')}
     <div class="grid-3">
       <div class="stat stat--pink"><div class="k">Eventos próximos</div><div class="v">${ev.events.length}</div></div>
       <div class="stat stat--blue"><div class="k">Pendiente de cobro</div><div class="v">${bal.history ? fmtEur(bal.history.rest - (bal.payments || []).reduce((t, p) => t + (+p.amount || 0), 0)) : '—'}</div></div>
-      <div class="stat stat--yellow"><div class="k">Horas este mes</div><div class="v" id="hMes">—</div></div>
+      ${tt ? `<div class="stat stat--yellow"><div class="k">Horas este mes</div><div class="v" id="hMes">—</div></div>` : ''}
     </div>
     <div class="panel"><div class="panel__head"><h2>Tus próximos eventos</h2></div><div class="panel__body" style="padding:0">${eventMiniList(next)}</div></div>`, ['Inicio']);
-  api('attendance-summary').then(s => { const r = (s.rows || [])[0]; if (r && el('hMes')) el('hMes').textContent = hm(r.m0) + ' h'; }).catch(() => {});
+  if (tt) api('attendance-summary').then(s => { const r = (s.rows || [])[0]; if (r && el('hMes')) el('hMes').textContent = hm(r.m0) + ' h'; }).catch(() => {});
 }
 // Datos de contacto de Conecta So (visibles para el cliente en su Inicio).
 const CS_CONTACT = { phone: '674 758 989', wa: '34674758989', email: 'comercial@conectaso.es', web: 'https://www.conectaso.es', ig: 'https://www.instagram.com/conecta.so/' };
