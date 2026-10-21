@@ -45,21 +45,41 @@ function run(seed, db) {
     }
 
     // ---- USUARIOS (merge de user.data, conserva time_tracking y demás) ----
+    // La intranet tiene usuarios que COMPARTEN email. El UNIQUE de users.email obliga a:
+    //   Pasada 1: escribir cada usuario con un email TEMPORAL único (sin colisiones) + sus datos.
+    //   Pasada 2: asignar el email final; los repetidos se renombran (local+uID@dominio).
+    // Dos pasadas evitan choques transitorios del UNIQUE al reescribir filas existentes.
+    const dataFor = u => { const d = {}; ['worker_type', 'color', 'vehicle_allowed', 'sending', 'prices', 'tyc', 'djFincas', 'djServices'].forEach(k => { if (u[k] !== undefined) d[k] = u[k]; }); return d; };
     for (const u of seed.users) {
       const row = users.getRow(u.id);
-      const dataIncoming = {};
-      ['worker_type', 'color', 'vehicle_allowed', 'sending', 'prices', 'tyc', 'djFincas', 'djServices'].forEach(k => { if (u[k] !== undefined) dataIncoming[k] = u[k]; });
-      const email = (u.mail || '').trim() || `sin-email-${u.id}@conectaso.local`;
+      const tmp = `volcado-tmp-${u.id}@conectaso.local`;
       if (row) {
         const cur = JSON.parse(row.data || '{}');
         if (cur.time_tracking !== undefined) counts.preservados.time_tracking++;
-        // users.update hace Object.assign(cur, data): pasando solo dataIncoming se conserva el resto
-        users.update(u.id, { email, name: u.name || row.name, role: u.role || row.role, data: dataIncoming });
+        users.update(u.id, { email: tmp, name: u.name || row.name, role: u.role || row.role, data: dataFor(u) });
         counts.users.actualizados++;
       } else {
-        users.create({ id: u.id, email, name: u.name || '', role: u.role || 'user', active: true, data: dataIncoming }, null);
+        users.create({ id: u.id, email: tmp, name: u.name || '', role: u.role || 'user', active: true, data: dataFor(u) }, null);
         counts.users.nuevos++;
       }
+    }
+    // Pasada 2: email final deduplicado. Reservamos primero los emails de usuarios existentes que
+    // NO están en el volcado (p. ej. el admin de desarrollo) para no chocar con ellos.
+    const volcadoIds = new Set(seed.users.map(u => u.id));
+    const seen = new Map();
+    if (typeof users.all === 'function') users.all().forEach(x => { if (!volcadoIds.has(x.id) && x.email) seen.set(String(x.email).toLowerCase(), x.id); });
+    counts.emailDuplicados = 0;
+    for (const u of seed.users) {
+      let email = (u.mail || '').trim() || `sin-email-${u.id}@conectaso.local`;
+      const key = email.toLowerCase();
+      let extra = null;
+      if (seen.has(key)) {
+        const at = email.indexOf('@');
+        email = at > 0 ? `${email.slice(0, at)}+u${u.id}${email.slice(at)}` : `dup-${u.id}@conectaso.local`;
+        extra = { emailOriginal: (u.mail || '').trim(), emailDuplicado: true };
+        counts.emailDuplicados++;
+      } else seen.set(key, u.id);
+      users.update(u.id, extra ? { email, data: extra } : { email });
     }
 
     // ---- LOCALIZACIONES (merge: conserva lat/lng/tiempos/archivos) ----

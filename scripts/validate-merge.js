@@ -49,6 +49,7 @@ const store = {
   setSetting: (k, v) => { settings[k] = v; },
 };
 const users = {
+  all: () => Object.values(memUsers).map(r => ({ id: r.id, email: r.email, name: r.name, role: r.role })),
   getRow: id => memUsers[id] ? Object.assign({}, memUsers[id]) : null,
   update: (id, { email, name, role, data }) => { const r = memUsers[id]; const cur = JSON.parse(r.data || '{}'); r.email = email != null ? email : r.email; r.name = name != null ? name : r.name; r.role = role || r.role; r.data = JSON.stringify(data ? Object.assign(cur, data) : cur); },
   create: ({ id, email, name, role, data }) => { memUsers[id] = { id, email, name, role, data: JSON.stringify(data || {}) }; },
