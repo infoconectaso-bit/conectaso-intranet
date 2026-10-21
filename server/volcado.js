@@ -201,10 +201,14 @@ async function handle(req, res, seg, method, url) {
     for (const id of ids) {
       const rep = { id, files: [], skipped: [], errors: [] };
       try {
-        const page = await srcFetch('/admin/events/update/' + id, cookie, ua);
-        // enlaces a archivos de la sección "archivos": /public/uploads/{id}/files/{nombre}
-        const re = new RegExp('/public/uploads/' + id + '/files/([^"\'\\s>]+)', 'g');
-        const names = [...new Set([...page.text.matchAll(re)].map(m => decodeURIComponent(m[1])))];
+        let names;
+        const provided = (body.fileMap || {})[id] || (body.fileMap || {})[String(id)];
+        if (provided) { names = [...new Set(provided.map(n => decodeURIComponent(String(n))))]; }
+        else { // si no se pasa la lista, se saca del HTML de la ficha (requiere cookie)
+          const page = await srcFetch('/admin/events/update/' + id, cookie, ua);
+          const re = new RegExp('/public/uploads/' + id + '/files/([^"\'\\s>]+)', 'g');
+          names = [...new Set([...page.text.matchAll(re)].map(m => decodeURIComponent(m[1])))];
+        }
         for (const name of names) {
           try {
             if (existsStmt.get('events', id, name).n > 0) { rep.skipped.push(name); continue; }
