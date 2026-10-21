@@ -24,6 +24,11 @@ const IGNORE = new Set(['_token', 'author', 'djsOptions', 'servicesOptions', 'im
  *  Devuelve { ev, unmapped }. unmapped debe quedar vacío (si no, hay un campo nuevo que tratar). */
 function mapEvent(raw) {
   const ev = { music: {}, optionals: [], extras: {}, spouses: [{}, {}], services: [], coUsers: [], plus: [], files: [] };
+  // Servicios extra: cada FILA (id arbitrario) enlaza tres campos por ese id de fila:
+  //   event_service_{fila}   = id del servicio del CATÁLOGO (1-53)  [el VALOR, no el id de fila]
+  //   event_user_{fila}      = id del trabajador RESPONSABLE de ese servicio
+  //   horas_extras_servicio_{fila} = horas extra de ese servicio
+  const svcRows = {};
   const unmapped = [];
   const sp = (i, k, v) => { if (v !== '' && v != null) ev.spouses[i][k] = v; };
   for (const key of Object.keys(raw)) {
@@ -39,10 +44,15 @@ function mapEvent(raw) {
     const om = key.match(/^(ceremony|aperitif|banquet|disco)_optionals_(\d+)_(title|value|link|order|comment)$/);
     if (om) { let o = ev.optionals.find(x => x._id === om[2] && x.area === om[1]); if (!o) { o = { _id: om[2], area: om[1] }; ev.optionals.push(o); } o[om[3]] = v; continue; }
     if (/^extra_/.test(key)) { if (truthy(v)) ev.extras[key] = true; continue; }
-    if (/^event_user_(\d+)$/.test(key)) { if (truthy(v)) ev.userId = +key.match(/\d+/)[0]; continue; }
-    if (/^event_second_user_(\d+)$/.test(key)) { if (truthy(v)) ev.coUsers.push(+key.match(/\d+/)[0]); continue; }
-    if (/^event_service_(\d+)$/.test(key)) { if (v && v !== '') ev.services.push({ servicio: +key.match(/\d+/)[0], resp: +v || v }); continue; }
-    if (/^horas_extras_servicio_(\d+)$/.test(key)) { if (v && v !== '0' && v !== '') { const id = +key.match(/\d+/)[0]; const s = ev.services.find(x => x.servicio === id); if (s) s.overtime = v; else ev.services.push({ servicio: id, overtime: v }); } continue; }
+    let sm;
+    // servicio del catálogo elegido en esta fila (el VALOR es el id de catálogo)
+    if (sm = key.match(/^event_service_(\d+)$/)) { if (v !== '' && v != null) (svcRows[sm[1]] = svcRows[sm[1]] || {}).servicio = +v; continue; }
+    // trabajador RESPONSABLE de esta fila de servicio (NO es el titular del evento)
+    if (sm = key.match(/^event_user_(\d+)$/)) { if (v !== '' && v != null) (svcRows[sm[1]] = svcRows[sm[1]] || {}).resp = +v || ''; continue; }
+    // horas extra de esta fila de servicio
+    if (sm = key.match(/^horas_extras_servicio_(\d+)$/)) { if (v !== '' && v != null) (svcRows[sm[1]] = svcRows[sm[1]] || {}).horas = v; continue; }
+    // co-titular: el id del cliente está en el VALOR (no en el id de fila)
+    if (sm = key.match(/^event_second_user_(\d+)$/)) { if (v && v !== '0' && v !== '') ev.coUsers.push(+v); continue; }
     if (/^plus_(\d+)$/.test(key)) { if (v && v !== '0' && v !== '') { const id = +key.match(/\d+/)[0]; let p = ev.plus.find(x => x.userId === id); if (!p) { p = { userId: id }; ev.plus.push(p); } p.amount = v; } continue; }
     if (/^plus_reason_(\d+)$/.test(key)) { if (v) { const id = +key.match(/\d+/)[0]; let p = ev.plus.find(x => x.userId === id); if (!p) { p = { userId: id }; ev.plus.push(p); } p.concept = v; } continue; }
     if (/^event_files_(\d+)_(value|description|hidden)$/.test(key)) { const id = key.match(/\d+/)[0]; let f = ev.files.find(x => x._id === id); if (!f) { f = { _id: id }; ev.files.push(f); } f[key.split('_').pop()] = v; continue; }
@@ -94,6 +104,10 @@ function mapEvent(raw) {
       default: if (!KNOWN.has(key)) unmapped.push(key);
     }
   }
+  // servicios extra: una entrada por fila con servicio de catálogo, con su responsable y horas.
+  ev.services = Object.values(svcRows).filter(r => r.servicio != null && r.servicio !== '').map(r => ({ servicio: +r.servicio, resp: (r.resp == null ? '' : r.resp), resp2: '', horas: (r.horas == null ? '' : r.horas) }));
+  // co-titulares únicos
+  ev.coUsers = [...new Set(ev.coUsers)];
   // limpieza de ids temporales de opcionales/archivos
   ev.optionals.forEach(o => { o.id = +o._id || 0; delete o._id; });
   ev.files.forEach(f => { f.id = +f._id || 0; delete f._id; });
@@ -189,6 +203,11 @@ async function handle(req, res, seg, method, url) {
         });
       }
       if (cmd === 'inspect') { return send(res, 200, { ok: true, events: (body.ids || []).map(id => store.get('events', +id)) }); }
+      if (cmd === 'patch-events') { // corrige services/coUsers/userId de eventos ya importados (fix del bug de mapeo)
+        const list = body.patch || []; let n = 0;
+        dbm.transaction(() => { list.forEach(p => { const e = store.get('events', +p.id); if (!e) return; if (p.services !== undefined) e.services = p.services; if (p.coUsers !== undefined) e.coUsers = p.coUsers; if (p.userId !== undefined) e.userId = p.userId; store.put('events', e); n++; }); });
+        return send(res, 200, { ok: true, patched: n });
+      }
       if (cmd === 'years') { // eventos por año (de la fecha)
         const by = {}; store.all('events').forEach(e => { const y = (e.fecha || '').slice(0, 4) || '(sin)'; by[y] = (by[y] || 0) + 1; }); return send(res, 200, { ok: true, years: by });
       }
