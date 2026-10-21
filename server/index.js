@@ -613,7 +613,11 @@ function listEventsFor(user) {
 function extraRequestsApi(req, res, user) {
   if (!user || user.role !== 'admin') return fail(res, 403, 'Sin acceso');
   const out = [];
-  store.all('events').forEach(e => { const st = e.extraStatus || {}; Object.keys(st).forEach(k => out.push({ evId: e.id, conyuges: e.conyuges || '', fecha: e.fecha || '', lugar: (store.get('locations', e.lugar) || {}).name || '', extraKey: k, estado: st[k] })); });
+  store.all('events').forEach(e => {
+    if (evRealized(e)) return;  // boda ya celebrada: sus solicitudes de extras ya no tienen sentido
+    const st = e.extraStatus || {};
+    Object.keys(st).forEach(k => out.push({ evId: e.id, conyuges: e.conyuges || '', fecha: e.fecha || '', lugar: (store.get('locations', e.lugar) || {}).name || '', extraKey: k, estado: st[k] }));
+  });
   const rank = { solicitado: 0, pendiente_pago: 1, reservado: 2 };
   out.sort((a, b) => (rank[a.estado] - rank[b.estado]) || (a.fecha || '').localeCompare(b.fecha || ''));
   return ok(res, { requests: out, total: out.length, pending: out.filter(x => x.estado === 'solicitado').length });
