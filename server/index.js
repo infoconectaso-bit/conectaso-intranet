@@ -376,7 +376,9 @@ function tycAutofill(u) {
   return { novios, finca: loc, fecha: ev.fecha || '', dnis, evId: ev.id || null };
 }
 function tycSignatureFor(u) {
-  if (u.tycSign && u.tycSign.date) return u.tycSign;
+  // Si hay firma con fecha (p.ej. importada de la intranet), se usa; el nombre/DNI se
+  // completan con los datos del evento si la firma no los trae.
+  if (u.tycSign && u.tycSign.date) { const a = tycAutofill(u); return Object.assign({ version: '2027', name: a.novios || u.name || '', dni: a.dnis || '' }, u.tycSign); }
   const ev = eventOfUser(u);
   if (ev && ev.tycSigned) { const a = tycAutofill(u); return { name: ev.tycSigner || a.novios || '', dni: a.dnis || '', date: ev.tycSignedAt || '', version: String(ev.tycVersion || '2027') }; }
   // Firma del sistema anterior (booleano "tyc"): no guardaba fecha ni firmante, se reconstruye

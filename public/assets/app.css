@@ -77,8 +77,8 @@ html.night-dim .empty,html.night-dim .cli-hint{background:#221c15}
 html.night-dim .form-sub,html.night-dim .btn,html.night-dim .mtab,html.night-dim .yrchip,html.night-dim .cmt.open > .cmt-btn,html.night-dim .edituser-lbl,html.night-dim .tyc-body strong{color:var(--ink)}
 /* elementos con fondo de COLOR claro (azul/amarillo/pastel): mantienen texto oscuro */
 html.night-dim .btn--blue,html.night-dim .btn--yellow,html.night-dim .nav a.active,html.night-dim .yrchip.on,html.night-dim .progress > div,html.night-dim .tag,html.night-dim .ex-badge,html.night-dim .pay-circle{color:#1a140a}
-/* avisos (.alert) tienen fondo pastel claro: texto oscuro también en modo noche para que se lean */
-html.night-dim .alert,html.night-dim .alert b,html.night-dim .alert strong{color:#1a140a}
+/* avisos con fondo pastel claro fijo: texto oscuro también en modo noche para que se lean */
+html.night-dim .alert,html.night-dim .alert b,html.night-dim .alert strong,html.night-dim .pdf-notice,html.night-dim .pdf-notice b,html.night-dim .pdf-notice strong{color:#1a140a}
 html.night-dim .btn--dark{color:#efe9df}
 /* capa cálida extra (reduce aún más el azul), muy sutil sobre el tema oscuro */
 .night-overlay{position:fixed;inset:0;background:rgba(255,150,40,.06);pointer-events:none;z-index:99998;display:none}

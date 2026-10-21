@@ -276,6 +276,12 @@ async function handle(req, res, seg, method, url) {
         ids.forEach(id => { const row = users.getRow(id); if (row) { users.update(id, { data: { tyc: val } }); n++; } });
         return send(res, 200, { ok: true, marked: n });
       }
+      if (cmd === 'set-tyc-dates') { // fija la fecha/hora de firma real (de la intranet) en cada usuario firmado
+        const dates = body.dates || {}; let n = 0;
+        const toISO = s => { const m = /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}):(\d{2}))?/.exec(String(s || '')); return m ? (`${m[3]}-${m[2]}-${m[1]}` + (m[4] ? `T${m[4]}:${m[5]}:${m[6]}` : 'T00:00:00')) : null; };
+        Object.keys(dates).forEach(id => { const iso = toISO(dates[id]); if (!iso) return; const row = users.getRow(+id); if (!row) return; const cur = JSON.parse(row.data || '{}'); const sign = Object.assign({ version: '2027' }, cur.tycSign, { date: iso }); users.update(+id, { data: { tycSign: sign } }); n++; });
+        return send(res, 200, { ok: true, set: n });
+      }
       if (cmd === 'find-users') { // buscar usuarios por nombre/email (para localizar cuentas de Jordi/Dowhile)
         const q = String(body.q || '').toLowerCase();
         return send(res, 200, { ok: true, users: users.all().filter(u => ((u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))).map(u => ({ id: u.id, role: u.role, name: u.name, email: u.email })) });
