@@ -764,6 +764,27 @@ async function events(req, res, user, seg, method, url) {
     store.put('events', ev); store.audit(user.id, 'remove-user', 'events', id);
     return ok(res, { ok: true });
   }
+  // --- PRUEBA: enviar una copia del email "parte de trabajo del DJ" (el recordatorio que
+  // se dispara el día después de la boda) a una dirección de prueba, con aviso de a quién
+  // iría de verdad. No marca el recordatorio como enviado ni toca el evento. Solo admin. ---
+  if (seg[2] === 'test-albaran' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const body = await readBody(req);
+    const to = String(body.to || user.email || '').trim();
+    if (!to || to.indexOf('@') < 0) return fail(res, 400, 'Indica una dirección de destino válida.');
+    const djId = +ev.djId || 0;
+    const dj = djId ? users.get(djId) : null;
+    if (!dj) return fail(res, 400, 'Este evento no tiene DJ asignado.');
+    const base = APP_URL();
+    const link = `${base || ''}/#/albaran?token=${auth.createToken(dj.id, 'albaran')}&ev=${ev.id}`;
+    const em = emails.djAlbaranEmail(dj, ev, link, base);
+    const subject = `[PRUEBA · iría a ${dj.name || 'DJ'} <${dj.email || 'sin email'}>] ${em.subject}`;
+    let result;
+    try { result = await mail.sendMail({ to, subject, text: em.text, html: em.html }); }
+    catch (e) { return ok(res, { ok: false, error: e.message, dj: { id: dj.id, name: dj.name, email: dj.email } }); }
+    const status = (result && result.skipped) ? 'skipped-allowlist' : (result && result.disabled) ? 'disabled' : 'sent';
+    return ok(res, { ok: true, status, to, dj: { id: dj.id, name: dj.name, email: dj.email } });
+  }
 
   // --- trabajador por horas (Josep): indica las horas realizadas tras la boda ---
   if (seg[2] === 'mis-horas' && method === 'POST') {
