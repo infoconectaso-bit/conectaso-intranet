@@ -7,6 +7,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { store, users, DATA_DIR } = require('./db');
 const auth = require('./auth');
 const mail = require('./mail');
@@ -29,7 +30,22 @@ function send(res, status, body, headers = {}) {
   const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
   // 'no-store': las respuestas de la API nunca se cachean en el navegador. Sin esto, algunos
   // navegadores servían un listado antiguo (p. ej. un evento recién asignado no aparecía).
-  res.writeHead(status, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' }, headers));
+  const h = Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' }, headers);
+  // Compresión gzip: los listados (eventos, usuarios) ocupan cientos de KB en JSON y se
+  // reducen ~85% comprimidos, acelerando mucho la carga. Solo si el navegador lo acepta
+  // y la respuesta es grande (umbral 1KB); el coste de CPU es mínimo para este tráfico.
+  const ae = (res.req && res.req.headers['accept-encoding']) || '';
+  const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  if (/\bgzip\b/.test(ae) && buf.length >= 1024 && !h['Content-Encoding']) {
+    try {
+      const gz = zlib.gzipSync(buf);
+      h['Content-Encoding'] = 'gzip';
+      h['Vary'] = 'Accept-Encoding';
+      res.writeHead(status, h);
+      return res.end(gz);
+    } catch (e) { /* si falla, se envía sin comprimir */ }
+  }
+  res.writeHead(status, h);
   res.end(data);
 }
 const ok = (res, body) => send(res, 200, body);
@@ -61,6 +77,13 @@ function serveStatic(req, res, urlPath) {
     }
     const ext = path.extname(full).toLowerCase();
     const cache = /\/assets\//.test(rel) ? 'public, max-age=31536000, immutable' : 'no-cache';
+    const ae = (req.headers['accept-encoding'] || '');
+    const textAsset = /\.(js|css|svg|json|html|webmanifest|map|txt)$/i.test(ext);
+    // Comprimir JS/CSS/SVG: el bundle pesa bastante y en la primera carga se nota.
+    if (textAsset && /\bgzip\b/.test(ae)) {
+      res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': cache, 'Content-Encoding': 'gzip', 'Vary': 'Accept-Encoding' });
+      return fs.createReadStream(full).pipe(zlib.createGzip()).pipe(res);
+    }
     res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': cache, 'Content-Length': stat.size });
     fs.createReadStream(full).pipe(res);
   });
