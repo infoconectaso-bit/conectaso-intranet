@@ -185,6 +185,48 @@ async function handle(req, res, seg, method, url) {
   const action = seg[1] || body.action;
   const cookie = body.cookie || ''; const ua = body.ua || '';
 
+  // MIGRAR ARCHIVOS: descarga los ficheros de la intranet (/public/uploads/{id}/files/*) y los
+  // guarda en la réplica (tabla files + disco). Server->server con la cookie del admin.
+  if (action === 'migrate-files') {
+    const dbm = require('./db'); const path = require('path'); const fs = require('fs'); const crypto = require('crypto');
+    const UP = path.join(dbm.DATA_DIR, 'uploads');
+    const ids = (body.ids || []).map(Number);
+    const uploadedBy = +body.adminId || null;
+    const MAXB = 120 * 1024 * 1024; // tope por archivo 120MB
+    const safe = n => String(n || 'archivo').normalize('NFKD').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120) || 'archivo';
+    const mimeOf = n => ({ pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', mp3: 'audio/mpeg', mp4: 'video/mp4', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }[(n.split('.').pop() || '').toLowerCase()] || 'application/octet-stream');
+    const existsStmt = dbm.db.prepare('SELECT COUNT(*) AS n FROM files WHERE collection = ? AND record_id = ? AND name = ?');
+    const insStmt = dbm.db.prepare('INSERT INTO files (id, collection, record_id, name, description, mime, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const out = [];
+    for (const id of ids) {
+      const rep = { id, files: [], skipped: [], errors: [] };
+      try {
+        const page = await srcFetch('/admin/events/update/' + id, cookie, ua);
+        // enlaces a archivos de la sección "archivos": /public/uploads/{id}/files/{nombre}
+        const re = new RegExp('/public/uploads/' + id + '/files/([^"\'\\s>]+)', 'g');
+        const names = [...new Set([...page.text.matchAll(re)].map(m => decodeURIComponent(m[1])))];
+        for (const name of names) {
+          try {
+            if (existsStmt.get('events', id, name).n > 0) { rep.skipped.push(name); continue; }
+            const url = SRC_BASE + '/public/uploads/' + id + '/files/' + encodeURIComponent(name);
+            const r = await fetch(url, { headers: { cookie, 'user-agent': ua || 'Mozilla/5.0' } });
+            if (!r.ok) { rep.errors.push(name + ' (http ' + r.status + ')'); continue; }
+            const buf = Buffer.from(await r.arrayBuffer());
+            if (!buf.length) { rep.errors.push(name + ' (vacío)'); continue; }
+            if (buf.length > MAXB) { rep.errors.push(name + ' (demasiado grande ' + Math.round(buf.length / 1048576) + 'MB)'); continue; }
+            const fid = crypto.randomBytes(12).toString('hex');
+            const dir = path.join(UP, 'boda-' + id); fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(path.join(dir, fid + '-' + safe(name)), buf);
+            insStmt.run(fid, 'events', id, name, '', mimeOf(name), buf.length, uploadedBy);
+            rep.files.push({ name, size: buf.length });
+          } catch (e) { rep.errors.push(name + ' (' + e.message + ')'); }
+        }
+      } catch (e) { rep.errors.push('PAGE: ' + e.message); }
+      out.push(rep);
+    }
+    return send(res, 200, { ok: true, results: out });
+  }
+
   // QA (protegido por secreto): utilidades puntuales para limpiar pruebas y verificar el volcado.
   if (action === 'qa') {
     const dbm = require('./db'); const store = dbm.store, users = dbm.users; const authm = require('./auth');
