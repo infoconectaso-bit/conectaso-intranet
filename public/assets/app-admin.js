@@ -336,7 +336,7 @@ on(/^#\/localizaciones$/, async () => {
     <div class="panel"><div class="panel__body">${table('dtLocs', { rows: items, order: [1, 'asc'], filters: true, cols: [
       { t: 'Id', get: l => l.id }, { t: 'Nombre', get: l => l.name, html: l => `<a data-edit="${l.id}">${esc(l.name)}</a>` },
       { t: 'Dirección', get: l => l.direction || '' }, { t: 'Responsable', get: l => l.responsable || '' },
-      { t: 'Precio boda', get: l => l.weddingPrice ? l.weddingPrice + ' €' : '—', nofilter: true }, { t: 'Hora extra', get: l => l.extraPrice ? l.extraPrice + ' €' : '—', nofilter: true },
+      { t: 'Precio boda', get: l => l.weddingPrice ? l.weddingPrice + ' €' : '—', nofilter: true }, { t: 'Precio ceremonia', get: l => l.ceremonyPrice ? l.ceremonyPrice + ' €' : '—', nofilter: true }, { t: 'Hora extra', get: l => l.extraPrice ? l.extraPrice + ' €' : '—', nofilter: true },
       { t: 'Color', get: l => l.colorHex || '', html: l => `<span class="loc-badge" style="background:${esc(l.colorHex || '#777')}">${esc(l.colorHex || '')}</span>`, nofilter: true },
       { t: '', nosort: true, nofilter: true, html: l => `<div class="row-actions"><a class="btn btn--sm" href="#/plano/${l.id}">Plano</a><button class="btn btn--sm" data-edit="${l.id}">Editar</button><button class="btn btn--icon" data-del="${l.id}">🗑</button></div>` },
     ] })}</div></div>`, ['Localizaciones']);
