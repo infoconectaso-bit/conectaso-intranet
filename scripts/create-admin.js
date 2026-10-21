@@ -15,7 +15,7 @@ if (!args.length) { console.error('Uso: node scripts/create-admin.js <email> [no
 function makeLink(u) {
   const token = auth.createToken(u.id, 'invite');
   const base = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
-  return `${base}/activar?token=${token}`;
+  return `${base}/#/activar?token=${token}`;
 }
 
 if (args[0] === '--invite') {

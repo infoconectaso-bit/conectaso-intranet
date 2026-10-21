@@ -171,8 +171,8 @@ async function testEmails(req, res, user) {
   const to = String((body && body.to) || user.email || '').trim();
   if (!to || to.indexOf('@') < 0) return fail(res, 400, 'Indica un email de destino válido.');
   const base = APP_URL();
-  const link = (base || '') + '/activar?token=DEMO-TOKEN';
-  const resetLink = (base || '') + '/recuperar?token=DEMO-TOKEN';
+  const link = (base || '') + '/#/activar?token=DEMO-TOKEN';
+  const resetLink = (base || '') + '/#/activar?token=DEMO-TOKEN';
   const evLink = (base || '') + '/#/eventos/0';
   const ev = { id: 0, conyuges: 'Laura & Marc (prueba)', fecha: '2026-11-08', lugar: 0, hora: '17:30' };
   const uUser = { name: 'Laura & Marc', email: to, role: 'user' };
@@ -398,7 +398,7 @@ async function forgot(req, res) {
   if (row && row.active && !auth.rateLimited('forgot:' + ip, 5)) {
     auth.noteAttempt('forgot:' + ip);
     const token = auth.createToken(row.id, 'reset');
-    const link = `${APP_URL() || ''}/activar?token=${token}`;
+    const link = `${APP_URL() || ''}/#/activar?token=${token}`;
     if (mail.enabled()) {
       const em = emails.resetEmail(row, link, APP_URL());
       mail.sendMail({ to: row.email, subject: em.subject, text: em.text, html: em.html }).catch(() => {});
@@ -826,7 +826,7 @@ async function usersApi(req, res, user, seg, method) {
 }
 function makeInvite(u) {
   const token = auth.createToken(u.id, 'invite');
-  const link = `${APP_URL() || ''}/activar?token=${token}`;
+  const link = `${APP_URL() || ''}/#/activar?token=${token}`;
   const out = { link, sent: false };
   if (mail.enabled() && u.email) {
     const em = emails.inviteEmail(u, link, APP_URL());   // email HTML bonito, con texto según el rol
