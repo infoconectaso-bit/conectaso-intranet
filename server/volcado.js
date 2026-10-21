@@ -203,6 +203,16 @@ async function handle(req, res, seg, method, url) {
         });
       }
       if (cmd === 'inspect') { return send(res, 200, { ok: true, events: (body.ids || []).map(id => store.get('events', +id)) }); }
+      if (cmd === 'fakes') { // eventos/usuarios por encima del id real máximo (los que creamos nosotros)
+        const evMax = body.evMax || 2726; const uMax = body.uMax || 2078;
+        return send(res, 200, { ok: true,
+          fakeEvents: store.all('events').filter(e => e.id > evMax).map(e => ({ id: e.id, tipo: e.tipo, fecha: e.fecha || '', conyuges: (e.conyuges || '').slice(0, 30), dj: e.djId || '' })),
+          fakeUsers: users.all().filter(u => u.id > uMax).map(u => ({ id: u.id, role: u.role, name: (u.name || '').slice(0, 30), email: u.email })) });
+      }
+      if (cmd === 'find-users') { // buscar usuarios por nombre/email (para localizar cuentas de Jordi/Dowhile)
+        const q = String(body.q || '').toLowerCase();
+        return send(res, 200, { ok: true, users: users.all().filter(u => ((u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))).map(u => ({ id: u.id, role: u.role, name: u.name, email: u.email })) });
+      }
       if (cmd === 'patch-events') { // corrige services/coUsers/userId de eventos ya importados (fix del bug de mapeo)
         const list = body.patch || []; let n = 0;
         dbm.transaction(() => { list.forEach(p => { const e = store.get('events', +p.id); if (!e) return; if (p.services !== undefined) e.services = p.services; if (p.coUsers !== undefined) e.coUsers = p.coUsers; if (p.userId !== undefined) e.userId = p.userId; store.put('events', e); n++; }); });

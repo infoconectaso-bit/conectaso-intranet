@@ -476,7 +476,7 @@ async function changePassword(req, res, user) {
 // Nandez (713) y DJ Gallego (850). (Ampliable; Corcoy NO es excepción.)
 const MULTI_SAMEDAY_OK = { '713': 1, '850': 1 };
 // Trabajadores que no se revisan en "precios por revisar" (gerencia / por horas / etc.).
-const PRICE_ALERT_SKIP = [227, 1095, 234, 292, 1813, 276, 713];
+const PRICE_ALERT_SKIP = [226, 227, 1095, 234, 292, 1813, 276, 713];  // 226/227 = Adria DJ (nunca lleva precio)
 const uName = id => (users.get(id) || {}).name || ('#' + id);
 function onVacation(workerId, date) {
   if (!workerId || !date) return null;
@@ -496,6 +496,7 @@ function staffConflicts() {
   const out = [];
   Object.keys(byDay).forEach(date => Object.keys(byDay[date]).forEach(w => {
     if (MULTI_SAMEDAY_OK[String(w)]) return;              // puede hacer 2/día siempre
+    { const wu = users.get(+w); if (wu && wu.role === 'planner') return; }  // las wedding planners sí pueden 2/día
     if (acked.has(dupAckKey(w, date))) return;            // caso puntual ya avisado
     const evs = byDay[date][w]; if (evs.length >= 2) out.push({ date, workerId: +w, workerName: uName(+w), events: evs });
   }));
