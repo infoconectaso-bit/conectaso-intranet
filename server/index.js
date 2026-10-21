@@ -217,7 +217,7 @@ async function testEmails(req, res, user) {
     ['Recordatorio 15 días', () => emails.coupleReminderEmail(ev, demoMagic, base)],
     ['Recordatorio 7 días (música)', () => emails.coupleMusicEmail(ev, demoMagic, base)],
     ['Parte del DJ (boda finalizada)', () => emails.djAlbaranEmail(uDj, ev, demoMagic, base)],
-    ['Aviso de solicitud de extra', () => emails.extraRequestEmail(ev, ['Máquina de humo', 'Sparklers / chispas frías'], 'Can Oliver Carpa', evLink, base)],
+    ['Aviso de solicitud de extra', () => emails.extraRequestEmail(ev, ['Máquina de humo', 'Sparklers / chispas frías'], 'Can Oliver Carpa', demoMagic, base)],
   ];
 
   // El proveedor de correo suele limitar los correos por segundo. Se envían ESPACIADOS y
@@ -632,10 +632,20 @@ function notifyNewExtraRequests(user, oldEv, newEv) {
   if (!nuevos.length) return;
   const finca = (store.get('locations', newEv.lugar) || {}).name || newEv.lugarOtro || '—';
   const items = nuevos.map(k => extraLabel(k));
-  const link = APP_URL() + '/#/eventos/' + newEv.id;
-  const em = emails.extraRequestEmail(newEv, items, finca, link, APP_URL());
   store.audit(user.id, 'extra-request', 'events', newEv.id);
-  if (mail.enabled()) { try { mail.sendMail({ to: FACT_EMAIL, subject: em.subject, text: em.text, html: em.html }); } catch (e) { console.error('[aviso extra] email:', e.message); } }
+  if (!mail.enabled()) return;
+  // Se avisa a administración. Cada admin recibe un enlace que le AUTOLOGUEA como admin y
+  // le lleva a la boda (aunque tuviera otra cuenta abierta). A facturación va un enlace normal.
+  const admins = users.all().filter(u => u.role === 'admin' && u.email);
+  const sendExtra = (to, uid) => {
+    const link = uid ? (APP_URL() + '/#/albaran?token=' + auth.createToken(uid, 'magic') + '&ev=' + newEv.id) : (APP_URL() + '/#/eventos/' + newEv.id);
+    const em = emails.extraRequestEmail(newEv, items, finca, link, APP_URL());
+    try { mail.sendMail({ to, subject: em.subject, text: em.text, html: em.html }); } catch (e) { console.error('[aviso extra] email:', e.message); }
+  };
+  const seen = new Set();
+  admins.forEach(a => { seen.add(a.email.toLowerCase()); sendExtra(a.email, a.id); });
+  // A facturación (posible buzón compartido) un enlace normal: evita dar sesión de admin a quien lo lea.
+  if (FACT_EMAIL && !seen.has(FACT_EMAIL.toLowerCase())) sendExtra(FACT_EMAIL, null);
 }
 
 async function events(req, res, user, seg, method, url) {
