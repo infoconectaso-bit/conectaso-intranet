@@ -1326,16 +1326,18 @@ on(/^#\/eventos\/(\d+)\/pdf$/, async m => {
   loading(['Eventos', 'PDF']);
   const { event: ev } = await api('events/' + m[1]);
   const NI = '<b>No indicado</b>', val = v => v ? `<b>${esc(v)}</b>` : NI;
+  // En el resumen musical: el MOMENTO va en negrita y el título de la canción normal.
+  const pv = v => v ? esc(v) : '<span class="muted">No indicado</span>';
   const label = (k, def) => momentTitle(ev, k, (ev.labels && ev.labels[k]) || def);
   const opts = (ev.optionals || []).slice().sort((a, b) => (+a.order || 99) - (+b.order || 99));
   const area = key => {
     const fixed = (key === 'disco' ? DISCO_MOMENTS : musicAreasFor(ev).find(a => a.key === key).moments)
-      .map((mm, i) => { const k = key + '_' + mm[0], mu = (ev.music || {})[k] || {}; return { on: mu.on, order: +mu.order || (i + 1), html: `<div><span class="m-ic">${momentIcon(k)}</span> ${esc(label(k, mm[1]))} : ${val(mu.song)} ${linkChip(mu.link)}</div>` }; })
+      .map((mm, i) => { const k = key + '_' + mm[0], mu = (ev.music || {})[k] || {}; return { on: mu.on, order: +mu.order || (i + 1), html: `<div><span class="m-ic">${momentIcon(k)}</span> <b>${esc(label(k, mm[1]))}</b> : ${pv(mu.song)} ${linkChip(mu.link)}</div>` }; })
       .filter(x => !x.on);
-    const extra = opts.filter(o => (o.sec || 'C') === (SEC_OF[key] || (key === 'disco' ? 'D' : ''))).map(o => ({ order: +o.order || 60, html: `<div>• ${esc(o.title)} : ${val(o.value)} ${linkChip(o.link)}</div>` }));
+    const extra = opts.filter(o => (o.sec || 'C') === (SEC_OF[key] || (key === 'disco' ? 'D' : ''))).map(o => ({ order: +o.order || 60, html: `<div>• <b>${esc(o.title)}</b> : ${pv(o.value)} ${linkChip(o.link)}</div>` }));
     return fixed.concat(extra).sort((a, b) => a.order - b.order).map(x => x.html).join('');
   };
-  const ent = opts.filter(o => (o.sec || 'C') === 'E').map(o => `<div>• Entrega para: ${esc(o.title)} : ${val(o.value)} ${linkChip(o.link)}</div>`).join('');
+  const ent = opts.filter(o => (o.sec || 'C') === 'E').map(o => `<div>• <b>Entrega para: ${esc(o.title)}</b> : ${pv(o.value)} ${linkChip(o.link)}</div>`).join('');
   const extrasList = EXTRAS_CLIENTE.filter(x => ev.extras && ev.extras[x[0]]).map(x => `<div>• ${esc(x[1])}</div>`).join('');
   const sp = ev.spouses || [{}, {}];
   const head = `<div class="pdf-head"><img src="assets/brand/logo-principal-azul.svg" alt="Conecta So"><div style="text-align:right;color:#777;font-size:10px">Configuración musical de boda<br>${esc(ev.conyuges)}<br>${dmy(ev.fecha)}</div></div>`;
