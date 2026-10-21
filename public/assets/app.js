@@ -238,9 +238,12 @@ window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); _defer
 window.addEventListener('appinstalled', () => { try { localStorage.setItem('cs_install_off', '1'); } catch (e) {} _deferredInstall = null; });
 const _isStandalone = () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
 const _isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+// Solo móvil/tablet: en ordenador no se ofrece instalar la app.
+const _isMobile = () => /android|iphone|ipad|ipod|iemobile|blackberry|opera mini|mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 function maybeInstallPrompt() {
   try {
     if (!S.user || ['user', 'planner', 'dj'].indexOf(S.user.role) < 0) return;  // novios, wedding planner y DJs
+    if (!_isMobile()) return;                                                    // solo en móvil/tablet, nunca en ordenador
     if (_isStandalone()) return;                                                 // ya está instalada
     if (localStorage.getItem('cs_install_off') === '1') return;                  // instalada o "no volver a mostrar"
     if (sessionStorage.getItem('cs_install_shown') === '1') return;             // una vez por sesión
