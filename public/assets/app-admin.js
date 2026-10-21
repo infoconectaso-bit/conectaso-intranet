@@ -82,7 +82,7 @@ async function solicitudesExtras() {
       modal('Reserva de extras · Boda #' + ev, `<p>Copia este mensaje y pégalo en el grupo de WhatsApp de la pareja:</p>
         <pre class="msg-preview">${esc(waTxt)}</pre>
         <div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn--sm btn--primary" id="waCopyA">📋 Copiar texto</button></div>`,
-        { okText: 'Marcar como confirmada', onOk: async () => { await api('events/' + ev + '/extra-confirm', { method: 'POST', body: { key: k } }); toast('Confirmada', 'ok'); solicitudesExtras(); } });
+        { okText: 'Mensaje enviado', onOk: async () => { await api('events/' + ev + '/extra-confirm', { method: 'POST', body: { key: k } }); toast('Mensaje enviado · pendiente de pago', 'ok'); solicitudesExtras(); } });
       setTimeout(() => { const c = document.getElementById('waCopyA'); if (c) c.onclick = () => copyText(waTxt).then(ok => toast(ok ? 'Texto copiado' : 'No se pudo copiar, selecciónalo a mano', ok ? 'ok' : 'err')); }, 60); });
     $$('[data-dec]').forEach(b => b.onclick = () => { const [ev, k] = splitD(b.dataset.dec);
       modal('Declinar solicitud', `¿Declinar <b>${esc(exName(k))}</b> de la boda #${ev}? Se quitará de su evento.`, { okText: 'Declinar', danger: true, onOk: async () => { await api('events/' + ev + '/extra-decline', { method: 'POST', body: { key: k } }); toast('Solicitud declinada', 'ok'); solicitudesExtras(); } }); });
@@ -218,7 +218,7 @@ async function usuariosPage(openId) {
     $$('[data-edit]').forEach(b => b.onclick = () => userForm(users.find(u => u.id == b.dataset.edit), users));
     $$('[data-invite]').forEach(b => b.onclick = async () => { const r = await api('users/' + b.dataset.invite + '/invite', { method: 'POST' }); showInvite(r.invite); });
     $$('[data-cal]').forEach(b => b.onclick = () => calForUser(users.find(u => u.id == b.dataset.cal)));
-    $$('[data-del]').forEach(b => b.onclick = () => modal('Dar de baja', '¿Eliminar esta cuenta? El usuario perderá el acceso.', { okText: 'Eliminar', danger: true, onOk: async () => { await api('users/' + b.dataset.del, { method: 'DELETE' }); toast('Usuario eliminado', 'ok'); location.hash = '#/usuarios'; CS.route ? CS.route() : location.reload(); } }));
+    $$('[data-del]').forEach(b => b.onclick = () => modal('Dar de baja', '¿Eliminar esta cuenta? El usuario perderá el acceso.', { okText: 'Eliminar', danger: true, onOk: async () => { await api('users/' + b.dataset.del, { method: 'DELETE' }); toast('Usuario eliminado', 'ok'); usuariosPage(); } }));
   });
   if (openId) { const u = users.find(x => x.id == openId); if (u) userForm(u, users); }
 }
@@ -232,9 +232,15 @@ function calForUser(u) {
     .catch(e => toast(e.message || 'No se pudo crear la boda', 'err'));
 }
 function showInvite(invite) {
-  modal('Enlace de acceso', invite.sent
-    ? `<p>Hemos enviado un correo con el enlace de acceso.</p>`
-    : `<p>Comparte este enlace con la persona para que cree su contraseña (caduca en 14 días):</p><input class="control" readonly value="${esc(invite.link)}" onclick="this.select()">`);
+  if (invite.sent) { modal('Enlace de acceso', `<p>✅ Hemos enviado un correo con el enlace de acceso a <b>${esc(invite.to || '')}</b>.</p>`); return; }
+  const note = invite.reason === 'allowlist'
+      ? `<p class="hint">⚠ El correo <b>NO</b> se envió: <b>${esc(invite.to || 'esa dirección')}</b> no está en la lista blanca de pruebas. Añádela en <b>Ajustes → Correo</b> (campo "Lista blanca") o comparte el enlace de abajo a mano.</p>`
+    : invite.reason === 'disabled'
+      ? `<p class="hint">⚠ El envío de correo está desactivado. Comparte el enlace de abajo a mano.</p>`
+    : invite.reason === 'error'
+      ? `<p class="hint">⚠ No se pudo enviar el correo. Comparte el enlace de abajo a mano.</p>`
+    : '';
+  modal('Enlace de acceso', `${note}<p>Comparte este enlace con la persona para que cree su contraseña (caduca en 14 días):</p><input class="control" readonly value="${esc(invite.link)}" onclick="this.select()">`);
 }
 function userForm(u, all) {
   const creating = !u.id;
@@ -299,7 +305,7 @@ function userForm(u, all) {
       try {
         if (creating) { const r = await api('users', { method: 'POST', body: { email: d.mail, name: d.name, role: d.role, data } }); await CS.loadContext(); showInvite(r.invite); }
         else { await api('users/' + u.id, { method: 'PUT', body: { email: d.mail, name: d.name, role: d.role, data } }); await CS.loadContext(); toast('Guardado', 'ok'); }
-        location.hash = '#/usuarios';
+        if (location.hash === '#/usuarios') usuariosPage(); else location.hash = '#/usuarios';
       } catch (e) { toast(e.message, 'err'); return true; }
     } });
   const rw = $('#resendWelcome', bg); if (rw) rw.onclick = async () => { try { const r = await api('users/' + u.id + '/invite', { method: 'POST' }); toast('Mensaje de bienvenida reenviado', 'ok'); showInvite(r.invite); } catch (e) { toast(e.message || 'No se pudo reenviar', 'err'); } };

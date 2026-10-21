@@ -34,6 +34,22 @@ const tt = (es, ca, en, fr) => ({ es: es, ca: ca || es, en: en || es, fr: fr || 
 // Una boda se considera finalizada al DÍA SIGUIENTE a las 05:00 (hora local): hasta entonces sigue pendiente.
 const bizToday = () => { const d = new Date(Date.now() - 5 * 3600000); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const eventFinished = ev => !!(ev && ev.fecha && ev.fecha < bizToday());
+// la boda ha EMPEZADO: hora actual >= inicio real (hora de ceremonia; si la ceremonia
+// es fuera de la finca, la hora de inicio del aperitivo). Antes de ese momento se
+// considera que aún no ha comenzado, aunque ya sea el mismo día.
+const eventStarted = ev => {
+  if (!ev || !ev.fecha) return false;
+  if (eventFinished(ev)) return true;                 // día siguiente: ya pasó
+  const now = new Date();
+  const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  if (ev.fecha < todayStr) return true;               // fecha pasada
+  if (ev.fecha > todayStr) return false;              // fecha futura
+  const hm = ev.ceremoniaFuera ? ev.celebrationHour : ev.hora;  // mismo día: comparar hora
+  const m = /^(\d{1,2}):(\d{2})/.exec(hm || '');
+  if (!m) return false;                               // sin hora definida: aún no mostrar
+  const start = (+m[1]) * 60 + (+m[2]);
+  return (now.getHours() * 60 + now.getMinutes()) >= start;
+};
 
 /* catálogos del formulario de evento */
 const MUSIC_AREAS = [
@@ -180,7 +196,13 @@ async function eventsList(done) {
   ];
   if (admin) cols.push(
     { t: 'Pago', get: e => '', html: e => pagoChip(e), nosort: true },
-    { t: 'Usuario', get: e => clientName(e), html: e => `<a href="#/usuario/${e.userId}" title="Ver ficha del cliente">${e.userId} - ${esc(clientName(e))}</a>` });
+    { t: 'Clientes', get: e => clientName(e) + ' ' + [e.userId].concat(e.coUsers || []).join(' '),
+      html: e => {
+        const co = (e.coUsers || []).map(Number).filter(id => id && id !== +e.userId);
+        const main = `<a href="#/usuario/${e.userId}" title="Titular de la boda">${e.userId} - ${esc(clientName(e))}</a>`;
+        const extra = co.map(id => `<a href="#/usuario/${id}" class="co-id" title="Cliente vinculado a esta boda">+ ${id}${userName(id) ? ' - ' + esc(userName(id)) : ''}</a>`).join('');
+        return `<div class="cli-ids">${main}${extra}</div>`;
+      } });
   cols.push({ t: '', nosort: true, html: e => `<div class="row-actions"><a class="btn btn--icon" href="#/eventos/${e.id}" title="Abrir / editar">${svg('edit')}</a><a class="btn btn--icon" href="#/eventos/${e.id}/pdf" title="PDF">${svg('doc')}</a>${admin ? `<button class="btn btn--icon" data-del-event="${e.id}" title="Borrar">🗑</button>` : ''}</div>` });
   const title = done ? 'Bodas realizadas' : 'Bodas pendientes';
   const lead = admin ? 'Gestiona todas las bodas y eventos creados.' : (S.user.role === 'planner' ? 'Bodas en las que estás asignado/a.' : 'Tus eventos asignados.');
@@ -252,7 +274,7 @@ function eventEditorAdmin(ev) {
     </div></div>
     <div class="tabs-row">
       ${adminTabs}
-      ${simple ? '' : `<label class="switch switch--onoff edituser-toggle" title="La edición se cierra sola 7 días antes de la boda. Actívala aquí para volver a habilitarla."><span class="edituser-lbl">Edición cliente</span><input type="checkbox" name="habilitar_edicion_para_usuario" ${ev.canEdit ? 'checked' : ''}><span class="track"></span><span class="switch-state">${ev.canEdit ? 'Activado' : 'Desactivado'}</span></label>`}
+      ${simple ? '' : `<label class="switch switch--onoff edituser-toggle" title="La edición del cliente se cierra sola 7 días antes de la boda. Dentro de esos 7 días, actívala aquí para reabrirla puntualmente."><span class="edituser-lbl">Edición cliente</span><input type="checkbox" name="habilitar_edicion_para_usuario" ${(ev.editUser || ev.editUnlock) ? 'checked' : ''}><span class="track"></span><span class="switch-state">${(typeof ev.daysToEvent === 'number' && ev.daysToEvent > 7) ? 'Abierta (auto)' : ((ev.editUser || ev.editUnlock) ? 'Reabierta' : 'Cerrada')}</span></label>`}
     </div>
     ${lockNotice}
     <div data-pane="datos">${paneDatos(ev, locOpts)}${simple ? '' : accessBlock(ev)}</div>
@@ -462,6 +484,7 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
     ${fg('Lugar de la ceremonia', inp('wedding_location', ev.lugarCeremonia, ro))}
     ${fg(tt('Ceremonia fuera del lugar de la celebración', 'Cerimònia fora del lloc de la celebració', 'Ceremony away from the venue', 'Cérémonie hors du lieu de réception'), `<label class="chk"><input type="checkbox" name="ceremony_outside" ${ev.ceremoniaFuera ? 'checked' : ''} ${readonly ? 'disabled' : ''}> <span>${tt('Marca si la ceremonia se celebra fuera de la finca (no realizamos la sonorización de ceremonia)', 'Marca si la cerimònia se celebra fora de la finca (no fem la sonorització de cerimònia)', 'Tick if the ceremony is held away from the venue (we do not provide ceremony sound)', 'Cochez si la cérémonie a lieu hors du lieu (nous ne sonorisons pas la cérémonie)')}</span></label>`)}
     ${fg('Nº de invitados', inp('guest_number', ev.guests, { type: 'number', ...ro }))}
+    ${(S.user.role === 'user' && ev.djName) ? fg('Vuestro DJ', `<div class="readbox"><b>${esc(ev.djName)}</b></div><p class="hint">Asignación final de vuestro DJ.</p>`) : ''}
     ${isAdmin() ? fg('Observaciones ocultas', ta('privat_observations', ev.obsPriv, 'Solo las ven administración y el DJ')) : (S.user.role === 'dj' && ev.obsPriv !== undefined ? fg('Observaciones ocultas', `<div class="readbox">${esc(ev.obsPriv) || '<span class="muted">Sin observaciones ocultas</span>'}</div>`) : '')}
   </div></div></div>
   ${isAdmin() ? `<div class="mblock mblock--of"><h4>Asignaciones</h4><div class="inner"><div class="form-grid">
@@ -791,8 +814,10 @@ function paneFacturacion(ev) {
     : `<p class="hint" style="margin-top:14px">Los pluses solo pueden añadirse <b>una vez finalizada la boda</b>.</p>`) : '';
   return `<div class="panel"><div class="panel__head"><h3>Facturación del evento</h3></div><div class="panel__body">
     <h4 class="form-sub">Coste de personal</h4>
-    ${rows ? `<div class="table-wrap"><table class="dt"><tbody>${rows}</tbody></table></div>` : '<div class="empty">Sin datos de facturación.</div>'}
-    ${revRows ? `<h4 class="form-sub" style="margin-top:18px">Ingresos y beneficio</h4><div class="table-wrap"><table class="dt"><tbody>${revRows}</tbody></table></div>` : ''}
+    ${eventStarted(ev)
+      ? (rows ? `<div class="table-wrap"><table class="dt"><tbody>${rows}</tbody></table></div>` : '<div class="empty">Sin datos de facturación.</div>')
+      : '<div class="empty">Disponible a partir de la hora de inicio del evento.</div>'}
+    ${eventStarted(ev) && revRows ? `<h4 class="form-sub" style="margin-top:18px">Ingresos y beneficio</h4><div class="table-wrap"><table class="dt"><tbody>${revRows}</tbody></table></div>` : ''}
     ${(ev.plus || []).length ? `<h4 class="form-sub">Pluses</h4>${plusList}` : ''}${plusAdd}
     ${eventFinished(ev) ? `<h4 class="form-sub" style="margin-top:18px">Albarán de trabajo del DJ</h4>
       <div class="form-grid">${fg('Horas extra realizadas', sel('dj_assigned_overtime', [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas', '4 hora y media', '5 Horas'], ev.djOvertime))}${fg('Pedir opinión', sel('ask_for_opinion', [['', '—'], 'Si', 'No'], ev.opinion))}</div>
@@ -947,7 +972,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   if (full) ['event_total_import', 'event_payed_import'].forEach(n => { const i = form.querySelector('[name=' + n + ']'); if (i) i.addEventListener('input', () => { const t = +form.event_total_import.value || 0, p = +form.event_payed_import.value || 0; if (el('pendField')) el('pendField').value = (t - p) + ' €'; }); });
   // toggle Habilitar edición: texto Activado/Desactivado en vivo
   const enTog = form.querySelector('[name=habilitar_edicion_para_usuario]');
-  if (enTog) enTog.addEventListener('change', () => { const st = enTog.closest('.switch--onoff').querySelector('.switch-state'); if (st) st.textContent = enTog.checked ? 'Activado' : 'Desactivado'; });
+  if (enTog) enTog.addEventListener('change', () => { const st = enTog.closest('.switch--onoff').querySelector('.switch-state'); if (st) st.textContent = enTog.checked ? 'Reabierta' : 'Cerrada'; });
   // tarjetas de servicios extra: marcar/desmarcar en vivo
   form.addEventListener('change', e => {
     const sw = e.target.closest('.switch--incl'); if (sw && e.target.matches('input[type=checkbox]')) { const st = sw.querySelector('.switch-state'); if (st) st.textContent = e.target.checked ? 'Desactivado' : 'Activado'; const mo = e.target.closest('[data-moment]'); if (mo) mo.classList.toggle('moment--off', e.target.checked); }
@@ -1264,7 +1289,7 @@ on(/^#\/eventos\/(\d+)\/pdf$/, async m => {
         <div>Fecha de boda : ${val(dmy(ev.fecha))}</div>${isAdmin() ? `<div>Tipo de boda : ${val(ev.tipo)}</div>` : ''}
         <div>Hora de la ceremonia : ${val(ev.hora)}</div><div>Lugar de la ceremonia : ${val(ev.lugarCeremonia)}</div>
         <div>Hora inicio aperitivo : ${val(ev.celebrationHour)}</div><div>Lugar de la celebración : ${val(CS.locName(ev))}</div>
-        <div>DJ asignado : ${val(djOf(ev))}</div><div>Nº de invitados : ${val(ev.guests)}</div></div>
+        ${S.user.role !== 'user' ? `<div>DJ asignado : ${val(djOf(ev))}</div>` : ''}<div>Nº de invitados : ${val(ev.guests)}</div></div>
       <h3 style="font-size:11px">Cónyuges:</h3><div class="pdf-grid">${sp.map(s => `<div><b>${esc(s.name || 'No indicado')}</b>${s.mobile ? ` (${esc(s.mobile)})` : ''}</div>`).join('')}</div>
       <h3>2. Ceremonia</h3>${area('ceremony')}
       <h3>3. Aperitivo</h3>${area('aperitif')}

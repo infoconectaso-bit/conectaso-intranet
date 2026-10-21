@@ -304,8 +304,20 @@ function guessGender(name) {
 // Al firmar el contrato, autorrellena los cónyuges del evento (nombres + DNIs) si aún no están.
 function autofillSpousesFromTyc(user, sign) {
   const ev = eventOfUser(user); if (!ev) return;
-  const names = String(ev.conyuges || '').split(/\s+y\s+/i).map(s => s.trim()).filter(Boolean);
   const cur = ev.spouses || [];
+  // Si el cliente ha indicado los nombres completos en la firma, se usan directamente
+  // y se fija con ellos el nombre del evento (conyuges).
+  const n1 = String(sign.name1 || '').trim(), n2 = String(sign.name2 || '').trim();
+  if (n1 || n2) {
+    ev.spouses = [
+      Object.assign({}, cur[0] || {}, { name: n1 || (cur[0] || {}).name || '', dni: String(sign.dni || '').trim() || (cur[0] || {}).dni || '' }),
+      Object.assign({}, cur[1] || {}, { name: n2 || (cur[1] || {}).name || '', dni: String(sign.dni2 || '').trim() || (cur[1] || {}).dni || '' }),
+    ];
+    const nm = ev.spouses.map(s => s.name).filter(Boolean).join(' y ');
+    if (nm) ev.conyuges = nm;
+    store.put('events', ev); return;
+  }
+  const names = String(ev.conyuges || '').split(/\s+y\s+/i).map(s => s.trim()).filter(Boolean);
   const hasData = cur.some(s => s && (s.name || s.dni));
   if (hasData) {
     // Ya hay datos (p. ej. admin): solo rellena DNIs que falten, sin reordenar ni pisar nombres.
@@ -607,7 +619,11 @@ function enrichEvent(out, ev, user) {
   out.daysToEvent = perm.daysUntilEvent(ev);
   const ids = [ev.userId].concat(ev.coUsers || []).filter(Boolean);
   out.accessUsers = ids.map(id => { const au = users.get(id) || {}; return { id: +id, name: au.name || '', email: au.email || '', owner: id == ev.userId }; });
-  if (user.role === 'user') { const tot = +ev.pagoCliente || 0, pg = +ev.pagado || 0; out.pago = { total: tot, pagado: pg, pendiente: tot - pg, metodo: ev.metodo || '' }; }
+  if (user.role === 'user') {
+    const tot = +ev.pagoCliente || 0, pg = +ev.pagado || 0; out.pago = { total: tot, pagado: pg, pendiente: tot - pg, metodo: ev.metodo || '' };
+    // El cliente ve el DJ (solo por nombre) cuando faltan menos de 60 días: la asignación final.
+    if (out.daysToEvent != null && out.daysToEvent < 60 && ev.djId) { const dj = users.get(ev.djId); if (dj && dj.name) out.djName = dj.name; }
+  }
   return out;
 }
 
@@ -734,8 +750,9 @@ async function events(req, res, user, seg, method, url) {
     ev.coUsers = ev.coUsers || [];
     if (+ev.userId !== +u.id && ev.coUsers.indexOf(u.id) < 0) ev.coUsers.push(u.id);
     store.put('events', ev); store.audit(user.id, 'invite-user', 'events', id);
-    // El correo está desactivado: se genera el enlace de activación para compartir manualmente.
-    const invite = makeInvite(u);
+    // Se envía el correo de activación (si el correo está activo y el destinatario pasa la lista
+    // blanca); 'invite' indica si se envió de verdad o hay que compartir el enlace a mano.
+    const invite = await makeInvite(u);
     return ok(res, { ok: true, user: { id: u.id, name: u.name, email: u.email }, invite });
   }
   if (seg[2] === 'remove-user' && method === 'POST') {
@@ -844,7 +861,7 @@ async function usersApi(req, res, user, seg, method) {
     if (!body.email) return fail(res, 400, 'El email es obligatorio.');
     if (users.byEmail(body.email)) return fail(res, 409, 'Ya existe un usuario con ese email.');
     const u = users.create({ email: body.email, name: body.name || '', role: body.role || 'user', data: body.data || {} });
-    const invite = makeInvite(u);
+    const invite = await makeInvite(u);
     store.audit(user.id, 'user-create', 'users', u.id);
     return ok(res, { user: u, invite });
   }
@@ -862,18 +879,24 @@ async function usersApi(req, res, user, seg, method) {
     users.del(id); auth.endAllSessions(id); store.audit(user.id, 'user-delete', 'users', id);
     return ok(res, { ok: true });
   }
-  if (seg[2] === 'invite' && method === 'POST') { const u = users.get(id); return ok(res, { invite: makeInvite(u) }); }
+  if (seg[2] === 'invite' && method === 'POST') { const u = users.get(id); return ok(res, { invite: await makeInvite(u) }); }
   return fail(res, 405, 'Método no permitido');
 }
-function makeInvite(u) {
+async function makeInvite(u) {
   const token = auth.createToken(u.id, 'invite');
   const link = `${APP_URL() || ''}/#/activar?token=${token}`;
-  const out = { link, sent: false };
-  if (mail.enabled() && u.email) {
+  const out = { link, sent: false, to: (u && u.email) || '' };
+  if (!u || !u.email) { out.reason = 'no-email'; return out; }
+  if (!mail.enabled()) { out.reason = 'disabled'; return out; }
+  try {
     const em = emails.inviteEmail(u, link, APP_URL());   // email HTML bonito, con texto según el rol
-    mail.sendMail({ to: u.email, subject: em.subject, text: em.text, html: em.html }).then(() => {}).catch(() => {});
-    out.sent = true;
-  }
+    const r = await mail.sendMail({ to: u.email, subject: em.subject, text: em.text, html: em.html });
+    // sendMail devuelve {skipped} si el destinatario no está en la lista blanca, {disabled} si el
+    // correo está apagado, o nada/ok si se envió. Reflejamos el resultado real para no mentir en la UI.
+    if (r && r.skipped) out.reason = 'allowlist';
+    else if (r && r.disabled) out.reason = 'disabled';
+    else out.sent = true;
+  } catch (e) { out.reason = 'error'; out.error = e.message; console.error('[invitación] email:', e.message); }
   return out;
 }
 

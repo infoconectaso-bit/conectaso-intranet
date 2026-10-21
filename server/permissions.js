@@ -9,8 +9,9 @@
 
 // Campos que nunca ve el personal (DJ/planner) en una ficha de evento
 const STAFF_HIDDEN = ['pagoCliente', 'pagado', 'pagoRestaurante', 'metodo', 'factRows', 'plus', 'obsPriv', 'totalCost'];
-// Campos ocultos al cliente
-const CLIENT_HIDDEN = ['factRows', 'plus', 'obsPriv', 'obsDj', 'totalCost', 'djOvertime', 'opinion', 'pagoRestaurante'];
+// Campos ocultos al cliente. 'djId' se oculta: el cliente solo ve a su DJ (por nombre,
+// vía enrichEvent → djName) cuando faltan menos de 60 días, que es la asignación final.
+const CLIENT_HIDDEN = ['factRows', 'plus', 'obsPriv', 'obsDj', 'totalCost', 'djOvertime', 'opinion', 'pagoRestaurante', 'djId'];
 // Campos que el cliente puede modificar cuando la edición está habilitada
 const CLIENT_EDITABLE = ['music', 'optionals', 'disco', 'extras', 'spouses', 'guests', 'celebrationHour', 'lugarCeremonia', 'ceremoniaFuera', 'hora'];
 // El wedding planner puede modificar lo mismo que el cliente (música, extras, horarios,
@@ -51,7 +52,7 @@ function sanitizeEvent(user, ev) {
 }
 
 const EVENT_SUMMARY = ['id', 'tipo', 'conyuges', 'fecha', 'hora', 'lugar', 'lugarOtro', 'estado', 'metodo', 'pagoCliente', 'pagado',
-  'userId', 'services', 'djId', 'wpId', 'editUser', 'guests'];
+  'userId', 'coUsers', 'services', 'djId', 'wpId', 'editUser', 'guests'];
 function summarizeEvent(user, ev) {
   const s = {};
   EVENT_SUMMARY.forEach(k => { if (ev[k] !== undefined) s[k] = ev[k]; });

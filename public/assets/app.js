@@ -334,9 +334,14 @@ async function renderTyc() {
     .replace(/\{novios\}/g, `<b>${esc(a.novios || '—')}</b>`)
     .replace(/\{finca\}/g, `<b>${esc(a.finca || '—')}</b>`)
     .replace(/\{fecha\}/g, `<b>${esc(fecha || '—')}</b>`);
+  const nm = String(a.novios || '').split(/\s+y\s+/i).map(s => s.trim());
   const dniFields = isClient
-    ? `<div class="grid-2"><div class="field"><label>DNI ${esc((a.novios || '').split(' y ')[0] || 'primer cónyuge')}</label><input class="control" id="tDni" placeholder="DNI"></div>
-       <div class="field"><label>DNI ${esc((a.novios || '').split(' y ')[1] || 'segundo cónyuge')}</label><input class="control" id="tDni2" placeholder="DNI"></div></div>`
+    ? `<div class="grid-2">
+         <div class="field"><label>Nombre completo · primer cónyuge</label><input class="control" id="tName1" value="${esc(nm[0] || '')}" placeholder="Nombre y apellidos"></div>
+         <div class="field"><label>DNI · primer cónyuge</label><input class="control" id="tDni" placeholder="DNI"></div>
+         <div class="field"><label>Nombre completo · segundo cónyuge</label><input class="control" id="tName2" value="${esc(nm[1] || '')}" placeholder="Nombre y apellidos"></div>
+         <div class="field"><label>DNI · segundo cónyuge</label><input class="control" id="tDni2" placeholder="DNI"></div>
+       </div>`
     : `<div class="field"><label>DNI</label><input class="control" id="tDni" placeholder="DNI"></div>`;
   app.innerHTML = `<div class="tyc-screen"><div class="tyc-card">
     <div class="tyc-head"><img src="/assets/brand/logo-principal-azul.svg" alt="Conecta So" style="height:40px"><span class="tyc-tag">Contrato interno</span></div>
@@ -346,7 +351,7 @@ async function renderTyc() {
     <div class="tyc-body">${text}</div>
     <form id="tycForm" class="tyc-form">
       ${dniFields}
-      <div class="field"><label>Firma (escribe tu nombre completo)</label><input class="control" id="tName" value="${esc(S.user.name || '')}" placeholder="Nombre y apellidos"></div>
+      ${isClient ? '' : `<div class="field"><label>Firma (escribe tu nombre completo)</label><input class="control" id="tName" value="${esc(S.user.name || '')}" placeholder="Nombre y apellidos"></div>`}
       <label class="tyc-accept"><input type="checkbox" id="tAccept"> He leído y acepto el contrato.</label>
       <div class="tyc-actions"><button type="button" class="btn btn--ghost" id="tLogout">Salir</button><button type="submit" class="btn btn--primary">Firmar y entrar</button></div>
     </form></div></div>`;
@@ -354,13 +359,16 @@ async function renderTyc() {
   el('tLogout').onclick = async () => { await api('auth/logout', { method: 'POST' }); S.user = null; location.hash = '#/'; renderAuth(); };
   form.onsubmit = async e => {
     e.preventDefault();
-    const name = el('tName').value.trim();
+    const name1 = (el('tName1') || {}).value ? el('tName1').value.trim() : '';
+    const name2 = (el('tName2') || {}).value ? el('tName2').value.trim() : '';
+    const name = isClient ? name1 : ((el('tName') || {}).value || '').trim();
     const dni = el('tDni').value.trim();
-    const dni2 = (el('tDni2') || {}).value || '';
+    const dni2 = (el('tDni2') || {}).value ? el('tDni2').value.trim() : '';
     if (!el('tAccept').checked) return toast('Debes marcar que aceptas el contrato', 'err');
-    if (!name) return toast('Escribe tu nombre para firmar', 'err');
-    if (!dni) return toast('Indica tu DNI', 'err');
-    try { const res = await api('tyc/sign', { method: 'POST', body: { name, dni, dni2 } }); S.user = res.user || Object.assign(S.user, { tycSigned: true }); toast('Contrato firmado', 'ok'); location.hash = '#/'; route(); }
+    if (isClient) { if (!name1 || !name2) return toast('Escribe el nombre completo de ambos cónyuges', 'err'); }
+    else if (!name) return toast('Escribe tu nombre para firmar', 'err');
+    if (!dni) return toast('Indica el DNI', 'err');
+    try { const res = await api('tyc/sign', { method: 'POST', body: { name, name1, name2, dni, dni2 } }); S.user = res.user || Object.assign(S.user, { tycSigned: true }); toast('Contrato firmado', 'ok'); location.hash = '#/'; route(); }
     catch (err) { toast(err.message, 'err'); }
   };
 }

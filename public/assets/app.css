@@ -962,3 +962,7 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
   .ruta-deck .slide--auto .esc tr{break-inside:avoid}
   .ruta-deck .slide--auto .esc thead{display:table-header-group}
 }
+
+/* IDs de clientes vinculados a una boda (listado de eventos) */
+.cli-ids{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+.cli-ids .co-id{font-size:12px;opacity:.85}
