@@ -152,7 +152,11 @@ async function api(req, res, url) {
   if (seg[0] === 'collections') return collection(req, res, user, seg, method);
 
   // --- correos de prueba (admin · Configuración avanzada) ---
-  if (seg[0] === 'test-emails' && method === 'POST') return testEmails(req, res, user);
+  if (seg[0] === 'test-emails') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (method === 'POST') return testEmails(req, res, user);
+    if (method === 'GET') return ok(res, lastTestRun || { running: false, results: [] });
+  }
 
   return fail(res, 404, 'Ruta no encontrada');
 }
@@ -186,25 +190,39 @@ async function testEmails(req, res, user) {
     ['Aviso de solicitud de extra', () => emails.extraRequestEmail(ev, ['Máquina de humo', 'Sparklers / chispas frías'], 'Can Oliver Carpa', evLink, base)],
   ];
 
-  // Mailtrap (plan gratis) limita los correos por segundo. Para no superar el límite,
-  // se envían ESPACIADOS y EN SEGUNDO PLANO: la respuesta vuelve al instante y los
-  // correos van llegando solos a la bandeja (uno cada GAP ms).
+  // Mailtrap (plan gratis) limita los correos por segundo. Se envían ESPACIADOS y
+  // EN SEGUNDO PLANO, con REINTENTOS si Mailtrap frena ("too many per second").
+  // El progreso se guarda en lastTestRun para que la pantalla lo muestre en vivo (GET).
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const GAP = +(process.env.TEST_MAIL_GAP_MS || 5000);
+  const GAP = +(process.env.TEST_MAIL_GAP_MS || 6000);
+  const retryable = msg => /5\.7\.0|too many|rate|\b4\d\d\b|timeout|tiempo de espera/i.test(String(msg || ''));
+  lastTestRun = { to, total: jobs.length, startedAt: Date.now(), running: true, results: jobs.map(j => ({ label: j[0], status: 'pendiente' })) };
+  const run = lastTestRun;
+  store.audit(user.id, 'test-emails');
+
   (async () => {
     for (let i = 0; i < jobs.length; i++) {
       if (i > 0) await sleep(GAP);
       const [label, build] = jobs[i];
-      try { const em = build(); await mail.sendMail({ to, subject: '[PRUEBA] ' + em.subject, text: em.text, html: em.html }); console.log('[correo-prueba] ✓', label); }
-      catch (e) { console.error('[correo-prueba] ✗', label, '-', e.message); }
+      run.results[i].status = 'enviando';
+      let sent = false, lastErr = '';
+      for (let t = 1; t <= 4 && !sent; t++) {
+        try { const em = build(); await mail.sendMail({ to, subject: '[PRUEBA] ' + em.subject, text: em.text, html: em.html }); sent = true; }
+        catch (e) { lastErr = e.message || 'error'; if (t < 4 && retryable(lastErr)) await sleep(GAP * t); else break; }
+      }
+      run.results[i].status = sent ? 'ok' : 'error';
+      if (!sent) run.results[i].error = lastErr;
+      console.log('[correo-prueba]', sent ? '✓' : '✗', label, sent ? '' : '- ' + lastErr);
     }
-    console.log('[correo-prueba] terminado →', to);
+    run.running = false; run.finishedAt = Date.now();
+    console.log('[correo-prueba] terminado →', to, '·', run.results.filter(r => r.status === 'ok').length + '/' + run.total);
   })();
 
-  store.audit(user.id, 'test-emails');
   const etaSeconds = Math.round((jobs.length - 1) * GAP / 1000);
   return ok(res, { to, count: jobs.length, etaSeconds });
 }
+// Estado del último envío de prueba (para que la pantalla muestre el progreso en vivo).
+let lastTestRun = null;
 
 /* ---------- login / cuenta ---------- */
 async function login(req, res) {

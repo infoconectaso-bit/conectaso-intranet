@@ -1092,20 +1092,38 @@ on(/^#\/cuenta$/, async () => {
   const advForgot = el('advForgot');
   if (advForgot) advForgot.onclick = () => { const m = el('advMsg'); m.style.display = 'block'; m.innerHTML = 'Te hemos enviado la contraseña a tu email de administración (<b>' + esc(S.user.email || 'tu email') + '</b>).<br><span class="muted">Nota: aún no hay envío de correo real. La contraseña es <b>lamusica20</b>.</span>'; };
   const tmForm = el('testMailForm');
-  if (tmForm) tmForm.onsubmit = async e => {
-    e.preventDefault();
-    const to = (el('testMailTo') || {}).value || '';
-    const m = el('testMailMsg'); const btn = tmForm.querySelector('button[type=submit]');
-    m.style.display = 'block'; m.innerHTML = 'Enviando…'; if (btn) btn.disabled = true;
-    try {
-      const r = await api('test-emails', { method: 'POST', body: { to } });
-      m.innerHTML = '📨 <b>Enviando ' + r.count + ' correos</b> a <b>' + esc(r.to) + '</b>, espaciados para no superar el límite de Mailtrap.<br>'
-        + '<span class="muted">Irán apareciendo solos en tu bandeja durante los próximos <b>~' + r.etaSeconds + ' s</b> (busca el prefijo <b>[PRUEBA]</b>). No hace falta esperar aquí.</span>';
-      toast('Enviando correos de prueba…', 'ok');
-    } catch (err) {
-      m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>';
-      toast('No se pudieron enviar', 'err');
-    } finally { if (btn) btn.disabled = false; }
-  };
+  if (tmForm) {
+    const icon = s => s === 'ok' ? '✅' : s === 'error' ? '❌' : s === 'enviando' ? '⏳' : '◻️';
+    const render = (run, head) => {
+      const m = el('testMailMsg'); if (!m) return;
+      const rows = (run.results || []).map(r => icon(r.status) + ' ' + esc(r.label) + (r.status === 'error' ? ' <span style="color:#d9534f">— ' + esc(r.error || 'error') + '</span>' : '')).join('<br>');
+      const okN = (run.results || []).filter(r => r.status === 'ok').length;
+      m.innerHTML = head + '<br><span class="muted">' + okN + '/' + (run.total || (run.results || []).length) + ' enviados · buscan el prefijo <b>[PRUEBA]</b> en tu bandeja.</span><br><br>' + rows;
+    };
+    tmForm.onsubmit = async e => {
+      e.preventDefault();
+      const to = (el('testMailTo') || {}).value || '';
+      const m = el('testMailMsg'); const btn = tmForm.querySelector('button[type=submit]');
+      m.style.display = 'block'; m.innerHTML = 'Enviando…'; if (btn) btn.disabled = true;
+      try {
+        const r = await api('test-emails', { method: 'POST', body: { to } });
+        toast('Enviando correos de prueba…', 'ok');
+        const head = '📨 <b>Enviando ' + r.count + ' correos</b> a <b>' + esc(r.to) + '</b> (espaciados para no saturar Mailtrap, ~' + r.etaSeconds + ' s).';
+        let tries = 0;
+        const poll = async () => {
+          try {
+            const st = await api('test-emails');
+            render(st, head);
+            if (st.running && tries++ < 60) return setTimeout(poll, 3000);
+            if (btn) btn.disabled = false;
+          } catch (x) { if (btn) btn.disabled = false; }
+        };
+        poll();
+      } catch (err) {
+        m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>';
+        toast('No se pudieron enviar', 'err'); if (btn) btn.disabled = false;
+      }
+    };
+  }
 });
 })();
