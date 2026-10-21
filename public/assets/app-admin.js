@@ -1050,7 +1050,13 @@ on(/^#\/cuenta$/, async () => {
       <p class="hint" style="margin-bottom:12px">Secciones de uso puntual, protegidas con contraseña.</p>
       ${benefOk()
       ? `<div class="btn-row"><a class="btn btn--primary" href="#/beneficios">€ Beneficios</a> <a class="btn" href="#/papelera">🗑 Papelera de eventos</a></div>
-         <p class="hint" style="margin-top:10px">Desbloqueado en este dispositivo durante esta sesión.</p>`
+         <p class="hint" style="margin-top:10px">Desbloqueado en este dispositivo durante esta sesión.</p>
+         <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
+         <h4 style="margin:0 0 6px">✉️ Correos de prueba</h4>
+         <p class="hint" style="margin-bottom:12px">Envía una muestra de <b>todos</b> los correos de la intranet (alta, contraseña, aviso de extra y los 3 recordatorios) a una dirección, con datos de ejemplo. <b>No crea usuarios ni toca eventos</b>: solo sirve para revisarlos (p. ej. en tu bandeja de Mailtrap).</p>
+         <form id="testMailForm" style="max-width:460px"><div class="field"><label>Enviar a</label><input class="control" type="email" id="testMailTo" value="${esc(S.user.email || '')}" placeholder="tu-email@ejemplo.com"></div>
+           <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Enviar correos de prueba</button></div></form>
+         <div id="testMailMsg" style="margin-top:12px;display:none;font-size:13px"></div>`
       : `<form id="advForm" style="max-width:420px"><div class="field"><label>Contraseña</label><input class="control" type="password" id="advPass" autocomplete="off"></div>
           <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Desbloquear</button>
           <button type="button" class="btn btn--sm" id="advForgot">¿Olvidaste la contraseña?</button></div></form>
@@ -1085,5 +1091,22 @@ on(/^#\/cuenta$/, async () => {
   };
   const advForgot = el('advForgot');
   if (advForgot) advForgot.onclick = () => { const m = el('advMsg'); m.style.display = 'block'; m.innerHTML = 'Te hemos enviado la contraseña a tu email de administración (<b>' + esc(S.user.email || 'tu email') + '</b>).<br><span class="muted">Nota: aún no hay envío de correo real. La contraseña es <b>lamusica20</b>.</span>'; };
+  const tmForm = el('testMailForm');
+  if (tmForm) tmForm.onsubmit = async e => {
+    e.preventDefault();
+    const to = (el('testMailTo') || {}).value || '';
+    const m = el('testMailMsg'); const btn = tmForm.querySelector('button[type=submit]');
+    m.style.display = 'block'; m.innerHTML = 'Enviando…'; if (btn) btn.disabled = true;
+    try {
+      const r = await api('test-emails', { method: 'POST', body: { to } });
+      const fail = (r.results || []).filter(x => !x.ok);
+      const rows = (r.results || []).map(x => (x.ok ? '✅ ' : '❌ ') + esc(x.label) + (x.ok ? '' : ' — ' + esc(x.error || 'error'))).join('<br>');
+      m.innerHTML = '<b>' + r.okCount + '/' + r.total + ' enviados</b> a <b>' + esc(r.to) + '</b>' + (fail.length ? ' (algunos fallaron)' : '') + '.<br><span class="muted">Revísalos en tu bandeja (buscan el prefijo <b>[PRUEBA]</b>).</span><br><br>' + rows;
+      toast(fail.length ? 'Enviados con algún fallo' : 'Correos de prueba enviados', fail.length ? 'warn' : 'ok');
+    } catch (err) {
+      m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>';
+      toast('No se pudieron enviar', 'err');
+    } finally { if (btn) btn.disabled = false; }
+  };
 });
 })();

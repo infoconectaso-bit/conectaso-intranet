@@ -151,7 +151,48 @@ async function api(req, res, url) {
   // --- colecciones genéricas ---
   if (seg[0] === 'collections') return collection(req, res, user, seg, method);
 
+  // --- correos de prueba (admin · Configuración avanzada) ---
+  if (seg[0] === 'test-emails' && method === 'POST') return testEmails(req, res, user);
+
   return fail(res, 404, 'Ruta no encontrada');
+}
+
+// Envía a UNA dirección una muestra de cada correo de la intranet, con datos de ejemplo.
+// No crea usuarios ni toca eventos: solo manda emails (pensado para revisarlos en Mailtrap).
+async function testEmails(req, res, user) {
+  if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+  if (!mail.enabled()) return fail(res, 400, 'El correo no está activo todavía. Actívalo en el servidor (MAIL_DISABLED=false + SMTP) para poder enviar pruebas.');
+  const body = await readBody(req).catch(() => ({}));
+  const to = String((body && body.to) || user.email || '').trim();
+  if (!to || to.indexOf('@') < 0) return fail(res, 400, 'Indica un email de destino válido.');
+  const base = APP_URL();
+  const link = (base || '') + '/activar?token=DEMO-TOKEN';
+  const resetLink = (base || '') + '/recuperar?token=DEMO-TOKEN';
+  const evLink = (base || '') + '/#/eventos/0';
+  const ev = { id: 0, conyuges: 'Laura & Marc (prueba)', fecha: '2026-11-08', lugar: 0, hora: '17:30' };
+  const uUser = { name: 'Laura & Marc', email: to, role: 'user' };
+  const uPlanner = { name: 'Wedding Planner (prueba)', email: to, role: 'planner' };
+  const uDj = { name: 'Carlos (DJ, prueba)', email: to, role: 'dj' };
+  const extraText = 'La boda #0 (Laura & Marc (prueba)) ha solicitado el servicio extra:\n• Máquina de humo\n\nFecha del evento: 08/11/2026\nLugar: Can Oliver Carpa\n\nEntra en la intranet (Servicios extras) para revisar la disponibilidad y continuar con la reserva.';
+  const jobs = [
+    ['Alta · novios', () => emails.inviteEmail(uUser, link, base)],
+    ['Alta · wedding planner', () => emails.inviteEmail(uPlanner, link, base)],
+    ['Alta · DJ', () => emails.inviteEmail(uDj, link, base)],
+    ['Restablecer contraseña', () => emails.resetEmail(uUser, resetLink, base)],
+    ['Recordatorio 15 días', () => emails.coupleReminderEmail(ev, evLink, base)],
+    ['Recordatorio 7 días (música)', () => emails.coupleMusicEmail(ev, evLink, base)],
+    ['Parte del DJ (boda finalizada)', () => emails.djAlbaranEmail(uDj, ev, evLink, base)],
+  ];
+  const results = [];
+  for (const [label, build] of jobs) {
+    try { const em = build(); await mail.sendMail({ to, subject: '[PRUEBA] ' + em.subject, text: em.text, html: em.html }); results.push({ label, ok: true }); }
+    catch (e) { results.push({ label, ok: false, error: e.message }); }
+  }
+  try { await mail.sendMail({ to, subject: '[PRUEBA] Nueva solicitud de extra · Boda #0', text: extraText }); results.push({ label: 'Aviso de solicitud de extra', ok: true }); }
+  catch (e) { results.push({ label: 'Aviso de solicitud de extra', ok: false, error: e.message }); }
+  store.audit(user.id, 'test-emails');
+  const okCount = results.filter(r => r.ok).length;
+  return ok(res, { to, okCount, total: results.length, results });
 }
 
 /* ---------- login / cuenta ---------- */
