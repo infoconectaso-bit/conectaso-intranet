@@ -632,7 +632,7 @@ function enrichEvent(out, ev, user) {
   if (!out) return out;
   out.canEdit = perm.clientEditOpen(ev);
   out.daysToEvent = perm.daysUntilEvent(ev);
-  const ids = [ev.userId].concat(ev.coUsers || []).filter(Boolean);
+  const ids = [ev.userId].concat(ev.coUsers || []).filter(Boolean).filter(id => id == ev.userId || users.get(id));
   out.accessUsers = ids.map(id => { const au = users.get(id) || {}; return { id: +id, name: au.name || '', email: au.email || '', owner: id == ev.userId }; });
   if (user.role === 'user') {
     const tot = +ev.pagoCliente || 0, pg = +ev.pagado || 0; out.pago = { total: tot, pagado: pg, pendiente: tot - pg, metodo: ev.metodo || '' };
@@ -912,7 +912,11 @@ async function usersApi(req, res, user, seg, method) {
   }
   if (method === 'DELETE') {
     if (id === user.id) return fail(res, 400, 'No puedes eliminar tu propia cuenta.');
-    users.del(id); auth.endAllSessions(id); store.audit(user.id, 'user-delete', 'users', id);
+    users.del(id); auth.endAllSessions(id);
+    // Quitar al usuario borrado de los accesos (coUsers) de cualquier boda, para que no quede
+    // una entrada "fantasma" con botón de quitar en "Acceso a la boda".
+    store.all('events').forEach(e => { if ((e.coUsers || []).some(x => +x === id)) { e.coUsers = e.coUsers.filter(x => +x !== id); store.put('events', e); } });
+    store.audit(user.id, 'user-delete', 'users', id);
     return ok(res, { ok: true });
   }
   if (seg[2] === 'invite' && method === 'POST') { const u = users.get(id); return ok(res, { invite: await makeInvite(u) }); }

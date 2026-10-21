@@ -315,7 +315,7 @@ function eventViewRole(ev) {
     }
   }
   if (role === 'dj') intro = `<div class="alert alert--info">Puedes editar la <b>música</b> cuando quieras (incluso en la última semana) y marcar el <b>estado de contacto</b> abajo. El <b>parte de trabajo</b> (horas extra, opinión y observaciones) se rellena <b>tras la boda</b>.</div>`;
-  if (role === 'planner') intro = `<div class="alert alert--info">Como <b>wedding planner</b> puedes editar la <b>música</b>, los <b>extras</b> y los <b>horarios</b> de la boda. La <b>finca</b> y la <b>fecha</b> solo las cambia administración. Recuerda <b>Guardar</b> al terminar.</div>`;
+  if (role === 'planner') intro = `<div class="alert alert--info">Como <b>wedding planner</b> puedes editar la <b>música</b>, los <b>extras</b>, los <b>horarios</b>, el <b>nº de invitados</b> y el <b>lugar de la ceremonia</b> (incluido si es fuera de la finca). La <b>finca</b> y la <b>fecha</b> solo las cambia administración. Recuerda <b>Guardar</b> al terminar.</div>`;
 
   const simple = isSimpleEvent(ev);
   const tabs = simple
@@ -484,9 +484,9 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
     ${fg('Hora de la ceremonia', inp('wedding_hour', ev.hora, { type: 'time', ...roH }))}
     ${fg('Hora inicio aperitivo', inp('celebration_hour', ev.celebrationHour, { type: 'time', ...roH }))}
     ${fg('Lugar de la celebración', sel('celebration_location', locOpts, ev.lugar === 0 && ev.lugarOtro ? 'otro' : ev.lugar, roSel + ' data-search') + `<div id="otroWrap" style="margin-top:8px;display:${(!ev.lugar && ev.lugarOtro) ? 'block' : 'none'}">${inp('celebration_location_other', ev.lugarOtro, { ph: 'Indica el lugar', ...ro })}</div>` + travelInfo(ev))}
-    ${fg('Lugar de la ceremonia', inp('wedding_location', ev.lugarCeremonia, ro))}
-    ${fg(tt('Ceremonia fuera del lugar de la celebración', 'Cerimònia fora del lloc de la celebració', 'Ceremony away from the venue', 'Cérémonie hors du lieu de réception'), `<label class="chk"><input type="checkbox" name="ceremony_outside" ${ev.ceremoniaFuera ? 'checked' : ''} ${readonly ? 'disabled' : ''}> <span>${tt('Marca si la ceremonia se celebra fuera de la finca (no realizamos la sonorización de ceremonia)', 'Marca si la cerimònia se celebra fora de la finca (no fem la sonorització de cerimònia)', 'Tick if the ceremony is held away from the venue (we do not provide ceremony sound)', 'Cochez si la cérémonie a lieu hors du lieu (nous ne sonorisons pas la cérémonie)')}</span></label>`)}
-    ${fg('Nº de invitados', inp('guest_number', ev.guests, { type: 'number', ...ro }))}
+    ${fg('Lugar de la ceremonia', inp('wedding_location', ev.lugarCeremonia, roH))}
+    ${fg(tt('Ceremonia fuera del lugar de la celebración', 'Cerimònia fora del lloc de la celebració', 'Ceremony away from the venue', 'Cérémonie hors du lieu de réception'), `<label class="chk"><input type="checkbox" name="ceremony_outside" ${ev.ceremoniaFuera ? 'checked' : ''} ${(readonly && !horariosEditable) ? 'disabled' : ''}> <span>${tt('Marca si la ceremonia se celebra fuera de la finca (no realizamos la sonorización de ceremonia)', 'Marca si la cerimònia se celebra fora de la finca (no fem la sonorització de cerimònia)', 'Tick if the ceremony is held away from the venue (we do not provide ceremony sound)', 'Cochez si la cérémonie a lieu hors du lieu (nous ne sonorisons pas la cérémonie)')}</span></label>`)}
+    ${fg('Nº de invitados', inp('guest_number', ev.guests, { type: 'number', ...roH }))}
     ${(S.user.role === 'user' && ev.djName) ? fg('Vuestro DJ', `<div class="readbox"><b>${esc(ev.djName)}</b></div><p class="hint">Asignación final de vuestro DJ.</p>`) : ''}
     ${isAdmin() ? fg('Observaciones ocultas', ta('privat_observations', ev.obsPriv, 'Solo las ven administración y el DJ')) : (S.user.role === 'dj' && ev.obsPriv !== undefined ? fg('Observaciones ocultas', `<div class="readbox">${esc(ev.obsPriv) || '<span class="muted">Sin observaciones ocultas</span>'}</div>`) : '')}
   </div></div></div>
