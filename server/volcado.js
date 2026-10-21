@@ -73,7 +73,7 @@ function mapEvent(raw) {
       case 'event_total_cost': ev.totalCost = +v || 0; break;
       case 'dj_vinculated': ev.djId = +v || ''; break;
       case 'wp_vinculated': ev.wpId = +v || ''; break;
-      case 'dj_assigned_overtime': ev.djOvertime = v; break;
+      case 'dj_assigned_overtime': { const t = (raw['dj_assigned_overtime__text'] || '').trim(); ev.djOvertime = (!t || t === 'Selecciona') ? '' : t; break; }
       case 'dj_assigned_performed_ceremony': ev.djCeremony = truthy(v); break;
       case 'ask_for_opinion': { const t = (raw['ask_for_opinion__text'] || '').trim(); ev.opinion = t || (String(v) === '1' ? 'Si' : String(v) === '2' ? 'No' : (['Si', 'No'].includes(v) ? v : '')); break; }
       case 'privat_observations': ev.obsPriv = v; break;
@@ -275,6 +275,11 @@ async function handle(req, res, seg, method, url) {
         const ids = (body.ids || []).map(Number); const val = body.value !== false; let n = 0;
         ids.forEach(id => { const row = users.getRow(id); if (row) { users.update(id, { data: { tyc: val } }); n++; } });
         return send(res, 200, { ok: true, marked: n });
+      }
+      if (cmd === 'fix-overtime') { // convierte djOvertime numérico ("1") a su etiqueta ("1 Hora") en eventos ya importados
+        const V2L = { '0': '', '0.5': 'Media Hora', '1': '1 Hora', '1.5': '1 hora y media', '2': '2 Horas', '2.5': '2 hora y media', '3': '3 Horas', '3.5': '3 hora y media', '4': '4 Horas', '4.5': '4 hora y media', '5': '5 Horas' };
+        let n = 0; store.all('events').forEach(e => { const v = e.djOvertime; if (v != null && V2L[String(v)] !== undefined) { e.djOvertime = V2L[String(v)]; store.put('events', e); n++; } });
+        return send(res, 200, { ok: true, fixed: n });
       }
       if (cmd === 'set-tyc-dates') { // fija la fecha/hora de firma real (de la intranet) en cada usuario firmado
         const dates = body.dates || {}; let n = 0;
