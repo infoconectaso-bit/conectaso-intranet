@@ -171,6 +171,42 @@ async function handle(req, res, seg, method, url) {
   const action = seg[1] || body.action;
   const cookie = body.cookie || ''; const ua = body.ua || '';
 
+  // QA (protegido por secreto): utilidades puntuales para limpiar pruebas y verificar el volcado.
+  if (action === 'qa') {
+    const dbm = require('./db'); const store = dbm.store, users = dbm.users; const authm = require('./auth');
+    const cmd = body.cmd;
+    try {
+      if (cmd === 'stats') {
+        const keepE = new Set(body.keepE || []); const keepU = new Set(body.keepU || []);
+        const allE = store.all('events'); const allU = users.all();
+        const t0 = Date.now(); store.all('events'); const msAll = Date.now() - t0;
+        return send(res, 200, {
+          ok: true,
+          counts: { events: allE.length, users: allU.length, locations: store.all('locations').length, extras: store.all('extras').length, vehicles: store.all('vehicles').length, tacs: store.all('tacs').length },
+          extraEvents: allE.filter(e => !keepE.has(e.id)).map(e => ({ id: e.id, tipo: e.tipo, fecha: e.fecha || '', estado: e.estado, conyuges: (e.conyuges || '').slice(0, 30), dj: e.djId || '', userId: e.userId == null ? null : e.userId })),
+          extraUsers: allU.filter(u => !keepU.has(u.id)).map(u => ({ id: u.id, role: u.role, name: (u.name || '').slice(0, 30), email: u.email })),
+          msAllEvents: msAll,
+        });
+      }
+      if (cmd === 'inspect') { return send(res, 200, { ok: true, events: (body.ids || []).map(id => store.get('events', +id)) }); }
+      if (cmd === 'years') { // eventos por año (de la fecha)
+        const by = {}; store.all('events').forEach(e => { const y = (e.fecha || '').slice(0, 4) || '(sin)'; by[y] = (by[y] || 0) + 1; }); return send(res, 200, { ok: true, years: by });
+      }
+      if (cmd === 'mkuser') {
+        if (authm.passwordProblem(body.password)) return send(res, 200, { ok: false, error: 'pw' });
+        const u = users.create({ email: String(body.email).trim(), name: body.name || 'QA', role: body.role || 'user', active: true, data: {} }, authm.hashPassword(body.password));
+        return send(res, 200, { ok: true, id: u.id });
+      }
+      if (cmd === 'delete') {
+        const evs = (body.events || []).map(Number); const us = (body.users || []).map(Number);
+        let de = 0, du = 0;
+        dbm.transaction(() => { evs.forEach(id => { if (store.del('events', id)) de++; }); us.forEach(id => { authm.endAllSessions(id); if (users.del(id)) du++; }); });
+        return send(res, 200, { ok: true, deletedEvents: de, deletedUsers: du });
+      }
+      return send(res, 400, { error: 'cmd desconocido' });
+    } catch (e) { return send(res, 200, { ok: false, error: e.message, stack: String(e.stack || '').split('\n').slice(0, 4) }); }
+  }
+
   // IMPORTAR el volcado-seed con MERGE (preserva añadidos, no borra).
   if (action === 'import') {
     const seed = body.seed;
