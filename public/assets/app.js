@@ -570,10 +570,17 @@ const tycTitleYear = (baseTitle, fechaBoda) => {
   return base + ' ' + y;
 };
 function markActive() {
-  const h = location.hash || '#/';
-  $$('.nav a[data-nav]').forEach(a => {
+  const h = (location.hash || '#/').split('?')[0];
+  const links = $$('.nav a[data-nav]');
+  const targets = links.map(a => a.getAttribute('data-nav'));
+  // Coincidencia respetando límites de segmento (#/eventos NO coincide con #/eventos/realizados… salvo exacto o con "/").
+  const matches = t => t === h || (t !== '#/' && (h === t || h.startsWith(t + '/')));
+  links.forEach(a => {
     const t = a.getAttribute('data-nav');
-    a.classList.toggle('active', t === h || (t !== '#/' && h.startsWith(t)));
+    let on = matches(t);
+    // Si otro destino del menú coincide de forma MÁS específica (prefijo más largo), este no se marca.
+    if (on) on = !targets.some(o => o !== t && o.length > t.length && matches(o));
+    a.classList.toggle('active', on);
   });
 }
 function pageHead(title, lead, right) {
