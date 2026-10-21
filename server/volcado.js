@@ -233,6 +233,43 @@ async function handle(req, res, seg, method, url) {
     return send(res, 200, { ok: true, results: out });
   }
 
+  // Migrar los logos de fotomatón: descarga cada logo de /public/uploads/{id}/{fn} (público) y lo
+  // guarda en la tabla files (colección 'events'), dejando ev.disco.fotoLogo = /api/files/{fid}
+  // para que se muestre en la ficha. Idempotente: si ya apunta a /api/files/ no se repite.
+  if (action === 'migrate-fotologos') {
+    const dbm = require('./db'); const path = require('path'); const fs = require('fs'); const crypto = require('crypto');
+    const UP = path.join(dbm.DATA_DIR, 'uploads');
+    const MAXB = 20 * 1024 * 1024;
+    const safe = n => String(n || 'logo').normalize('NFKD').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120) || 'logo';
+    const mimeOf = n => ({ pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }[(n.split('.').pop() || '').toLowerCase()] || 'application/octet-stream');
+    const insStmt = dbm.db.prepare('INSERT INTO files (id, collection, record_id, name, description, mime, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const logos = body.logos || []; // [{id, fn}]
+    let done = 0, skipped = 0; const errors = [];
+    for (const it of logos) {
+      const id = +it.id, fn = String(it.fn || '');
+      try {
+        const ev = store.get('events', id);
+        if (!ev) { errors.push(id + ' (evento no existe)'); continue; }
+        if (ev.disco && typeof ev.disco.fotoLogo === 'string' && ev.disco.fotoLogo.indexOf('/api/files/') === 0) { skipped++; continue; }
+        const url = SRC_BASE + '/public/uploads/' + id + '/' + encodeURIComponent(fn);
+        const r = await fetch(url);
+        if (!r.ok) { errors.push(id + ' (http ' + r.status + ')'); continue; }
+        const buf = Buffer.from(await r.arrayBuffer());
+        if (!buf.length || buf.length > MAXB) { errors.push(id + ' (tamaño ' + buf.length + ')'); continue; }
+        const ext = (fn.split('.').pop() || 'png').toLowerCase();
+        const name = 'Logo fotomatón.' + ext;
+        const fid = crypto.randomBytes(12).toString('hex');
+        const dir = path.join(UP, 'boda-' + id); fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, fid + '-' + safe(name)), buf);
+        insStmt.run(fid, 'events', id, name, 'Logo fotomatón', mimeOf(fn), buf.length, +body.adminId || null);
+        ev.disco = ev.disco || {}; ev.disco.fotoLogo = '/api/files/' + fid;
+        store.put('events', ev);
+        done++;
+      } catch (e) { errors.push(id + ' (' + e.message + ')'); }
+    }
+    return send(res, 200, { ok: true, done, skipped, errors });
+  }
+
   // QA (protegido por secreto): utilidades puntuales para limpiar pruebas y verificar el volcado.
   if (action === 'qa') {
     const dbm = require('./db'); const store = dbm.store, users = dbm.users; const authm = require('./auth');
