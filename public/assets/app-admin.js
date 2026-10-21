@@ -5,7 +5,7 @@
    ============================================================================ */
 (function () {
 const CS = window.__CS;
-const { S, api, shell, pageHead, table, bindTable, toast, modal, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
+const { S, api, shell, pageHead, table, bindTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
   userName, dot, svg, on, loading, $, $$ } = CS;
 const { fg, inp, sel, ta, collectForm } = CS.momentHelpers;
 const isAdmin = () => S.user.role === 'admin';
@@ -83,7 +83,7 @@ async function solicitudesExtras() {
         <pre class="msg-preview">${esc(waTxt)}</pre>
         <div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn--sm btn--primary" id="waCopyA">📋 Copiar texto</button></div>`,
         { okText: 'Marcar como confirmada', onOk: async () => { await api('events/' + ev + '/extra-confirm', { method: 'POST', body: { key: k } }); toast('Confirmada', 'ok'); solicitudesExtras(); } });
-      setTimeout(() => { const c = document.getElementById('waCopyA'); if (c) c.onclick = () => { try { navigator.clipboard.writeText(waTxt); } catch (x) { try { document.execCommand('copy'); } catch (y) {} } toast('Texto copiado', 'ok'); }; }, 60); });
+      setTimeout(() => { const c = document.getElementById('waCopyA'); if (c) c.onclick = () => copyText(waTxt).then(ok => toast(ok ? 'Texto copiado' : 'No se pudo copiar, selecciónalo a mano', ok ? 'ok' : 'err')); }, 60); });
     $$('[data-dec]').forEach(b => b.onclick = () => { const [ev, k] = splitD(b.dataset.dec);
       modal('Declinar solicitud', `¿Declinar <b>${esc(exName(k))}</b> de la boda #${ev}? Se quitará de su evento.`, { okText: 'Declinar', danger: true, onOk: async () => { await api('events/' + ev + '/extra-decline', { method: 'POST', body: { key: k } }); toast('Solicitud declinada', 'ok'); solicitudesExtras(); } }); });
     $$('[data-paid]').forEach(b => b.onclick = async () => { const [ev, k] = splitD(b.dataset.paid); await api('events/' + ev + '/extra-pay', { method: 'POST', body: { key: k } }); toast('Marcado como pagado · reservado', 'ok'); solicitudesExtras(); });

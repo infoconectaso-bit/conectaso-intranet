@@ -204,6 +204,25 @@ function toast(msg, kind) {
   const t = document.createElement('div'); t.className = 'toast' + (kind ? ' toast--' + kind : '');
   t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
 }
+/* Copiar al portapapeles. Usa la API moderna en https y, en http (como el servidor
+   por IP), recurre a un textarea temporal + execCommand para que funcione igual. */
+function _copyFallback(text) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { ta.setSelectionRange(0, text.length); } catch (e) {}
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch (e) { return false; }
+}
+function copyText(text) {
+  text = String(text == null ? '' : text);
+  if (navigator.clipboard && window.isSecureContext && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).then(() => true, () => _copyFallback(text));
+  }
+  return Promise.resolve(_copyFallback(text));
+}
 function modal(title, bodyHtml, { okText, onOk, danger } = {}) {
   const bg = document.createElement('div'); bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal"><h3>${esc(title)}</h3><div class="mb">${bodyHtml}</div>
@@ -804,7 +823,7 @@ function eventMiniList(list) {
 }
 
 /* El resto de páginas se cargan desde módulos añadidos abajo */
-window.__CS = { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
+window.__CS = { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
   estado, locName, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, tycTitleYear, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$ };
 
 boot();

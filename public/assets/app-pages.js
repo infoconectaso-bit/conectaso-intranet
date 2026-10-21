@@ -4,7 +4,7 @@
    ============================================================================ */
 (function () {
 const CS = window.__CS;
-const { S, api, shell, pageHead, table, refreshTable, toast, modal, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
+const { S, api, shell, pageHead, table, refreshTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
   estado, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$ } = CS;
 const isAdmin = () => S.user.role === 'admin';
 const el = id => document.getElementById(id);
@@ -970,7 +970,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
         modal('Enlace del parte de trabajo', `<p>Comparte este enlace con <b>${esc(r.workerName || 'el DJ')}</b>. Al abrirlo <b>entra directamente</b> (sin contraseña) a rellenar ${r.hourly ? 'su parte de horas' : 'su albarán'} de esta boda. Caduca en 7 días.</p>
           <div class="field"><label>Enlace</label><input class="control" id="albLink" readonly value="${esc(link)}" onclick="this.select()"></div>
           <div class="btn-row"><button type="button" class="btn btn--sm btn--primary" id="albCopy">Copiar enlace</button> <a class="btn btn--sm" href="mailto:?subject=${asunto}&body=${cuerpo}">Abrir en email</a></div>`, { okText: 'Cerrar' });
-        setTimeout(() => { const c = document.getElementById('albCopy'); if (c) c.onclick = () => { const i = document.getElementById('albLink'); i.select(); try { navigator.clipboard.writeText(i.value); } catch (x) { document.execCommand('copy'); } toast('Enlace copiado', 'ok'); }; }, 60);
+        setTimeout(() => { const c = document.getElementById('albCopy'); if (c) c.onclick = () => { const i = document.getElementById('albLink'); if (i) i.select(); copyText(i ? i.value : '').then(ok => toast(ok ? 'Enlace copiado' : 'No se pudo copiar, selecciónalo a mano', ok ? 'ok' : 'err')); }; }, 60);
       } catch (err) { toast(err.message || 'No se pudo generar el enlace', 'err'); }
       finally { al.disabled = false; }
       return; }
@@ -993,7 +993,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
         <pre class="msg-preview">${esc(waTxt)}</pre>
         <div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn--sm btn--primary" id="waCopy">📋 Copiar texto</button></div>`,
         { okText: 'Marcar como confirmada', onOk: () => { api('events/' + ev.id + '/extra-confirm', { method: 'POST', body: { key } }).then(() => { toast('Disponibilidad confirmada', 'ok'); reloadExtras(); }).catch(err => toast(err.message || 'Error', 'err')); } });
-      setTimeout(() => { const c = document.getElementById('waCopy'); if (c) c.onclick = () => { try { navigator.clipboard.writeText(waTxt); } catch (x2) { try { document.execCommand('copy'); } catch (x3) {} } toast('Texto copiado', 'ok'); }; }, 60);
+      setTimeout(() => { const c = document.getElementById('waCopy'); if (c) c.onclick = () => copyText(waTxt).then(ok => toast(ok ? 'Texto copiado' : 'No se pudo copiar, selecciónalo a mano', ok ? 'ok' : 'err')); }, 60);
       return; }
     if (pay) { e.preventDefault(); e.stopPropagation(); const key = pay.dataset.extraPay; const x = EXTRAS_CLIENTE.find(y => y[0] === key); const admin = S.user.role === 'admin';
       modal(admin ? 'Marcar reserva pagada' : 'Pagar reserva · ' + x[1], admin
