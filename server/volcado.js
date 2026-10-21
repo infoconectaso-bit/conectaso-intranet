@@ -237,7 +237,7 @@ async function handle(req, res, seg, method, url) {
   // guarda en la tabla files (colección 'events'), dejando ev.disco.fotoLogo = /api/files/{fid}
   // para que se muestre en la ficha. Idempotente: si ya apunta a /api/files/ no se repite.
   if (action === 'migrate-fotologos') {
-    const dbm = require('./db'); const path = require('path'); const fs = require('fs'); const crypto = require('crypto');
+    const dbm = require('./db'); const store = dbm.store; const path = require('path'); const fs = require('fs'); const crypto = require('crypto');
     const UP = path.join(dbm.DATA_DIR, 'uploads');
     const MAXB = 20 * 1024 * 1024;
     const safe = n => String(n || 'logo').normalize('NFKD').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120) || 'logo';
