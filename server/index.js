@@ -159,6 +159,33 @@ async function api(req, res, url) {
     if (method === 'GET') return ok(res, lastTestRun || { running: false, results: [] });
   }
 
+  // --- configuración del correo (admin · Configuración avanzada) ---
+  if (seg[0] === 'mail-config') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (method === 'GET') {
+      const c = store.setting('mailConfig') || {};
+      // Nunca se devuelve la contraseña; solo si hay una guardada.
+      return ok(res, { config: { host: c.host || '', port: c.port || 587, user: c.user || '', from: c.from || '', allowlist: c.allowlist || '', enabled: !!c.enabled, hasPass: !!c.pass }, enabledNow: mail.enabled() });
+    }
+    if (method === 'POST') {
+      const b = await readBody(req);
+      const cur = store.setting('mailConfig') || {};
+      const next = {
+        host: String(b.host || '').trim(),
+        port: +b.port || 587,
+        user: String(b.user || '').trim(),
+        from: String(b.from || '').trim(),
+        allowlist: String(b.allowlist || '').trim(),
+        enabled: !!b.enabled,
+        // Conserva la clave guardada si el formulario la deja en blanco (no se reescribe).
+        pass: (b.pass != null && b.pass !== '') ? b.pass : cur.pass,
+      };
+      store.setSetting('mailConfig', next);
+      store.audit(user.id, 'mail-config-save');
+      return ok(res, { ok: true, enabledNow: mail.enabled() });
+    }
+  }
+
   return fail(res, 404, 'Ruta no encontrada');
 }
 

@@ -1052,6 +1052,20 @@ on(/^#\/cuenta$/, async () => {
       ? `<div class="btn-row"><a class="btn btn--primary" href="#/beneficios">€ Beneficios</a> <a class="btn" href="#/papelera">🗑 Papelera de eventos</a></div>
          <p class="hint" style="margin-top:10px">Desbloqueado en este dispositivo durante esta sesión.</p>
          <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
+         <h4 style="margin:0 0 6px">📧 Configuración del correo</h4>
+         <p class="hint" style="margin-bottom:12px">Datos de tu proveedor de correo (Brevo, Gmail…). Se guardan aquí, en la intranet — <b>no hace falta tocar el servidor</b>.</p>
+         <form id="mailCfgForm" style="max-width:520px">
+           <label class="chk" style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><input type="checkbox" id="mcEnabled"> <span>Correo <b>activado</b> (si lo desactivas, no se envía ningún email)</span></label>
+           <div class="field"><label>Servidor SMTP</label><input class="control" id="mcHost" placeholder="smtp-relay.brevo.com"></div>
+           <div class="field"><label>Puerto</label><input class="control" id="mcPort" placeholder="587"></div>
+           <div class="field"><label>Usuario / Login</label><input class="control" id="mcUser" placeholder="xxxxx@smtp-brevo.com"></div>
+           <div class="field"><label>Contraseña / clave SMTP</label><input class="control" type="password" id="mcPass" autocomplete="off" placeholder="(pega aquí tu clave)"></div>
+           <div class="field"><label>Remitente — email del "De"</label><input class="control" id="mcFrom" placeholder="adriadeejay@gmail.com"></div>
+           <div class="field"><label>Lista blanca de destinatarios <span class="muted">(solo estos reciben correos; déjalo vacío para enviar a todos — ¡úsalo en pruebas!)</span></label><input class="control" id="mcAllow" placeholder="correo1@x.com, correo2@y.com"></div>
+           <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Guardar configuración</button></div>
+         </form>
+         <div id="mailCfgMsg" style="margin-top:10px;display:none;font-size:13px"></div>
+         <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
          <h4 style="margin:0 0 6px">✉️ Correos de prueba</h4>
          <p class="hint" style="margin-bottom:12px">Envía una muestra de <b>todos</b> los correos de la intranet (alta, contraseña, aviso de extra y los 3 recordatorios) a una dirección, con datos de ejemplo. <b>No crea usuarios ni toca eventos</b>: solo sirve para revisarlos (p. ej. en tu bandeja de correo de pruebas).</p>
          <form id="testMailForm" style="max-width:460px"><div class="field"><label>Enviar a</label><input class="control" type="email" id="testMailTo" value="${esc(S.user.email || '')}" placeholder="tu-email@ejemplo.com"></div>
@@ -1091,6 +1105,32 @@ on(/^#\/cuenta$/, async () => {
   };
   const advForgot = el('advForgot');
   if (advForgot) advForgot.onclick = () => { const m = el('advMsg'); m.style.display = 'block'; m.innerHTML = 'Te hemos enviado la contraseña a tu email de administración (<b>' + esc(S.user.email || 'tu email') + '</b>).<br><span class="muted">Nota: aún no hay envío de correo real. La contraseña es <b>lamusica20</b>.</span>'; };
+  const mcForm = el('mailCfgForm');
+  if (mcForm) {
+    api('mail-config').then(r => {
+      const c = (r && r.config) || {};
+      if (el('mcEnabled')) el('mcEnabled').checked = !!c.enabled;
+      if (el('mcHost')) el('mcHost').value = c.host || '';
+      if (el('mcPort')) el('mcPort').value = c.port || 587;
+      if (el('mcUser')) el('mcUser').value = c.user || '';
+      if (el('mcPass')) el('mcPass').placeholder = c.hasPass ? '•••••••• (guardada — déjalo vacío para no cambiarla)' : '(pega aquí tu clave)';
+      if (el('mcFrom')) el('mcFrom').value = c.from || '';
+      if (el('mcAllow')) el('mcAllow').value = c.allowlist || '';
+    }).catch(() => {});
+    mcForm.onsubmit = async e => {
+      e.preventDefault();
+      const m = el('mailCfgMsg'); m.style.display = 'block'; m.textContent = 'Guardando…';
+      try {
+        const r = await api('mail-config', { method: 'POST', body: {
+          enabled: el('mcEnabled').checked, host: el('mcHost').value, port: el('mcPort').value,
+          user: el('mcUser').value, pass: el('mcPass').value, from: el('mcFrom').value, allowlist: el('mcAllow').value,
+        } });
+        el('mcPass').value = ''; el('mcPass').placeholder = '•••••••• (guardada — déjalo vacío para no cambiarla)';
+        m.innerHTML = '✅ Guardado. El correo está ahora <b>' + (r.enabledNow ? 'activado' : 'desactivado') + '</b>.';
+        toast('Configuración guardada', 'ok');
+      } catch (err) { m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>'; toast('No se pudo guardar', 'err'); }
+    };
+  }
   const tmForm = el('testMailForm');
   if (tmForm) {
     const icon = s => s === 'ok' ? '✅' : s === 'error' ? '❌' : s === 'enviando' ? '⏳' : '◻️';

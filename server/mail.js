@@ -7,29 +7,43 @@
 const net = require('net');
 const tls = require('tls');
 
+// Configuración guardada desde el panel de admin (si existe); si no, se usa el .env.
+function saved() {
+  try { return require('./db').store.setting('mailConfig') || {}; } catch (e) { return {}; }
+}
 function cfg() {
+  const s = saved();
   return {
-    host: process.env.SMTP_HOST,
-    port: +(process.env.SMTP_PORT || 587),
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-    from: process.env.MAIL_FROM || process.env.SMTP_USER || 'no-reply@conectaso.es',
+    host: s.host || process.env.SMTP_HOST,
+    port: +(s.port || process.env.SMTP_PORT || 587),
+    user: s.user || process.env.SMTP_USER,
+    pass: s.pass || process.env.SMTP_PASS,
+    from: s.from || process.env.MAIL_FROM || process.env.SMTP_USER || 'no-reply@conectaso.es',
   };
 }
-// INTERRUPTOR DE SEGURIDAD: por defecto el correo está DESACTIVADO. No se envía ni un email
-// (ni a clientes ni a nadie) salvo que se ponga explícitamente MAIL_DISABLED=false Y haya SMTP.
-const MAIL_DISABLED = process.env.MAIL_DISABLED !== 'false';
-const enabled = () => !MAIL_DISABLED && !!cfg().host;
+// Lista blanca de destinatarios (red de seguridad): del panel o del .env.
+function allowlist() {
+  const s = saved();
+  const raw = (s.allowlist != null && s.allowlist !== '') ? s.allowlist : process.env.MAIL_ALLOWLIST;
+  return String(raw || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+}
+// INTERRUPTOR DE SEGURIDAD: por defecto el correo está DESACTIVADO. Se activa desde el panel
+// (mailConfig.enabled) o, si no hay config guardada, con MAIL_DISABLED=false en el .env.
+function isDisabled() {
+  const s = saved();
+  if (typeof s.enabled === 'boolean') return !s.enabled;
+  return process.env.MAIL_DISABLED !== 'false';
+}
+const enabled = () => !isDisabled() && !!cfg().host;
 const b64 = s => Buffer.from(String(s), 'utf8').toString('base64');
 const encHeader = s => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${b64(s)}?=`);
 
 /** Conversa con el servidor SMTP paso a paso. Resuelve al aceptarse el mensaje. */
 function sendMail({ to, subject, text, html }) {
-  if (MAIL_DISABLED) { console.log('[CORREO DESACTIVADO] NO se envía →', to, '·', subject); return Promise.resolve({ disabled: true }); }
-  // RED DE SEGURIDAD (entornos de pruebas): si MAIL_ALLOWLIST está definida, SOLO se envía
-  // a esas direcciones; cualquier otra (p. ej. un cliente real) se bloquea. Así, en un
-  // servidor de pruebas con datos reales, nunca sale un correo a un novio o DJ de verdad.
-  const allow = String(process.env.MAIL_ALLOWLIST || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (isDisabled()) { console.log('[CORREO DESACTIVADO] NO se envía →', to, '·', subject); return Promise.resolve({ disabled: true }); }
+  // RED DE SEGURIDAD: si hay lista blanca, SOLO se envía a esas direcciones; cualquier otra
+  // (p. ej. un cliente real) se bloquea. Imprescindible en un servidor de pruebas con datos reales.
+  const allow = allowlist();
   if (allow.length && allow.indexOf(String(to).trim().toLowerCase()) < 0) {
     console.log('[CORREO BLOQUEADO · fuera de MAIL_ALLOWLIST] NO se envía →', to, '·', subject);
     return Promise.resolve({ skipped: true });
