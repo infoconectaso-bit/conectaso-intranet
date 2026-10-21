@@ -121,12 +121,67 @@ async function srcFetch(path, cookie, ua) {
   return { status: r.status, finalUrl: r.url, text: await r.text() };
 }
 
-async function handle(req, res, seg, method) {
+// Página mínima de subida del volcado-seed (mismo origen, sin "mixed content", sin límite de tamaño).
+// El secreto lo inyecta el servidor tras validar la query, así no queda escrito en el cliente de serie.
+function uploadPage(secret) {
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Volcado · Conecta Só</title><style>body{font-family:system-ui,Arial,sans-serif;max-width:620px;margin:40px auto;padding:0 16px;color:#1b1b1f}
+h1{font-size:20px}.box{border:2px dashed #bbb;border-radius:12px;padding:24px;text-align:center}
+button{font-size:16px;padding:12px 20px;border:0;border-radius:10px;background:#0B8043;color:#fff;cursor:pointer;margin-top:14px}
+button:disabled{opacity:.5;cursor:default}#log{white-space:pre-wrap;background:#f6f6f8;border-radius:10px;padding:14px;margin-top:18px;font-size:14px;min-height:40px}
+.ok{color:#0B8043;font-weight:600}.err{color:#D50000;font-weight:600}</style></head>
+<body><h1>Volcado de la intranet → réplica</h1>
+<p>Selecciona el archivo <b>volcado-seed.json</b> que te ha pasado Claude y pulsa <b>Importar</b>. Se fusiona sin borrar nada.</p>
+<div class="box"><input type="file" id="f" accept="application/json,.json"><br><button id="go" disabled>Importar</button></div>
+<div id="log">Esperando archivo…</div>
+<script>
+var S=${JSON.stringify(secret)},f=document.getElementById('f'),go=document.getElementById('go'),log=document.getElementById('log');
+f.onchange=function(){go.disabled=!f.files.length;log.textContent=f.files.length?('Archivo: '+f.files[0].name+' ('+(f.files[0].size/1048576).toFixed(1)+' MB). Pulsa Importar.'):'Esperando archivo…';};
+go.onclick=function(){
+  if(!f.files.length)return;go.disabled=true;log.textContent='Leyendo archivo…';
+  var r=new FileReader();
+  r.onload=function(){
+    var seed;try{seed=JSON.parse(r.result);}catch(e){log.innerHTML='<span class=err>El archivo no es un JSON válido.</span>';go.disabled=false;return;}
+    log.textContent='Importando '+(seed.events?seed.events.length:'?')+' eventos y '+(seed.users?seed.users.length:'?')+' usuarios… (puede tardar unos segundos)';
+    fetch('/api/volcado/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({secret:S,seed:seed})})
+      .then(function(x){return x.json();})
+      .then(function(j){ if(j.ok){log.innerHTML='<span class=ok>✅ Volcado completado.</span>\\n'+JSON.stringify(j.counts,null,2);}else{log.innerHTML='<span class=err>Error: '+(j.error||'desconocido')+'</span>';go.disabled=false;} })
+      .catch(function(e){log.innerHTML='<span class=err>Error de red: '+e.message+'</span>';go.disabled=false;});
+  };
+  r.onerror=function(){log.innerHTML='<span class=err>No se pudo leer el archivo.</span>';go.disabled=false;};
+  r.readAsText(f.files[0]);
+};
+</script></body></html>`;
+}
+
+async function handle(req, res, seg, method, url) {
+  const action0 = seg[1] || '';
+  // GET: página de subida (secreto en la query, validado aquí)
+  if (method === 'GET' && action0 === 'upload') {
+    const q = require('url').parse(url || '', true).query || {};
+    if (q.secret !== SECRET) { res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Secreto incorrecto'); }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(uploadPage(SECRET));
+  }
   if (method !== 'POST') return send(res, 405, { error: 'Método no permitido' });
-  let body; try { body = await readBody(req); } catch (e) { return send(res, 400, { error: 'Body inválido' }); }
+  // el seed del volcado puede pesar ~12 MB
+  const limit = (action0 === 'import') ? 48 * 1024 * 1024 : 4 * 1024 * 1024;
+  let body; try { body = await readBody(req, limit); } catch (e) { return send(res, 400, { error: 'Body inválido' }); }
   if (body.secret !== SECRET) return send(res, 403, { error: 'Secreto incorrecto' });
   const action = seg[1] || body.action;
   const cookie = body.cookie || ''; const ua = body.ua || '';
+
+  // IMPORTAR el volcado-seed con MERGE (preserva añadidos, no borra).
+  if (action === 'import') {
+    const seed = body.seed;
+    if (!seed || !Array.isArray(seed.events) || !Array.isArray(seed.users)) return send(res, 400, { error: 'seed inválido' });
+    try {
+      const dbm = require('./db');
+      const imp = require('./volcado-import');
+      const counts = imp.run(seed, { store: dbm.store, users: dbm.users, transaction: dbm.transaction });
+      return send(res, 200, { ok: true, counts });
+    } catch (e) { return send(res, 200, { ok: false, error: e.message, stack: String(e.stack || '').split('\n').slice(0, 4) }); }
+  }
 
   if (action === 'probe') {
     const id = body.id || 2029;
