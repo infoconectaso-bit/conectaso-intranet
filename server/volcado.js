@@ -65,7 +65,7 @@ function mapEvent(raw) {
       case 'wp_vinculated': ev.wpId = +v || ''; break;
       case 'dj_assigned_overtime': ev.djOvertime = v; break;
       case 'dj_assigned_performed_ceremony': ev.djCeremony = truthy(v); break;
-      case 'ask_for_opinion': ev.opinion = v; break;
+      case 'ask_for_opinion': { const t = (raw['ask_for_opinion__text'] || '').trim(); ev.opinion = t || (String(v) === '1' ? 'Si' : String(v) === '2' ? 'No' : (['Si', 'No'].includes(v) ? v : '')); break; }
       case 'privat_observations': ev.obsPriv = v; break;
       case 'observations_on_dj_event': ev.obsDj = v; break;
       case 'description': ev.description = v; break;
@@ -98,6 +98,16 @@ function mapEvent(raw) {
   ev.optionals.forEach(o => { o.id = +o._id || 0; delete o._id; });
   ev.files.forEach(f => { f.id = +f._id || 0; delete f._id; });
   ev.conyuges = [ev.spouses[0].name, ev.spouses[1].name].filter(Boolean).join(' y ');
+  // Defaults para calcar el formato del seed probado (campos que la intranet vieja no expone en
+  // el formulario o que son nuestros). El merge del importador conserva lo que ya hubiera.
+  if (ev.ceremoniaFuera === undefined) ev.ceremoniaFuera = false;      // 'ceremonia fuera' es campo NUESTRO
+  if (ev.pagoRestaurante === undefined) ev.pagoRestaurante = 0;
+  if (ev.totalCost === undefined) ev.totalCost = '';
+  if (!ev.labels) ev.labels = {};
+  if (!ev.entregas) ev.entregas = [];
+  // userId (titular) NO viene en el formulario del evento: lo inyecta el exportador desde el
+  // listado (columna Usuario). Si llega en el raw como ownerId, lo usamos.
+  if (ev.userId === undefined && raw.__ownerId) ev.userId = +raw.__ownerId || null;
   return { ev, unmapped };
 }
 
