@@ -321,6 +321,13 @@ async function handle(req, res, seg, method, url) {
           if (ch) { e.djOvertime = v; store.put('events', e); } });
         return send(res, 200, { ok: true, fixed: n, cleared });
       }
+      if (cmd === 'clean-fotologos') { // borra la referencia de logo cuando NO es una imagen ya subida (/api/files/): rotos y formatos corruptos pasados
+        let cleared = 0; store.all('events').forEach(e => {
+          const v = e.disco && e.disco.fotoLogo;
+          if (typeof v === 'string' && v.trim() && v.indexOf('/api/files/') !== 0) { e.disco.fotoLogo = ''; store.put('events', e); cleared++; }
+        });
+        return send(res, 200, { ok: true, cleared });
+      }
       if (cmd === 'set-tyc-dates') { // fija la fecha/hora de firma real (de la intranet) en cada usuario firmado
         const dates = body.dates || {}; let n = 0;
         const toISO = s => { const m = /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}):(\d{2}))?/.exec(String(s || '')); return m ? (`${m[3]}-${m[2]}-${m[1]}` + (m[4] ? `T${m[4]}:${m[5]}:${m[6]}` : 'T00:00:00')) : null; };

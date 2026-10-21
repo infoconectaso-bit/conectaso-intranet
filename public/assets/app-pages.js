@@ -610,7 +610,7 @@ function paneMusica(ev, canEdit) {
     ${fg('¿Se aceptan peticiones de invitados?', radset('guest_requests', [['si_todas', 'Sí, todas'], ['no_ninguna', 'No, ninguna'], ['si_similares', 'Sí, si son similares a nuestra playlist']], d.guests))}
     ${fg('Restricciones', ta('disco_restrictions', d.restrictions, 'Qué NO debe sonar'))}
     ${fg('Observaciones', ta('disco_observations', d.observations, 'Lo que quieras contarnos'))}
-    ${fg('Logo para el fotomatón', `<input type="file" accept="image/png,image/jpeg" id="fotoLogoInput" class="control" ${readonly ? 'disabled' : ''}>
+    ${fg('Logo para el fotomatón', `<input type="file" accept="image/*" id="fotoLogoInput" class="control" ${readonly ? 'disabled' : ''}>
       <input type="hidden" name="foto_logo_data" value="${esc(d.fotoLogo || '')}">
       <div id="fotoLogoPrev" class="foto-logo-prev">${d.fotoLogo ? `<img src="${esc(d.fotoLogo)}" alt="Logo fotomatón"><button type="button" class="btn btn--xs btn--red" id="fotoLogoDel">Quitar</button>` : ''}</div>
       <p class="hint">Sube el logo que quieres en las fotos del fotomatón. Preferiblemente <b>PNG o JPG con fondo blanco</b>.</p>`)}
@@ -904,6 +904,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   const paintFoto = url => { if (!fotoPrev) return; fotoPrev.innerHTML = url ? `<img src="${url}" alt="Logo fotomatón"><button type="button" class="btn btn--xs btn--red" id="fotoLogoDel">Quitar</button>` : ''; const del = fotoPrev.querySelector('#fotoLogoDel'); if (del) del.onclick = () => { if (fotoHidden) fotoHidden.value = ''; if (fotoInput) fotoInput.value = ''; paintFoto(''); }; };
   if (fotoInput) fotoInput.onchange = () => {
     const f = fotoInput.files && fotoInput.files[0]; if (!f) return;
+    if (!/^image\//.test(f.type)) { toast('El logo debe ser una imagen (PNG, JPG, WEBP…)', 'err'); fotoInput.value = ''; return; }
     if (f.size > 4 * 1024 * 1024) { toast('La imagen es muy grande (máx. 4 MB)', 'err'); fotoInput.value = ''; return; }
     const rd = new FileReader();
     rd.onload = () => { if (fotoHidden) fotoHidden.value = rd.result; paintFoto(rd.result); };
