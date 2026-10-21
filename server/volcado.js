@@ -174,7 +174,7 @@ function mapLocation(raw) {
 
 /** Extra real -> nuestro esquema. */
 function mapExtra(raw) {
-  return { id: +raw.extra_id || +raw.__id || undefined, name: raw.name || '', allows_overtime: truthy(raw.allows_overtime) };
+  return { id: +raw.service_id || +raw.extra_id || +raw.__id || undefined, name: raw.name || '', allows_overtime: truthy(raw.allows_overtime) };
 }
 
 /** Usuario real -> nuestro esquema (shape del seed + pricing de DJ, que el seed original no traía). */
