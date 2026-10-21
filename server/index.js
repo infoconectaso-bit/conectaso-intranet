@@ -342,9 +342,13 @@ function autofillSpousesFromTyc(user, sign) {
 }
 function tycSignedBy(u) {
   if (!u || u.role !== 'user') return false;
+  const ev = eventOfUser(u);
+  // El cotitular (segundo cónyuge invitado) NUNCA firma: entra directo. El titular ya rellena
+  // y firma los datos de ambos. Solo el titular (owner) del evento firma el contrato.
+  if (ev && +ev.userId !== +u.id) return true;
   if (u.tycSign && u.tycSign.date) return true;           // firma hecha en la intranet nueva
   if (u.tyc === true) return true;                        // firma del sistema anterior (booleano "tyc")
-  const ev = eventOfUser(u); return !!(ev && ev.tycSigned); // firma ya registrada en los datos reales
+  return !!(ev && ev.tycSigned);                          // firma ya registrada en los datos reales
 }
 function tycAutofill(u) {
   if (!u || u.role !== 'user') return { novios: '', finca: '', fecha: '', dnis: '', evId: null };

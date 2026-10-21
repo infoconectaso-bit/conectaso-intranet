@@ -17,9 +17,10 @@ const CLIENT_EDITABLE = ['music', 'optionals', 'disco', 'extras', 'spouses', 'gu
 // El wedding planner puede modificar lo mismo que el cliente (música, extras, horarios,
 // datos de la boda) EXCEPTO la fecha y el lugar, y sin el bloqueo de 7 días del cliente.
 const PLANNER_EDITABLE = CLIENT_EDITABLE;
-// Campos que el DJ puede modificar en sus eventos (su "parte de trabajo"): observaciones,
-// horas extra realizadas y si pide opinión. Solo tras celebrarse la boda (ver mergeEventUpdate).
-const DJ_EDITABLE = ['obsDj', 'djOvertime', 'opinion'];
+// Campos que el DJ puede modificar: música, momentos opcionales, disco, títulos y estado de
+// contacto SIEMPRE; y su "parte de trabajo" (observaciones, horas extra, opinión) solo tras
+// celebrarse la boda. El detalle de qué y cuándo se decide en mergeEventUpdate.
+const DJ_EDITABLE = ['estado', 'music', 'optionals', 'disco', 'labels', 'obsDj', 'djOvertime', 'opinion'];
 const { evRealized } = require('./time');
 
 // Días hasta la boda (0 = hoy). La edición del cliente se cierra 7 días antes,
@@ -70,10 +71,16 @@ function mergeEventUpdate(user, current, incoming) {
     if (!clientEditOpen(current)) throw httpError(403, 'La edición de este evento no está habilitada. Contacta con Conecta So.');
     allowed = CLIENT_EDITABLE;
   } else if (user.role === 'planner') {
-    allowed = PLANNER_EDITABLE;  // puede editar siempre; nunca fecha ni lugar (no están en la lista)
+    // El planner, como el cliente, NO puede editar dentro de los últimos 7 días (edición cerrada).
+    if (!clientEditOpen(current)) throw httpError(403, 'La edición de esta boda está cerrada (últimos 7 días). Ahora solo pueden cambiarla administración o el DJ.');
+    allowed = PLANNER_EDITABLE;
   } else if (user.role === 'dj') {
-    if (!evRealized(current)) throw httpError(403, 'Podrás rellenar el parte de trabajo cuando se haya celebrado la boda.');
-    allowed = DJ_EDITABLE;
+    // El DJ (y admin) puede editar la MÚSICA y el ESTADO de contacto SIEMPRE, incluso en los
+    // últimos 7 días. El PARTE (observaciones, horas extra, opinión) solo tras celebrarse la boda.
+    const realized = evRealized(current);
+    if (!realized && ['obsDj', 'djOvertime', 'opinion'].some(k => incoming[k] !== undefined))
+      throw httpError(403, 'Podrás rellenar el parte de trabajo cuando se haya celebrado la boda.');
+    allowed = ['estado', 'music', 'optionals', 'disco', 'labels'].concat(realized ? ['obsDj', 'djOvertime', 'opinion'] : []);
   }
   else throw httpError(403, 'Tu perfil solo puede consultar este evento.');
   const next = Object.assign({}, current);

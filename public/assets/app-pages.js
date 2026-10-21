@@ -185,7 +185,7 @@ async function eventsList(done) {
   const svcList = e => (e.services || []).filter(s => s.servicio);
   const svcHtml = e => { const svc = svcList(e); return svc.length ? `<div class="svc-list">${svc.map(s => `<div><b>${esc(extraName(s.servicio))}</b> → ${esc(userName(s.resp) || '—')}${s.resp2 ? ' y ' + esc(userName(s.resp2)) : ''}</div>`).join('')}</div>` : '<span class="muted">—</span>'; };
   const cols = [
-    { t: 'Id', get: e => e.id, html: e => admin ? `<a class="ev-id" href="#/eventos/${e.id}" style="color:${estado(e.estado).c}" title="${esc(estado(e.estado).n)}">${e.id}</a>` : `<a href="#/eventos/${e.id}">${e.id}</a>` },
+    { t: 'Id', get: e => e.id, html: e => (admin || S.user.role === 'dj') ? `<a class="ev-id" href="#/eventos/${e.id}" style="color:${estado(e.estado).c}" title="${esc(estado(e.estado).n)}">${e.id}</a>` : `<a href="#/eventos/${e.id}">${e.id}</a>` },
     ...(admin ? [{ t: 'Tipo', get: e => e.tipo, html: e => `<a href="#/eventos/${e.id}">${esc(e.tipo)}</a>` }] : []),
     { t: 'Cónyuges', get: e => e.conyuges, html: e => `<a href="#/eventos/${e.id}">${esc(e.conyuges || 'No indicado')}</a>` },
     { t: 'Fecha', get: e => e.fecha || '', html: e => slash(e.fecha) },
@@ -196,11 +196,11 @@ async function eventsList(done) {
   ];
   if (admin) cols.push(
     { t: 'Pago', get: e => '', html: e => pagoChip(e), nosort: true },
-    { t: 'Clientes', get: e => clientName(e) + ' ' + [e.userId].concat(e.coUsers || []).join(' '),
+    { t: 'Usuario', get: e => clientName(e) + ' ' + [e.userId].concat(e.coUsers || []).join(' '),
       html: e => {
         const co = (e.coUsers || []).map(Number).filter(id => id && id !== +e.userId);
         const main = `<a href="#/usuario/${e.userId}" title="Titular de la boda">${e.userId} - ${esc(clientName(e))}</a>`;
-        const extra = co.map(id => `<a href="#/usuario/${id}" class="co-id" title="Cliente vinculado a esta boda">+ ${id}${userName(id) ? ' - ' + esc(userName(id)) : ''}</a>`).join('');
+        const extra = co.map(id => `<a href="#/usuario/${id}" class="co-id" title="Cotitular vinculado a esta boda">+ ${id}</a>`).join('');
         return `<div class="cli-ids">${main}${extra}</div>`;
       } });
   cols.push({ t: '', nosort: true, html: e => `<div class="row-actions"><a class="btn btn--icon" href="#/eventos/${e.id}" title="Abrir / editar">${svg('edit')}</a><a class="btn btn--icon" href="#/eventos/${e.id}/pdf" title="PDF">${svg('doc')}</a>${admin ? `<button class="btn btn--icon" data-del-event="${e.id}" title="Borrar">🗑</button>` : ''}</div>` });
@@ -216,7 +216,7 @@ async function eventsList(done) {
     yearBar = `<div class="yrbar">${chip('12m', 'Últimos 12 meses')}${years.map(y => chip(y, y)).join('')}${chip('all', 'Todos los años')}</div>`;
   }
   const tblId = done ? 'dtDone_' + DONE_VIEW.sel : 'dtTodo';
-  const legend = admin ? `<details class="estado-leg-wrap"><summary>Mostrar leyenda de estados</summary><div class="estado-leg" title="El color del número de evento indica su estado">${(S.meta.estados || []).map(s => `<span><i style="background:${s.c}"></i>${esc(s.n)}</span>`).join('')}</div></details>` : '';
+  const legend = (admin || S.user.role === 'dj') ? `<details class="estado-leg-wrap"><summary>Mostrar leyenda de estados</summary><div class="estado-leg" title="El color del número de evento indica su estado">${(S.meta.estados || []).map(s => `<span><i style="background:${s.c}"></i>${esc(s.n)}</span>`).join('')}</div></details>` : '';
   shell(`${pageHead(title, lead)}<div class="panel"><div class="panel__body">${yearBar}${table(tblId, { rows: evs, order: [3, done ? 'desc' : 'asc'], filters: admin, cols, dense: true, len: 25, empty: 'No hay bodas en esta lista.' })}${legend}</div></div>`, ['Eventos', title]);
   if (admin) $$('[data-del-event]').forEach(b => b.onclick = () => confirmDeleteEvent(+b.dataset.delEvent, done));
   $$('[data-yr]').forEach(b => b.onclick = () => { DONE_VIEW.sel = b.dataset.yr; eventsList(true); });
@@ -294,8 +294,11 @@ function eventEditorAdmin(ev) {
 function eventViewRole(ev) {
   const role = S.user.role;
   const isPlanner = role === 'planner';
-  // el wedding planner puede editar música, extras y horarios (nunca finca ni fecha)
-  const canEditMusic = (role === 'user' && ev.canEdit) || isPlanner;
+  // El DJ puede editar la música SIEMPRE (incluso en los últimos 7 días). El cliente y el
+  // planner solo si la edición está abierta (ev.canEdit; se cierra 7 días antes de la boda).
+  const canEditMusic = role === 'dj' || ((role === 'user' || isPlanner) && ev.canEdit);
+  // Los extras (servicios contratados) NO los toca el DJ; sí el cliente/planner con edición abierta.
+  const canEditExtras = (role === 'user' || isPlanner) && ev.canEdit;
   const locOpts = [[0, 'Selecciona un lugar']].concat((S.meta.locations || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es')).map(l => [l.id, l.name])).concat([['otro', 'Otro']]);
   let intro = '';
   if (role === 'user') {
@@ -311,7 +314,7 @@ function eventViewRole(ev) {
       intro = `<p class="hint cli-hint cli-hint--closed"><b>Edición cerrada</b> (desde 7 días antes de la boda). Para cambiar algo, <b>contacta con nosotros</b> y te la reabrimos.</p>`;
     }
   }
-  if (role === 'dj') intro = `<div class="alert alert--info">Ficha del evento. Puedes añadir tus observaciones como DJ al final.</div>`;
+  if (role === 'dj') intro = `<div class="alert alert--info">Puedes editar la <b>música</b> cuando quieras (incluso en la última semana) y marcar el <b>estado de contacto</b> abajo. El <b>parte de trabajo</b> (horas extra, opinión y observaciones) se rellena <b>tras la boda</b>.</div>`;
   if (role === 'planner') intro = `<div class="alert alert--info">Como <b>wedding planner</b> puedes editar la <b>música</b>, los <b>extras</b> y los <b>horarios</b> de la boda. La <b>finca</b> y la <b>fecha</b> solo las cambia administración. Recuerda <b>Guardar</b> al terminar.</div>`;
 
   const simple = isSimpleEvent(ev);
@@ -323,9 +326,9 @@ function eventViewRole(ev) {
     ? `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="archivos">Archivos</button></div>`
     : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button>${role === 'dj' ? '<button data-tab="servicios">Servicios</button><button data-tab="ruta">Ruta</button>' : ''}</div>`);
   const panes = `
-    <div data-pane="datos">${paneDatos(ev, locOpts, { readonly: !(role === 'user' && ev.canEdit), horariosEditable: isPlanner })}${role === 'user' ? clientPaymentBlock(ev) + accessBlock(ev) : ''}</div>
+    <div data-pane="datos">${paneDatos(ev, locOpts, { readonly: !(role === 'user' && ev.canEdit), horariosEditable: isPlanner && ev.canEdit })}${role === 'user' ? clientPaymentBlock(ev) + accessBlock(ev) : ''}</div>
     ${simple ? '' : `<div data-pane="musica" style="display:none">${paneMusica(ev, canEditMusic)}</div>
-    <div data-pane="extras" style="display:none">${paneExtras(ev, { readonly: !canEditMusic })}</div>`}
+    <div data-pane="extras" style="display:none">${paneExtras(ev, { readonly: !canEditExtras })}</div>`}
     ${role === 'dj' ? `<div data-pane="servicios" style="display:none">${paneServicios(ev, null, null, { readonly: true })}${(role === 'dj' && !simple) ? (eventFinished(ev)
         ? (HOURLY_IDS[S.user.id]
           ? `<div class="panel"><div class="panel__head"><h3>Parte de horas</h3></div><div class="panel__body">
@@ -351,7 +354,7 @@ function eventViewRole(ev) {
     ? `<div class="ev-cli-head"><h1>${esc(ev.conyuges || ev.tipo || 'Mi boda')}</h1><div class="ev-cli-sub">${dmy(ev.fecha)}${ev.hora ? ' · ' + ev.hora : ''}</div></div>`
     : pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''));
   shell(`${headHtml}
-    ${intro}${progHtml}<form id="evForm" class="${role === 'user' ? 'ev-client' : ''}" data-id="${ev.id}">${tabs}${panes}
+    ${intro}${progHtml}<form id="evForm" class="${role === 'user' ? 'ev-client' : ''}" data-id="${ev.id}">${tabs}${role === 'dj' ? `<div class="panel dj-estado"><div class="panel__body"><div class="field evtop-estado"><label>Estado de contacto</label>${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div><p class="hint" style="margin-top:6px">Marca en qué punto estás con esta boda (contactado, meeting, etc.).</p></div></div>` : ''}${panes}
     ${canSave ? `<div class="floatbar"><button type="submit" class="btn btn--primary">Guardar</button></div>` : ''}</form>`, role === 'user' ? [tt('Mi boda', 'La meva boda', 'My wedding', 'Mon mariage')] : ['Eventos', '#' + ev.id]);
   wireEventForm(ev, { full: false, role, canEditMusic, canSave });
 }
@@ -1162,8 +1165,16 @@ function buildEventPayload(ev, form, { full, role, canEditMusic }) {
   const readSpouses = () => ['first', 'second'].map((p, i) => { const cur = (ev.spouses || [])[i] || {}; const o = { name: d[p + '_spouse'], dni: d[p + '_spouse_dni'], email: d[p + '_spouse_email'], mobile: d[p + '_spouse_mobile'] }; if (d[p + '_spouse_address'] !== undefined) o.address = d[p + '_spouse_address']; return Object.assign({}, cur, o); });
 
   if (!full) {
-    // cliente: música/momentos/extras/datos permitidos; dj: solo obsDj
-    if (role === 'dj') return { obsDj: d.dj_observations, djOvertime: d.dj_assigned_overtime, opinion: d.ask_for_opinion };
+    // cliente: música/momentos/extras/datos permitidos; dj: música + estado + (tras la boda) el parte
+    if (role === 'dj') {
+      const o = {};
+      if (d.event_status !== undefined) o.estado = +d.event_status;
+      if (!isSimpleEvent(ev)) { o.music = readMoments(); o.optionals = readOpts(); o.disco = readDisco(); }
+      if (d.dj_observations !== undefined) o.obsDj = d.dj_observations;
+      if (d.dj_assigned_overtime !== undefined) o.djOvertime = d.dj_assigned_overtime;
+      if (d.ask_for_opinion !== undefined) o.opinion = d.ask_for_opinion;
+      return o;
+    }
     const out = { music: readMoments(), optionals: readOpts(), disco: readDisco(), extras: readExtras(), spouses: readSpouses(),
       guests: d.guest_number, celebrationHour: d.celebration_hour, lugarCeremonia: d.wedding_location, hora: d.wedding_hour, ceremoniaFuera: !!d.ceremony_outside };
     return out;
