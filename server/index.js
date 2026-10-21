@@ -14,6 +14,7 @@ const emails = require('./emails');
 const perm = require('./permissions');
 const fact = require('./facturacion');
 const { evFinished, evRealized } = require('./time');
+const volcado = require('./volcado');
 
 const PORT = +(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -117,6 +118,9 @@ async function api(req, res, url) {
     if (seg[1] === 'change-password' && method === 'POST') return changePassword(req, res, user);
     return fail(res, 404, 'Ruta no encontrada');
   }
+
+  // --- volcado/migración (protegido por secreto, NO por sesión): operación puntual ---
+  if (seg[0] === 'volcado') return volcado.handle(req, res, seg, method, url);
 
   if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
 
