@@ -101,7 +101,9 @@ function serveStatic(req, res, urlPath) {
       return fail(res, 404, 'No encontrado');
     }
     const ext = path.extname(full).toLowerCase();
-    const cache = /\/assets\//.test(rel) ? 'public, max-age=31536000, immutable' : 'no-cache';
+    // Caché larga SOLO si la URL trae ?v=<hash> (versión automática): la URL cambia al cambiar
+    // el archivo, así que es seguro. Sin ?v (p. ej. un logo referido directo) → revalidar siempre.
+    const cache = /[?&]v=/.test(req.url || '') ? 'public, max-age=31536000, immutable' : 'no-cache';
     const ae = (req.headers['accept-encoding'] || '');
     const textAsset = /\.(js|css|svg|json|html|webmanifest|map|txt)$/i.test(ext);
     // Comprimir JS/CSS/SVG: el bundle pesa bastante y en la primera carga se nota.
