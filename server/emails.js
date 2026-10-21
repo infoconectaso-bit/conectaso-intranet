@@ -148,4 +148,29 @@ function djAlbaranEmail(u, ev, link, baseUrl) {
   return { subject: c.subject, text: plainFromCopy(c, link), html: shell({ logoUrl, title: c.title, lead: c.lead, bodyHtml: c.body, cta: c.cta, link, foot: c.foot }) };
 }
 
-module.exports = { inviteEmail, resetEmail, coupleReminderEmail, coupleMusicEmail, djAlbaranEmail, shell, inviteCopy };
+// Aviso a facturación cuando una boda solicita uno o más servicios extra.
+// `items` = lista de nombres de los extras pedidos; `finca` = nombre del lugar.
+function extraRequestEmail(ev, items, finca, link, baseUrl) {
+  const logoUrl = baseUrl ? baseUrl.replace(/\/$/, '') + '/assets/brand/logo-email-blanco.png' : '';
+  const list = (items || []).map(x => esc(x));
+  const chips = list.map(n => `<tr><td style="padding:10px 14px;border:1px solid #f0d7e7;border-radius:10px;background:#fdf2f8;font-family:Arial,Helvetica,sans-serif;font-size:14.5px;color:#9d1b5f;font-weight:bold">✨ ${n}</td></tr><tr><td style="height:8px;line-height:8px">&nbsp;</td></tr>`).join('');
+  const boda = esc(ev.conyuges ? ev.conyuges + ' · #' + ev.id : ('#' + ev.id));
+  const body = `<p style="margin:0 0 14px 0">La boda <b>${boda}</b> acaba de solicitar ${list.length > 1 ? '<b>estos servicios extra</b>' : '<b>un servicio extra</b>'}:</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 6px 0">${chips}</table>
+<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:8px 0 2px 0;border-top:1px solid #ece4f1">
+  <tr><td style="padding:12px 0 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;color:#6b6472">📅 Fecha del evento: <b style="color:#39333f">${slashDate(ev.fecha)}</b></td></tr>
+  <tr><td style="padding:2px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;color:#6b6472">📍 Lugar: <b style="color:#39333f">${esc(finca || '—')}</b></td></tr>
+</table>
+<p style="margin:16px 0 0 0">Entra en <b>Servicios extras</b> para revisar la disponibilidad y continuar con la reserva:</p>`;
+  const text = `Nueva solicitud de extra · Boda ${ev.conyuges ? ev.conyuges + ' (#' + ev.id + ')' : '#' + ev.id}\n\n` +
+    `Servicios solicitados:\n${(items || []).map(x => '• ' + x).join('\n')}\n\n` +
+    `Fecha del evento: ${slashDate(ev.fecha)}\nLugar: ${finca || '—'}\n\n` +
+    `Entra en la intranet (Servicios extras) para revisar la disponibilidad y continuar con la reserva.\n${link}\n\n— Conecta Só · conectaso.es`;
+  return {
+    subject: `Nueva solicitud de extra · Boda #${ev.id}`,
+    text,
+    html: shell({ logoUrl, title: '✨ Nueva solicitud de extra', lead: `La boda #${ev.id} ha pedido un servicio extra`, bodyHtml: body, cta: 'Revisar la solicitud', link, foot: 'Entra con tu cuenta de administración.' }),
+  };
+}
+
+module.exports = { inviteEmail, resetEmail, coupleReminderEmail, coupleMusicEmail, djAlbaranEmail, extraRequestEmail, shell, inviteCopy };

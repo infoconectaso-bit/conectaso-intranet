@@ -173,33 +173,37 @@ async function testEmails(req, res, user) {
   const uUser = { name: 'Laura & Marc', email: to, role: 'user' };
   const uPlanner = { name: 'Wedding Planner (prueba)', email: to, role: 'planner' };
   const uDj = { name: 'Carlos (DJ, prueba)', email: to, role: 'dj' };
-  const extraText = 'La boda #0 (Laura & Marc (prueba)) ha solicitado el servicio extra:\n• Máquina de humo\n\nFecha del evento: 08/11/2026\nLugar: Can Oliver Carpa\n\nEntra en la intranet (Servicios extras) para revisar la disponibilidad y continuar con la reserva.';
+  const uAdmin = { name: 'Administración (prueba)', email: to, role: 'admin' };
   const jobs = [
     ['Alta · novios', () => emails.inviteEmail(uUser, link, base)],
     ['Alta · wedding planner', () => emails.inviteEmail(uPlanner, link, base)],
     ['Alta · DJ', () => emails.inviteEmail(uDj, link, base)],
+    ['Alta · administración', () => emails.inviteEmail(uAdmin, link, base)],
     ['Restablecer contraseña', () => emails.resetEmail(uUser, resetLink, base)],
     ['Recordatorio 15 días', () => emails.coupleReminderEmail(ev, evLink, base)],
     ['Recordatorio 7 días (música)', () => emails.coupleMusicEmail(ev, evLink, base)],
     ['Parte del DJ (boda finalizada)', () => emails.djAlbaranEmail(uDj, ev, evLink, base)],
+    ['Aviso de solicitud de extra', () => emails.extraRequestEmail(ev, ['Máquina de humo', 'Sparklers / chispas frías'], 'Can Oliver Carpa', evLink, base)],
   ];
-  // Se envían espaciados: Mailtrap (y muchos SMTP) limitan los correos por segundo,
-  // así que una pausa entre cada uno evita el "Too many emails per second".
+
+  // Mailtrap (plan gratis) limita los correos por segundo. Para no superar el límite,
+  // se envían ESPACIADOS y EN SEGUNDO PLANO: la respuesta vuelve al instante y los
+  // correos van llegando solos a la bandeja (uno cada GAP ms).
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const GAP = +(process.env.TEST_MAIL_GAP_MS || 2000);
-  const results = [];
-  let first = true;
-  for (const [label, build] of jobs) {
-    if (!first) await sleep(GAP); first = false;
-    try { const em = build(); await mail.sendMail({ to, subject: '[PRUEBA] ' + em.subject, text: em.text, html: em.html }); results.push({ label, ok: true }); }
-    catch (e) { results.push({ label, ok: false, error: e.message }); }
-  }
-  await sleep(GAP);
-  try { await mail.sendMail({ to, subject: '[PRUEBA] Nueva solicitud de extra · Boda #0', text: extraText }); results.push({ label: 'Aviso de solicitud de extra', ok: true }); }
-  catch (e) { results.push({ label: 'Aviso de solicitud de extra', ok: false, error: e.message }); }
+  const GAP = +(process.env.TEST_MAIL_GAP_MS || 5000);
+  (async () => {
+    for (let i = 0; i < jobs.length; i++) {
+      if (i > 0) await sleep(GAP);
+      const [label, build] = jobs[i];
+      try { const em = build(); await mail.sendMail({ to, subject: '[PRUEBA] ' + em.subject, text: em.text, html: em.html }); console.log('[correo-prueba] ✓', label); }
+      catch (e) { console.error('[correo-prueba] ✗', label, '-', e.message); }
+    }
+    console.log('[correo-prueba] terminado →', to);
+  })();
+
   store.audit(user.id, 'test-emails');
-  const okCount = results.filter(r => r.ok).length;
-  return ok(res, { to, okCount, total: results.length, results });
+  const etaSeconds = Math.round((jobs.length - 1) * GAP / 1000);
+  return ok(res, { to, count: jobs.length, etaSeconds });
 }
 
 /* ---------- login / cuenta ---------- */
@@ -577,17 +581,11 @@ function notifyNewExtraRequests(user, oldEv, newEv) {
   const nuevos = Object.keys(after).filter(k => after[k] === 'solicitado' && before[k] !== 'solicitado');
   if (!nuevos.length) return;
   const finca = (store.get('locations', newEv.lugar) || {}).name || newEv.lugarOtro || '—';
-  const lista = nuevos.map(k => '• ' + extraLabel(k)).join('\n');
-  const subject = `Nueva solicitud de extra · Boda #${newEv.id}`;
-  const text = `La boda #${newEv.id}${newEv.conyuges ? ' (' + newEv.conyuges + ')' : ''} ha solicitado ${nuevos.length > 1 ? 'estos servicios extra' : 'el servicio extra'}:
-${lista}
-
-Fecha del evento: ${slashDate(newEv.fecha)}
-Lugar: ${finca}
-
-Entra en la intranet (Servicios extras) para revisar la disponibilidad y continuar con la reserva.`;
+  const items = nuevos.map(k => extraLabel(k));
+  const link = APP_URL() + '/#/eventos/' + newEv.id;
+  const em = emails.extraRequestEmail(newEv, items, finca, link, APP_URL());
   store.audit(user.id, 'extra-request', 'events', newEv.id);
-  if (mail.enabled()) { try { mail.sendMail({ to: FACT_EMAIL, subject, text }); } catch (e) { console.error('[aviso extra] email:', e.message); } }
+  if (mail.enabled()) { try { mail.sendMail({ to: FACT_EMAIL, subject: em.subject, text: em.text, html: em.html }); } catch (e) { console.error('[aviso extra] email:', e.message); } }
 }
 
 async function events(req, res, user, seg, method, url) {

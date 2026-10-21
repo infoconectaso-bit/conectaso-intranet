@@ -1099,10 +1099,9 @@ on(/^#\/cuenta$/, async () => {
     m.style.display = 'block'; m.innerHTML = 'Enviando…'; if (btn) btn.disabled = true;
     try {
       const r = await api('test-emails', { method: 'POST', body: { to } });
-      const fail = (r.results || []).filter(x => !x.ok);
-      const rows = (r.results || []).map(x => (x.ok ? '✅ ' : '❌ ') + esc(x.label) + (x.ok ? '' : ' — ' + esc(x.error || 'error'))).join('<br>');
-      m.innerHTML = '<b>' + r.okCount + '/' + r.total + ' enviados</b> a <b>' + esc(r.to) + '</b>' + (fail.length ? ' (algunos fallaron)' : '') + '.<br><span class="muted">Revísalos en tu bandeja (buscan el prefijo <b>[PRUEBA]</b>).</span><br><br>' + rows;
-      toast(fail.length ? 'Enviados con algún fallo' : 'Correos de prueba enviados', fail.length ? 'warn' : 'ok');
+      m.innerHTML = '📨 <b>Enviando ' + r.count + ' correos</b> a <b>' + esc(r.to) + '</b>, espaciados para no superar el límite de Mailtrap.<br>'
+        + '<span class="muted">Irán apareciendo solos en tu bandeja durante los próximos <b>~' + r.etaSeconds + ' s</b> (busca el prefijo <b>[PRUEBA]</b>). No hace falta esperar aquí.</span>';
+      toast('Enviando correos de prueba…', 'ok');
     } catch (err) {
       m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>';
       toast('No se pudieron enviar', 'err');
