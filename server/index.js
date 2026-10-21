@@ -281,6 +281,8 @@ function meView(u) {
   // Flags que controlan qué apartados ve el DJ/técnico en su menú.
   if (u.role === 'dj') { out.vehicle_allowed = !!u.vehicle_allowed; out.time_tracking = !!u.time_tracking; }
   out.tycSigned = tycSignedBy(u);
+  // Bodas de 2026 y anteriores (o sin fecha): no necesitan firmar, no se les muestra el gate.
+  out.tycNotNeeded = u.role === 'user' && !out.tycSigned && !tycNeeded(u);
   return out;
 }
 
@@ -355,6 +357,12 @@ function tycSignedBy(u) {
   if (u.tycSign && u.tycSign.date) return true;           // firma hecha en la intranet nueva
   if (u.tyc === true) return true;                        // firma del sistema anterior (booleano "tyc")
   return !!(ev && ev.tycSigned);                          // firma ya registrada en los datos reales
+}
+// El TYC se implantó para la temporada 2027: las bodas de 2026 y anteriores (o sin fecha) NO firman.
+function tycNeeded(u) {
+  if (!u || u.role !== 'user') return false;
+  const ev = eventOfUser(u);
+  return !!(ev && ev.fecha && ev.fecha >= '2027-01-01');
 }
 function tycAutofill(u) {
   if (!u || u.role !== 'user') return { novios: '', finca: '', fecha: '', dnis: '', evId: null };
@@ -908,7 +916,10 @@ async function usersApi(req, res, user, seg, method) {
       // o tiene el booleano "tyc" del sistema anterior puesto a true (así es como se guardaban las firmas antiguas).
       const signed = u.role === 'user' && (!!(u.tycSign && u.tycSign.date) || u.tyc === true || signedUserIds.has(+u.id));
       // El cotitular (no es el titular de su evento) no firma: su pareja ya firmó por ambos.
-      const tycExempt = u.role === 'user' && !signed && coUserIds.has(+u.id);
+      // Tampoco firman las bodas de 2026 y anteriores (o sin fecha): el TYC es desde 2027.
+      const evFecha = (ownerEvent[+u.id] || {}).fecha || '';
+      const needsYear = evFecha && evFecha >= '2027-01-01';
+      const tycExempt = u.role === 'user' && !signed && (coUserIds.has(+u.id) || !needsYear);
       return Object.assign({}, u, { tycSigned: signed, tycExempt, ownedEvent: ownerEvent[+u.id] || null });
     });
     return ok(res, { users: list });

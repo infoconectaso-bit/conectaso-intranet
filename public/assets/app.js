@@ -327,7 +327,7 @@ async function albaranAutologin() {
 }
 /* Contrato TyC: el cliente debe firmarlo la primera vez antes de entrar. */
 async function tycGate() {
-  if (!S.user || S.user.role !== 'user' || S.user.tycSigned) return false;
+  if (!S.user || S.user.role !== 'user' || S.user.tycSigned || S.user.tycNotNeeded) return false;
   try { await renderTyc(); return true; } catch (e) { return false; }
 }
 async function renderTyc() {
