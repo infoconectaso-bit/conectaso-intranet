@@ -212,6 +212,41 @@ function modal(title, bodyHtml, { okText, onOk, danger } = {}) {
   bg.addEventListener('click', e => { if (e.target === bg || e.target.closest('[data-x]')) bg.remove(); if (e.target.closest('[data-ok]')) { const keep = onOk(bg); if (keep !== true) bg.remove(); } });
   return bg;
 }
+
+/* ---- Instalar como app (Android/Windows con botón nativo; iPhone con pasos) ---- */
+let _deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); _deferredInstall = e; });
+window.addEventListener('appinstalled', () => { try { localStorage.setItem('cs_install_off', '1'); } catch (e) {} _deferredInstall = null; });
+const _isStandalone = () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+const _isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+function maybeInstallPrompt() {
+  try {
+    if (!S.user || ['user', 'planner', 'dj'].indexOf(S.user.role) < 0) return;  // novios, wedding planner y DJs
+    if (_isStandalone()) return;                                                 // ya está instalada
+    if (localStorage.getItem('cs_install_off') === '1') return;                  // instalada o "no volver a mostrar"
+    if (sessionStorage.getItem('cs_install_shown') === '1') return;             // una vez por sesión
+    sessionStorage.setItem('cs_install_shown', '1');
+  } catch (e) { return; }
+  let action;
+  if (_deferredInstall) {
+    action = '<button class="btn btn--primary btn--block" id="iInstall" style="margin-top:4px">📲 Instalar la app</button>';
+  } else if (_isIOS()) {
+    action = '<div class="hint" style="margin-top:4px">En tu iPhone: pulsa <b>Compartir</b> (el icono ⬆️ de abajo) y luego <b>«Añadir a pantalla de inicio»</b>.</div>';
+  } else {
+    action = '<div class="hint" style="margin-top:4px">En el menú de tu navegador (⋮) elige <b>«Instalar aplicación»</b> o <b>«Añadir a pantalla de inicio»</b>.</div>';
+  }
+  const body = `<p style="margin:0 0 12px">Ten tu boda siempre a mano: añade <b>Conecta Só</b> a tu móvil y entra de un toque, como una app. 💛</p>${action}
+    <div style="margin-top:14px;text-align:center"><a href="#" id="iLater" style="font-size:13px;color:var(--muted)">Ahora no</a>
+    &nbsp;·&nbsp; <a href="#" id="iNever" style="font-size:13px;color:var(--muted)">No volver a mostrar</a></div>`;
+  const bg = modal('📲 Instala Conecta Só', body);
+  const inst = bg.querySelector('#iInstall');
+  if (inst) inst.onclick = async () => {
+    bg.remove();
+    try { _deferredInstall.prompt(); const r = await _deferredInstall.userChoice; if (r && r.outcome === 'accepted') { try { localStorage.setItem('cs_install_off', '1'); } catch (e) {} } _deferredInstall = null; } catch (e) {}
+  };
+  const later = bg.querySelector('#iLater'); if (later) later.onclick = e => { e.preventDefault(); bg.remove(); };
+  const never = bg.querySelector('#iNever'); if (never) never.onclick = e => { e.preventDefault(); try { localStorage.setItem('cs_install_off', '1'); } catch (x) {} bg.remove(); };
+}
 const ICON = {
   home: 'M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10', events: 'M7 2v4M17 2v4M3 9h18M5 5h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z',
   extras: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', users: 'M17 20v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2M12 10a4 4 0 100-8 4 4 0 000 8m9 10v-2a4 4 0 00-3-3.87',
@@ -241,6 +276,7 @@ async function boot() {
   await loadContext();
   if (await tycGate()) return;
   route();
+  setTimeout(maybeInstallPrompt, 1500);
 }
 /* Autologin del DJ/trabajador por enlace mágico para rellenar su parte de trabajo. */
 async function albaranAutologin() {
@@ -344,6 +380,7 @@ function renderAuth() {
 async function afterLogin() {
   const me = await api('auth/me'); S.user = me.user; S.mailEnabled = me.mailEnabled;
   await loadContext(); if (await tycGate()) return; if (!location.hash || location.hash === '#/recuperar') location.hash = '#/'; route();
+  setTimeout(maybeInstallPrompt, 1500);
 }
 function renderForgot() {
   app.innerHTML = authShell(`
