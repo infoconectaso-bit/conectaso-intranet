@@ -218,7 +218,14 @@ async function usuariosPage(openId) {
     $$('[data-edit]').forEach(b => b.onclick = () => userForm(users.find(u => u.id == b.dataset.edit), users));
     $$('[data-invite]').forEach(b => b.onclick = async () => { const r = await api('users/' + b.dataset.invite + '/invite', { method: 'POST' }); showInvite(r.invite); });
     $$('[data-cal]').forEach(b => b.onclick = () => calForUser(users.find(u => u.id == b.dataset.cal)));
-    $$('[data-del]').forEach(b => b.onclick = () => modal('Dar de baja', '¿Eliminar esta cuenta? El usuario perderá el acceso.', { okText: 'Eliminar', danger: true, onOk: async () => { await api('users/' + b.dataset.del, { method: 'DELETE' }); toast('Usuario eliminado', 'ok'); usuariosPage(); } }));
+    $$('[data-del]').forEach(b => b.onclick = () => {
+      const u = users.find(x => x.id == b.dataset.del) || {};
+      const ev = u.ownedEvent;
+      const body = ev
+        ? `<div class="alert alert--warn" style="margin-bottom:10px">⚠ <b>Ojo:</b> este usuario es el <b>titular</b> de la boda <b>#${ev.id}${ev.conyuges ? ' · ' + esc(ev.conyuges) : ''}</b>${ev.fecha ? ' (' + esc(slash(ev.fecha)) + ')' : ''}. Si lo eliminas, esa boda se quedará sin titular. Quizá quieras <b>eliminar antes el evento</b>.</div><div class="btn-row" style="margin-bottom:4px"><a class="btn btn--sm" href="#/eventos/${ev.id}">Ver el evento</a></div>`
+        : '¿Eliminar esta cuenta? El usuario perderá el acceso.';
+      modal('Dar de baja', body, { okText: ev ? 'Eliminar usuario igualmente' : 'Eliminar', danger: true, onOk: async () => { await api('users/' + b.dataset.del, { method: 'DELETE' }); toast('Usuario eliminado', 'ok'); usuariosPage(); } });
+    });
   });
   if (openId) { const u = users.find(x => x.id == openId); if (u) userForm(u, users); }
 }

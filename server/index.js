@@ -26,7 +26,9 @@ const APP_URL = () => (process.env.APP_URL || '').replace(/\/$/, '');
 /* ---------- utilidades HTTP ---------- */
 function send(res, status, body, headers = {}) {
   const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
-  res.writeHead(status, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' }, headers));
+  // 'no-store': las respuestas de la API nunca se cachean en el navegador. Sin esto, algunos
+  // navegadores servían un listado antiguo (p. ej. un evento recién asignado no aparecía).
+  res.writeHead(status, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' }, headers));
   res.end(data);
 }
 const ok = (res, body) => send(res, 200, body);
@@ -890,9 +892,11 @@ async function usersApi(req, res, user, seg, method) {
     // eventos por cada usuario → O(usuarios×eventos), con ~2000 usuarios dejaba la página colgada).
     const signedUserIds = new Set();
     const coUserIds = new Set();  // cotitulares (segundo/tercer acceso): su firma no es necesaria, ya firma el titular
+    const ownerEvent = {};        // userId del titular -> datos mínimos de su boda (para avisar al borrar)
     store.all('events').forEach(e => {
       if (e.tycSigned) { if (e.userId) signedUserIds.add(+e.userId); (e.coUsers || []).forEach(x => signedUserIds.add(+x)); }
       (e.coUsers || []).forEach(x => { if (+x !== +e.userId) coUserIds.add(+x); });
+      if (e.userId) ownerEvent[+e.userId] = { id: e.id, conyuges: e.conyuges || '', fecha: e.fecha || '' };
     });
     const list = users.all().map(u => {
       // Firmado si: firmó en la intranet nueva (tycSign), o en los datos del evento (ev.tycSigned),
@@ -900,7 +904,7 @@ async function usersApi(req, res, user, seg, method) {
       const signed = u.role === 'user' && (!!(u.tycSign && u.tycSign.date) || u.tyc === true || signedUserIds.has(+u.id));
       // El cotitular (no es el titular de su evento) no firma: su pareja ya firmó por ambos.
       const tycExempt = u.role === 'user' && !signed && coUserIds.has(+u.id);
-      return Object.assign({}, u, { tycSigned: signed, tycExempt });
+      return Object.assign({}, u, { tycSigned: signed, tycExempt, ownedEvent: ownerEvent[+u.id] || null });
     });
     return ok(res, { users: list });
   }
