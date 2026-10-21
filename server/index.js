@@ -1104,4 +1104,5 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`Gestor Conecta So escuchando en http://${HOST}:${PORT}`);
   if (!mail.enabled()) console.log('Aviso: SMTP no configurado — los enlaces de invitación se mostrarán en pantalla al administrador.');
+  try { require('./reminders').startReminders(); } catch (e) { console.error('[recordatorios] no se pudo iniciar:', e.message); }
 });

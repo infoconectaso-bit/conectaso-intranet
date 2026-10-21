@@ -97,4 +97,55 @@ function resetEmail(u, link, baseUrl) {
   return { subject: c.subject, text: plainFromCopy(c, link), html: shell({ logoUrl, title: c.title, lead: c.lead, bodyHtml: c.body, cta: c.cta, link, foot: c.foot }) };
 }
 
-module.exports = { inviteEmail, resetEmail, shell, inviteCopy };
+const slashDate = f => { const p = String(f || '').slice(0, 10).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (f || ''); };
+
+// Recordatorio a los novios 15 días antes de la boda.
+function coupleReminderEmail(ev, link, baseUrl) {
+  const logoUrl = baseUrl ? baseUrl.replace(/\/$/, '') + '/assets/brand/logo-email-blanco.png' : '';
+  const c = {
+    subject: 'Faltan 15 días para vuestra boda 💍 · Conecta Só',
+    title: '¡Ya queda nada! 💍',
+    lead: 'Repasad que tenéis todo listo para vuestra boda.',
+    body: `<p style="margin:0 0 14px 0">¡Hola ${esc(ev.conyuges || 'pareja')}!</p>
+<p style="margin:0 0 14px 0">Faltan <b>15 días</b> para vuestra boda del <b>${slashDate(ev.fecha)}</b> 🎉 Es buen momento para repasar que lo tenéis todo a punto en vuestro espacio: la <b>música</b> de cada momento, vuestros datos y los detalles.</p>
+<p style="margin:0">Si queréis cambiar algo, aún estáis a tiempo:</p>`,
+    cta: 'Entrar en mi boda',
+    foot: 'Entrad cuando queráis con vuestro email y contraseña.',
+  };
+  return { subject: c.subject, text: plainFromCopy(c, link), html: shell({ logoUrl, title: c.title, lead: c.lead, bodyHtml: c.body, cta: c.cta, link, foot: c.foot }) };
+}
+
+// Recordatorio a los novios 7 días antes si la música no está completa.
+function coupleMusicEmail(ev, link, baseUrl) {
+  const logoUrl = baseUrl ? baseUrl.replace(/\/$/, '') + '/assets/brand/logo-email-blanco.png' : '';
+  const c = {
+    subject: 'Os falta un poco de música para vuestra boda 🎵 · Conecta Só',
+    title: 'Os falta un poco de música 🎵',
+    lead: 'Completad la música antes de que se cierre la edición.',
+    body: `<p style="margin:0 0 14px 0">¡Hola ${esc(ev.conyuges || 'pareja')}!</p>
+<p style="margin:0 0 14px 0">Faltan <b>7 días</b> para vuestra boda del <b>${slashDate(ev.fecha)}</b> y hemos visto que aún tenéis <b>algunos momentos musicales sin canción</b>. Para que vuestro DJ lo prepare todo perfecto, entrad y completad la música (ceremonia, aperitivo, banquete y fiesta).</p>
+<p style="margin:0">Es rápido y marca la diferencia:</p>`,
+    cta: 'Completar mi música',
+    foot: 'La edición se cierra unos días antes de la boda, así que mejor no dejarlo para el final 🙂',
+  };
+  return { subject: c.subject, text: plainFromCopy(c, link), html: shell({ logoUrl, title: c.title, lead: c.lead, bodyHtml: c.body, cta: c.cta, link, foot: c.foot }) };
+}
+
+// Aviso al DJ/técnico cuando la boda ha finalizado, para rellenar su parte de trabajo.
+function djAlbaranEmail(u, ev, link, baseUrl) {
+  const logoUrl = baseUrl ? baseUrl.replace(/\/$/, '') + '/assets/brand/logo-email-blanco.png' : '';
+  const c = {
+    subject: 'Rellena tu parte de trabajo · Boda #' + ev.id + ' · Conecta Só',
+    title: '¿Cómo fue la boda? Rellena tu parte',
+    lead: 'Indica horas extra, opinión y observaciones del evento.',
+    body: `<p style="margin:0 0 14px 0">Hola${u.name ? ' ' + esc(u.name) : ''},</p>
+<p style="margin:0 0 14px 0">La boda <b>${esc(ev.conyuges || ('#' + ev.id))}</b> del <b>${slashDate(ev.fecha)}</b> ya ha finalizado. Entra para rellenar tu <b>albarán de trabajo</b>:</p>
+<p style="margin:0 0 14px 0">• Las <b>horas extra</b> realizadas<br>• Si hay que <b>pedir opinión</b> a los novios<br>• Tus <b>observaciones</b> del evento</p>
+<p style="margin:0">Con rellenarlo nos ayudas a cerrar el evento y tu cobro:</p>`,
+    cta: 'Rellenar mi parte',
+    foot: 'Entra con tu email y contraseña, en la pestaña Servicios del evento.',
+  };
+  return { subject: c.subject, text: plainFromCopy(c, link), html: shell({ logoUrl, title: c.title, lead: c.lead, bodyHtml: c.body, cta: c.cta, link, foot: c.foot }) };
+}
+
+module.exports = { inviteEmail, resetEmail, coupleReminderEmail, coupleMusicEmail, djAlbaranEmail, shell, inviteCopy };
