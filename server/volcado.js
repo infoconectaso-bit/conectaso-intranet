@@ -201,15 +201,17 @@ async function handle(req, res, seg, method, url) {
     for (const id of ids) {
       const rep = { id, files: [], skipped: [], errors: [] };
       try {
-        let names;
+        let items; // [{name, momento}]
         const provided = (body.fileMap || {})[id] || (body.fileMap || {})[String(id)];
-        if (provided) { names = [...new Set(provided.map(n => decodeURIComponent(String(n))))]; }
+        if (provided) { items = provided.map(x => (typeof x === 'string') ? { name: decodeURIComponent(x), momento: '' } : { name: decodeURIComponent(String(x.name)), momento: String(x.momento || '') }); }
         else { // si no se pasa la lista, se saca del HTML de la ficha (requiere cookie)
           const page = await srcFetch('/admin/events/update/' + id, cookie, ua);
           const re = new RegExp('/public/uploads/' + id + '/files/([^"\'\\s>]+)', 'g');
-          names = [...new Set([...page.text.matchAll(re)].map(m => decodeURIComponent(m[1])))];
+          items = [...new Set([...page.text.matchAll(re)].map(m => decodeURIComponent(m[1])))].map(n => ({ name: n, momento: '' }));
         }
-        for (const name of names) {
+        const seenN = {}; items = items.filter(it => it.name && !seenN[it.name] && (seenN[it.name] = 1));
+        for (const it of items) {
+          const name = it.name;
           try {
             if (existsStmt.get('events', id, name).n > 0) { rep.skipped.push(name); continue; }
             const url = SRC_BASE + '/public/uploads/' + id + '/files/' + encodeURIComponent(name);
@@ -221,8 +223,8 @@ async function handle(req, res, seg, method, url) {
             const fid = crypto.randomBytes(12).toString('hex');
             const dir = path.join(UP, 'boda-' + id); fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(path.join(dir, fid + '-' + safe(name)), buf);
-            insStmt.run(fid, 'events', id, name, '', mimeOf(name), buf.length, uploadedBy);
-            rep.files.push({ name, size: buf.length });
+            insStmt.run(fid, 'events', id, name, it.momento || '', mimeOf(name), buf.length, uploadedBy);
+            rep.files.push({ name, momento: it.momento || '', size: buf.length });
           } catch (e) { rep.errors.push(name + ' (' + e.message + ')'); }
         }
       } catch (e) { rep.errors.push('PAGE: ' + e.message); }
