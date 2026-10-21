@@ -257,6 +257,11 @@ async function handle(req, res, seg, method, url) {
           fakeEvents: store.all('events').filter(e => e.id > evMax).map(e => ({ id: e.id, tipo: e.tipo, fecha: e.fecha || '', conyuges: (e.conyuges || '').slice(0, 30), dj: e.djId || '' })),
           fakeUsers: users.all().filter(u => u.id > uMax).map(u => ({ id: u.id, role: u.role, name: (u.name || '').slice(0, 30), email: u.email })) });
       }
+      if (cmd === 'mark-tyc') { // marca usuarios como TYC firmado (data.tyc=true) desde los firmados de la intranet
+        const ids = (body.ids || []).map(Number); const val = body.value !== false; let n = 0;
+        ids.forEach(id => { const row = users.getRow(id); if (row) { users.update(id, { data: { tyc: val } }); n++; } });
+        return send(res, 200, { ok: true, marked: n });
+      }
       if (cmd === 'find-users') { // buscar usuarios por nombre/email (para localizar cuentas de Jordi/Dowhile)
         const q = String(body.q || '').toLowerCase();
         return send(res, 200, { ok: true, users: users.all().filter(u => ((u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))).map(u => ({ id: u.id, role: u.role, name: u.name, email: u.email })) });
