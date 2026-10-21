@@ -427,6 +427,8 @@ async function renderActivate() {
     app.innerHTML = authShell(`<h1>✅ El botón funciona</h1><div class="sub">Este es un <b>correo de prueba</b>, así que el enlace es de ejemplo y no crea ninguna contraseña. En un correo real (alta o restablecer), este mismo botón te abriría el formulario para crear tu contraseña.</div><a class="btn btn--dark btn--block" href="#/">Ir al inicio</a>`);
     return;
   }
+  // Si hay otra cuenta abierta, se cierra para que el formulario sea de la persona correcta.
+  if (S.user) { try { await api('auth/logout', { method: 'POST' }); } catch (e) {} S.user = null; }
   let info; try { info = await api('auth/invite-info?token=' + encodeURIComponent(token || '')); }
   catch (e) { app.innerHTML = authShell(`<h1>Enlace no válido</h1><div class="sub">Este enlace no es válido o ha caducado. Pide uno nuevo a administración.</div><a class="btn btn--dark btn--block" href="#/">Ir al inicio</a>`); return; }
   app.innerHTML = authShell(`
