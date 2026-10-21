@@ -24,20 +24,30 @@ const b64 = s => Buffer.from(String(s), 'utf8').toString('base64');
 const encHeader = s => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${b64(s)}?=`);
 
 /** Conversa con el servidor SMTP paso a paso. Resuelve al aceptarse el mensaje. */
-function sendMail({ to, subject, text }) {
+function sendMail({ to, subject, text, html }) {
   if (MAIL_DISABLED) { console.log('[CORREO DESACTIVADO] NO se envía →', to, '·', subject); return Promise.resolve({ disabled: true }); }
   const c = cfg();
   if (!c.host) return Promise.reject(new Error('SMTP no configurado'));
-  const lines = [
+  const b64body = s => b64(s).replace(/(.{76})/g, '$1\r\n');
+  const head = [
     `From: ${encHeader('Conecta So')} <${c.from}>`,
     `To: ${to}`,
     `Subject: ${encHeader(subject)}`,
     'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: base64',
-    '',
-    b64(text).replace(/(.{76})/g, '$1\r\n'),
-  ].join('\r\n');
+  ];
+  let lines;
+  if (html) {
+    // multipart/alternative: el cliente muestra el HTML y, si no puede, el texto plano.
+    const bnd = 'cs_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    lines = head.concat([
+      `Content-Type: multipart/alternative; boundary="${bnd}"`, '',
+      `--${bnd}`, 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', b64body(text || ''),
+      `--${bnd}`, 'Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', b64body(html),
+      `--${bnd}--`,
+    ]).join('\r\n');
+  } else {
+    lines = head.concat(['Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', b64body(text || '')]).join('\r\n');
+  }
 
   return new Promise((resolve, reject) => {
     let sock = c.port === 465 ? tls.connect(c.port, c.host, { servername: c.host }) : net.connect(c.port, c.host);

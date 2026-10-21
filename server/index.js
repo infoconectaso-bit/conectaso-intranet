@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const { store, users, DATA_DIR } = require('./db');
 const auth = require('./auth');
 const mail = require('./mail');
+const emails = require('./emails');
 const perm = require('./permissions');
 const fact = require('./facturacion');
 const { evFinished, evRealized } = require('./time');
@@ -328,8 +329,8 @@ async function forgot(req, res) {
     const token = auth.createToken(row.id, 'reset');
     const link = `${APP_URL() || ''}/activar?token=${token}`;
     if (mail.enabled()) {
-      mail.sendMail({ to: row.email, subject: 'Restablece tu contraseña · Conecta So',
-        text: `Hola,\n\nPara crear una nueva contraseña entra en:\n${link}\n\nEl enlace caduca en 24 horas. Si no lo has pedido, ignora este mensaje.` }).catch(() => {});
+      const em = emails.resetEmail(row, link, APP_URL());
+      mail.sendMail({ to: row.email, subject: em.subject, text: em.text, html: em.html }).catch(() => {});
     }
   }
   return ok(res, { ok: true });
@@ -763,9 +764,8 @@ function makeInvite(u) {
   const link = `${APP_URL() || ''}/activar?token=${token}`;
   const out = { link, sent: false };
   if (mail.enabled() && u.email) {
-    mail.sendMail({ to: u.email, subject: 'Tu acceso al gestor de Conecta So',
-      text: `Hola ${u.name || ''},\n\nTienes acceso al gestor de eventos de Conecta So. Crea tu contraseña aquí:\n${link}\n\nEl enlace caduca en 14 días.` })
-      .then(() => {}).catch(() => {});
+    const em = emails.inviteEmail(u, link, APP_URL());   // email HTML bonito, con texto según el rol
+    mail.sendMail({ to: u.email, subject: em.subject, text: em.text, html: em.html }).then(() => {}).catch(() => {});
     out.sent = true;
   }
   return out;
