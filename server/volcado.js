@@ -284,7 +284,9 @@ async function handle(req, res, seg, method, url) {
       if (cmd === 'set-tyc-dates') { // fija la fecha/hora de firma real (de la intranet) en cada usuario firmado
         const dates = body.dates || {}; let n = 0;
         const toISO = s => { const m = /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}):(\d{2}))?/.exec(String(s || '')); return m ? (`${m[3]}-${m[2]}-${m[1]}` + (m[4] ? `T${m[4]}:${m[5]}:${m[6]}` : 'T00:00:00')) : null; };
-        Object.keys(dates).forEach(id => { const iso = toISO(dates[id]); if (!iso) return; const row = users.getRow(+id); if (!row) return; const cur = JSON.parse(row.data || '{}'); const sign = Object.assign({ version: '2027' }, cur.tycSign, { date: iso }); users.update(+id, { data: { tycSign: sign } }); n++; });
+        // Firma LIMPIA (solo versión + fecha real): el nombre/DNI se reconstruyen del evento, así no
+        // arrastra datos de pruebas antiguas (p.ej. 'adrian y alba prueba').
+        Object.keys(dates).forEach(id => { const iso = toISO(dates[id]); if (!iso) return; const row = users.getRow(+id); if (!row) return; users.update(+id, { data: { tycSign: { version: '2027', date: iso } } }); n++; });
         return send(res, 200, { ok: true, set: n });
       }
       if (cmd === 'find-users') { // buscar usuarios por nombre/email (para localizar cuentas de Jordi/Dowhile)
