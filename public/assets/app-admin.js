@@ -930,7 +930,7 @@ async function mantenimientoPage() {
   const urgRank = { alta: 0, media: 1, baja: 2 };
   const pend = items.filter(m => m.status !== 'completado').sort((a, b) => (urgRank[a.urgency] - urgRank[b.urgency]) || (b.date || '').localeCompare(a.date || ''));
   const done = items.filter(m => m.status === 'completado').sort((a, b) => (b.fixedAt || '').localeCompare(a.fixedAt || ''));
-  const thumbs = m => (imgs[m.id] || []).length ? `<div class="mant-imgs">${imgs[m.id].map(f => `<a href="/api/files/${f.id}" target="_blank" rel="noopener"><img src="/api/files/${f.id}" alt="foto" loading="lazy"></a>`).join('')}</div>` : '';
+  const thumbs = m => (imgs[m.id] || []).length ? `<div class="mant-imgs">${imgs[m.id].map(f => `<img class="mant-thumb" src="/api/files/${f.id}" data-zoom="/api/files/${f.id}" alt="foto" title="Clic para ampliar" loading="lazy">`).join('')}</div>` : '';
   const card = (m, isDone) => `<div class="panel mant-card mant-card--${m.urgency || 'media'}"><div class="panel__body">
       <div class="mant-top"><div><b class="mant-subj">${esc(m.subject || 'Parte de mantenimiento')}</b>
         <div class="mant-meta">${esc(userName(m.userId))} · ${m.date ? dmy(m.date) : ''}${isDone && m.fixedAt ? ' · <b>Arreglado el ' + dmy(m.fixedAt) + '</b>' : ''}</div></div>
@@ -1006,7 +1006,7 @@ on(/^#\/tyc-firma\/(\d+)$/, async m => {
   const head = `<div class="pdf-head"><img src="assets/brand/logo-principal-azul.svg" alt="Conecta So"><div style="text-align:right;color:#777;font-size:10px">Contrato interno<br>${esc(u.name)}</div></div>`;
   const firma = s
     ? `<div class="pdf-sign"><h3>Firma</h3><div class="pdf-grid">
-         <div>Firmado por: <b>${esc(s.name)}</b></div><div>Fecha de firma: <b>${esc(dmy((s.date || '').slice(0, 10)))}</b></div>
+         <div>Firmado por: <b>${esc(s.name)}</b>${s.name2 ? ` y <b>${esc(s.name2)}</b>` : ''}</div><div>Fecha de firma: <b>${esc(dmy((s.date || '').slice(0, 10)))}</b></div>
          <div>DNI: <b>${esc(s.dni || a.dnis || '—')}</b></div>${s.dni2 ? `<div>DNI 2: <b>${esc(s.dni2)}</b></div>` : ''}
          <div>Hora de aceptación: <b>${esc(((s.date || '').slice(11, 16)) || '—')}</b></div><div>Versión aceptada: <b>${esc(s.version || r.tyc.version || '—')}</b></div></div>
        <p class="pdf-signline">✓ Documento aceptado y firmado electrónicamente por los contratantes.</p></div>`
@@ -1032,7 +1032,7 @@ on(/^#\/mi-contrato$/, async () => {
   const head = `<div class="pdf-head"><img src="/assets/brand/logo-principal-azul.svg" alt="Conecta So"><div style="text-align:right;color:#777;font-size:10px">Contrato de servicio<br>${esc(a.novios || S.user.name || '')}</div></div>`;
   const firma = s
     ? `<div class="pdf-sign"><h3>Firma</h3><div class="pdf-grid">
-         <div>Firmado por: <b>${esc(s.name)}</b></div><div>Fecha de firma: <b>${esc(dmy((s.date || '').slice(0, 10)))}</b></div>
+         <div>Firmado por: <b>${esc(s.name)}</b>${s.name2 ? ` y <b>${esc(s.name2)}</b>` : ''}</div><div>Fecha de firma: <b>${esc(dmy((s.date || '').slice(0, 10)))}</b></div>
          <div>DNI: <b>${esc(s.dni || a.dnis || '—')}</b></div>${s.dni2 ? `<div>DNI 2: <b>${esc(s.dni2)}</b></div>` : ''}
          <div>Versión aceptada: <b>${esc(s.version || r.tyc.version || '—')}</b></div></div>
        <p class="pdf-signline">✓ Documento aceptado y firmado electrónicamente por los contratantes.</p></div>`

@@ -375,7 +375,7 @@ async function tycApi(req, res, user, seg, method) {
   if (seg[1] === 'sign' && method === 'POST') {
     if (user.role !== 'user') return fail(res, 403, 'Solo los clientes firman el contrato.');
     const body = await readBody(req);
-    const sign = { version: c.version, name: body.name || user.name, dni: body.dni || '', dni2: body.dni2 || '', date: new Date().toISOString() };
+    const sign = { version: c.version, name: (body.name1 || body.name || user.name || '').trim(), name2: String(body.name2 || '').trim(), dni: body.dni || '', dni2: body.dni2 || '', date: new Date().toISOString() };
     users.update(user.id, { data: { tycSign: sign } });
     try { autofillSpousesFromTyc(user, sign); } catch (e) { /* no bloquear la firma */ }
     store.audit(user.id, 'tyc-sign');
@@ -597,9 +597,16 @@ function meta(user) {
 /* ---------- eventos ---------- */
 function listEventsFor(user) {
   if (user.role === 'admin') return store.all('events');
-  if (user.role === 'user') return store.byOwner('events', user.id);
-  if (user.role === 'planner') return store.byWp('events', user.id);
-  if (user.role === 'dj') return store.byStaff('events', user.id);
+  // IMPORTANTE: filtramos por los DATOS REALES del evento, no por los índices denormalizados
+  // (staff/owner_id/wp_id). Esos índices pueden quedar vacíos en eventos importados o creados
+  // fuera del flujo normal, lo que haría que una boda no apareciera en el listado del DJ, del
+  // planner o del cotitular. Escanear ~2000 eventos es instantáneo y es correcto para TODAS las
+  // bodas (actuales e importadas), no solo las guardadas de nuevo.
+  const all = store.all('events');
+  const uid = +user.id;
+  if (user.role === 'user') return all.filter(e => +e.userId === uid || (e.coUsers || []).some(x => +x === uid));
+  if (user.role === 'planner') return all.filter(e => +e.wpId === uid);
+  if (user.role === 'dj') return all.filter(e => +e.djId === uid || (e.services || []).some(s => +s.resp === uid || +s.resp2 === uid));
   return [];
 }
 // Listado global de solicitudes de extras (para la pestaña "Servicios extras" y el aviso de inicio).

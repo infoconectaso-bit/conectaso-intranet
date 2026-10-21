@@ -351,7 +351,7 @@ async function renderTyc() {
     <div class="tyc-head"><img src="/assets/brand/logo-principal-azul.svg" alt="Conecta So" style="height:40px"><span class="tyc-tag">Contrato interno</span></div>
     <h1>${esc(tycTitleYear(r.tyc.title, a.fecha))}</h1>
     <p class="tyc-sub">Antes de entrar por primera vez, lee y firma el contrato. Solo tienes que hacerlo una vez.</p>
-    ${isClient && (a.novios || a.finca || fecha) ? `<div class="tyc-datos"><div><span>Novios</span><b>${esc(a.novios || '—')}</b></div><div><span>Finca</span><b>${esc(a.finca || '—')}</b></div><div><span>Fecha</span><b>${esc(fecha || '—')}</b></div></div>` : ''}
+    ${isClient && (a.finca || fecha) ? `<div class="tyc-datos"><div><span>Lugar</span><b>${esc(a.finca || '—')}</b></div><div><span>Fecha</span><b>${esc(fecha || '—')}</b></div></div>` : ''}
     <div class="tyc-body">${text}</div>
     <form id="tycForm" class="tyc-form">
       ${dniFields}
@@ -641,6 +641,19 @@ document.addEventListener('click', e => {
   if (!el || el.readOnly || el.disabled) return;
   if (typeof el.showPicker === 'function') { try { el.showPicker(); } catch (x) {} }
 });
+// Visor rápido de imágenes (lightbox): amplía una foto SIN abrir otra pestaña. Cualquier
+// elemento con data-zoom="<url>" lo activa (p. ej. las fotos de los partes de mantenimiento).
+function openLightbox(src) {
+  const bg = document.createElement('div');
+  bg.className = 'lightbox';
+  bg.innerHTML = `<img src="${src}" alt=""><button class="lightbox__x" type="button" aria-label="Cerrar">✕</button>`;
+  const close = () => { bg.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = ev => { if (ev.key === 'Escape') close(); };
+  bg.addEventListener('click', ev => { if (ev.target === bg || ev.target.closest('.lightbox__x')) close(); });
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(bg);
+}
+document.addEventListener('click', e => { const z = e.target.closest('[data-zoom]'); if (z) { e.preventDefault(); openLightbox(z.getAttribute('data-zoom')); } });
 
 /* chips reutilizables */
 const dot = (color, title) => `<span class="dot" style="background:${color}" title="${esc(title || '')}"></span>`;
