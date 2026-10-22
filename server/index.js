@@ -1004,8 +1004,10 @@ async function events(req, res, user, seg, method, url) {
 
   // --- facturas de Holded del cliente de esta boda (admin y los propios novios) ---
   if (seg[2] === 'holded-invoices' && method === 'GET') {
+    // Pueden verlas: administración, la pareja (titular/cónyuges) y el wedding planner asignado.
+    // El DJ NO. (canSeeEvent ya garantiza que un planner solo llega a sus eventos asignados.)
     const owner = +ev.userId === +user.id || (ev.coUsers || []).some(x => +x === +user.id);
-    if (user.role !== 'admin' && !owner) return fail(res, 403, 'Sin acceso a la facturación de esta boda.');
+    if (user.role !== 'admin' && user.role !== 'planner' && !owner) return fail(res, 403, 'Sin acceso a la facturación de esta boda.');
     if (!holded.enabled()) return ok(res, { enabled: false, invoices: [] });
     const emails = [], nifs = [], names = [];
     const pushU = uid => { const u = users.get(uid); if (u && u.email) emails.push(u.email); };
@@ -1026,7 +1028,7 @@ async function events(req, res, user, seg, method, url) {
   // --- PDF de una factura de Holded (verifica que es del cliente de esta boda) ---
   if (seg[2] === 'holded-invoice-pdf' && method === 'GET') {
     const owner = +ev.userId === +user.id || (ev.coUsers || []).some(x => +x === +user.id);
-    if (user.role !== 'admin' && !owner) return fail(res, 403, 'Sin acceso');
+    if (user.role !== 'admin' && user.role !== 'planner' && !owner) return fail(res, 403, 'Sin acceso');
     const invId = url.searchParams.get('inv');
     if (!invId) return fail(res, 400, 'Falta la factura.');
     const emails = [], nifs = [], names = [];

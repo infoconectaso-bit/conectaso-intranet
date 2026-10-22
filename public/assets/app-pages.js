@@ -329,7 +329,7 @@ function eventViewRole(ev) {
     ? `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="archivos">Archivos</button></div>`
     : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button>${role === 'dj' ? '<button data-tab="servicios">Servicios</button><button data-tab="ruta">Ruta</button>' : ''}</div>`);
   const panes = `
-    <div data-pane="datos">${paneDatos(ev, locOpts, { readonly: !(role === 'user' && ev.canEdit), horariosEditable: isPlanner && ev.canEdit })}${role === 'user' ? clientPaymentBlock(ev) + `<div id="holdedFacturas" style="margin-top:16px"></div>` + accessBlock(ev) : ''}</div>
+    <div data-pane="datos">${paneDatos(ev, locOpts, { readonly: !(role === 'user' && ev.canEdit), horariosEditable: isPlanner && ev.canEdit })}${role === 'user' ? clientPaymentBlock(ev) + `<div id="holdedFacturas" style="margin-top:16px"></div>` + accessBlock(ev) : (isPlanner ? `<div id="holdedFacturas" style="margin-top:16px"></div>` : '')}</div>
     ${simple ? '' : `<div data-pane="musica" style="display:none">${paneMusica(ev, canEditMusic)}</div>
     <div data-pane="extras" style="display:none">${paneExtras(ev, { readonly: !canEditExtras })}</div>`}
     ${role === 'dj' ? `<div data-pane="servicios" style="display:none">${paneServicios(ev, null, null, { readonly: true })}${(role === 'dj' && !simple) ? (eventFinished(ev)
@@ -862,19 +862,23 @@ async function loadHoldedFacturas(ev) {
   const eur = n => (Math.round((+n || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
   const invs = r.invoices || [];
   const admin = isAdmin();
-  // Admin: importes SIN IVA (para cuadrar con el pagado del evento). Novios: importes CON IVA
-  // (lo que realmente pagan según la factura).
-  const amt = i => admin
-    ? { total: i.total, paid: i.paid, pending: i.pending }
-    : { total: i.totalConIva, paid: i.paidConIva, pending: Math.max(0, Math.round((i.totalConIva - i.paidConIva) * 100) / 100) };
-  const title = admin ? 'Facturas de Holded' : 'Tus facturas';
+  const isPlanner = S.user.role === 'planner';
+  // Cada factura: base imponible, IVA y total (con IVA). El pagado/pendiente se muestra SIN IVA para
+  // administración (cuadra con el pagado del evento) y CON IVA para la pareja y el planner.
+  const amt = i => {
+    const base = i.total, iva = i.tax, total = i.totalConIva;
+    const paid = admin ? i.paid : i.paidConIva;
+    const pending = admin ? i.pending : Math.max(0, Math.round((i.totalConIva - i.paidConIva) * 100) / 100);
+    return { base, iva, total, paid, pending };
+  };
+  const title = admin ? 'Facturas de Holded' : (isPlanner ? 'Facturas de la pareja' : 'Tus facturas');
   const matchLbl = { email: 'por email', nif: 'por NIF/DNI', name: 'por nombre' }[r.matchedBy] || '';
   const head = `<div class="panel__head"><h3>${title}</h3>${admin && r.contact ? `<span class="muted" style="font-size:12px">${esc(r.contact.name || '')}${matchLbl ? ' · ' + matchLbl : ''}</span>` : ''}</div>`;
   if (r.error) { box.innerHTML = `<div class="panel">${head}<div class="panel__body"><div class="alert alert--warn">No se pudieron cargar las facturas: ${esc(r.error)}</div></div></div>`; return; }
   if (!invs.length) {
     box.innerHTML = admin
       ? `<div class="panel">${head}<div class="panel__body"><p class="hint">No hay facturas de Holded vinculadas a este cliente (no se ha encontrado su contacto por email, NIF ni nombre).</p></div></div>`
-      : '';  // a los novios no les mostramos nada si aún no tienen facturas
+      : '';  // a la pareja/planner no les mostramos nada si aún no hay facturas
     return;
   }
   const statusChip = i => i.paidFull ? '<span class="tag tag--green">Pagada</span>' : (i.paid > 0 ? '<span class="tag tag--yellow">Parcial</span>' : '<span class="tag tag--grey">Pendiente</span>');
@@ -882,22 +886,23 @@ async function loadHoldedFacturas(ev) {
       <td><b>${esc(i.number || '—')}</b></td>
       <td>${esc(slash(i.date) || '')}</td>
       <td>${esc(i.desc || '')}</td>
-      <td style="text-align:right"${admin ? ` title="Total con IVA: ${eur(i.totalConIva)}"` : ''}>${eur(a.total)}</td>
+      <td style="text-align:right">${eur(a.base)}</td>
+      <td style="text-align:right">${eur(a.iva)}</td>
+      <td style="text-align:right"><b>${eur(a.total)}</b></td>
       <td style="text-align:right">${eur(a.paid)}</td>
       <td style="text-align:right">${a.pending > 0 ? eur(a.pending) : '—'}</td>
       <td>${statusChip(i)}</td>
       <td><a class="btn btn--icon" href="/api/events/${ev.id}/holded-invoice-pdf?inv=${encodeURIComponent(i.id)}" target="_blank" rel="noopener" title="Ver / descargar PDF">📄</a></td>
     </tr>`; }).join('');
-  const t = invs.reduce((s, i) => { const a = amt(i); return { total: s.total + a.total, paid: s.paid + a.paid, pending: s.pending + a.pending }; }, { total: 0, paid: 0, pending: 0 });
-  const impLbl = admin ? 'Importe (sin IVA)' : 'Importe';
+  const t = invs.reduce((s, i) => { const a = amt(i); return { base: s.base + a.base, iva: s.iva + a.iva, total: s.total + a.total, paid: s.paid + a.paid, pending: s.pending + a.pending }; }, { base: 0, iva: 0, total: 0, paid: 0, pending: 0 });
   const note = admin
-    ? 'Importes <b>sin IVA</b> (base imponible), igual que el pagado del evento. Pasa el ratón por el importe para ver el total con IVA.'
-    : 'Importes con IVA incluido. Puedes ver y descargar cada factura en PDF.';
+    ? 'Base imponible, IVA y total de cada factura. El <b>pagado/pendiente</b> se muestra <b>sin IVA</b>, igual que el pagado del evento.'
+    : 'Base imponible, IVA y total de cada factura. Puedes ver y descargar cada una en PDF.';
   box.innerHTML = `<div class="panel">${head}<div class="panel__body">
     <p class="hint">${note}</p>
-    <div class="table-wrap"><table class="dt"><thead><tr><th>Nº</th><th>Fecha</th><th>Concepto</th><th style="text-align:right">${impLbl}</th><th style="text-align:right">Pagado</th><th style="text-align:right">Pendiente</th><th>Estado</th><th></th></tr></thead>
+    <div class="table-wrap"><table class="dt"><thead><tr><th>Nº</th><th>Fecha</th><th>Concepto</th><th style="text-align:right">Base imp.</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th><th style="text-align:right">Pagado</th><th style="text-align:right">Pendiente</th><th>Estado</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr class="fact-sub"><td colspan="3"><b>Totales${admin ? ' (sin IVA)' : ''}</b></td><td style="text-align:right"><b>${eur(t.total)}</b></td><td style="text-align:right"><b>${eur(t.paid)}</b></td><td style="text-align:right"><b>${t.pending > 0 ? eur(t.pending) : '—'}</b></td><td colspan="2"></td></tr></tfoot>
+      <tfoot><tr class="fact-sub"><td colspan="3"><b>Totales</b></td><td style="text-align:right"><b>${eur(t.base)}</b></td><td style="text-align:right"><b>${eur(t.iva)}</b></td><td style="text-align:right"><b>${eur(t.total)}</b></td><td style="text-align:right"><b>${eur(t.paid)}</b></td><td style="text-align:right"><b>${t.pending > 0 ? eur(t.pending) : '—'}</b></td><td colspan="2"></td></tr></tfoot>
     </table></div>
     ${admin ? `<div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn--sm" id="holdedRefresh" title="Vuelve a leer contactos y facturas de Holded">↻ Actualizar desde Holded</button></div>` : ''}
   </div></div>`;
@@ -1027,7 +1032,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   const tabs = el('evTabs');
   if (tabs) tabs.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; $$('[data-tab]', tabs).forEach(x => x.classList.toggle('on', x === b)); $$('[data-pane]', form).forEach(p => p.style.display = p.dataset.pane === b.dataset.tab ? '' : 'none'); if (b.dataset.tab === 'archivos') loadFiles(ev); if (b.dataset.tab === 'ruta' && typeof loadRutaPlano === 'function') loadRutaPlano(ev); if (b.dataset.tab === 'facturacion' && typeof loadHoldedFacturas === 'function') loadHoldedFacturas(ev); });
   // Para los novios, las facturas van en la pestaña Datos (visible de inicio): cargarlas ya.
-  if (S.user.role === 'user' && el('holdedFacturas')) loadHoldedFacturas(ev);
+  if ((S.user.role === 'user' || S.user.role === 'planner') && el('holdedFacturas')) loadHoldedFacturas(ev);
   // añadir plus (admin, solo boda finalizada)
   function wirePlus() {
     const pb = form.querySelector('#addPlusBtn'); if (!pb) return;
