@@ -317,15 +317,21 @@ async function api(req, res, url) {
     const OT = { 'sin horas extra': 0, 'media hora': 0.5, '1 hora': 1, '1 hora y media': 1.5, '2 horas': 2, '2 hora y media': 2.5, '3 horas': 3, '3 hora y media': 3.5, '4 horas': 4, '4 hora y media': 4.5, '5 horas': 5 };
     const otH = s => OT[String(s || '').trim().toLowerCase()] || 0;
     const locName = id => (store.get('locations', id) || {}).name || '';
-    const realized = store.all('events').filter(e => evFinished(e));
+    // Agrupa las fincas que son la misma masía con varios espacios (Can Oliver 200/400/Carpa/Rústico,
+    // Can Ribas Cirerers/Exclusivo/Oliveres, etc.) en un único nombre de masía.
+    const venueGroup = n => { const s = String(n || '').trim(); if (/can\s*oliver/i.test(s)) return 'Can Oliver'; if (/can\s*ribas/i.test(s)) return 'Can Ribas'; if (/mas\s*bad[oó]/i.test(s)) return 'Mas Badó'; return s || 'Otros'; };
+    const masiaOf = e => venueGroup(locName(e.lugar) || e.lugarOtro);
+    const allEv = store.all('events');
+    const realized = allEv.filter(e => evFinished(e));
+    // Ventas por masía/pack: TODAS las bodas (pasadas y futuras ya previstas), no solo las realizadas.
     const ventasMasia = {}, ventasPack = {}, years = new Set();
-    realized.forEach(e => {
+    allEv.forEach(e => {
       const y = (e.fecha || '').slice(0, 4); if (!y) return; years.add(y);
-      const m = locName(e.lugar) || e.lugarOtro || 'Otros'; (ventasMasia[m] = ventasMasia[m] || {})[y] = (ventasMasia[m][y] || 0) + 1;
+      const m = masiaOf(e); (ventasMasia[m] = ventasMasia[m] || {})[y] = (ventasMasia[m][y] || 0) + 1;
       const p = e.tipo || '—'; (ventasPack[p] = ventasPack[p] || {})[y] = (ventasPack[p][y] || 0) + 1;
     });
     const heM = {};
-    realized.forEach(e => { const h = otH(e.djOvertime); const m = locName(e.lugar) || e.lugarOtro || 'Otros'; const x = heM[m] = heM[m] || { h: 0, ev: 0 }; x.h += h; x.ev++; });
+    realized.forEach(e => { const h = otH(e.djOvertime); const m = masiaOf(e); const x = heM[m] = heM[m] || { h: 0, ev: 0 }; x.h += h; x.ev++; });
     const horasMasia = Object.entries(heM).map(([m, x]) => ({ masia: m, horas: Math.round(x.h * 10) / 10, eventos: x.ev, media: x.ev ? Math.round(x.h / x.ev * 100) / 100 : 0 })).filter(r => r.horas > 0).sort((a, b) => b.horas - a.horas);
     const heD = {};
     realized.forEach(e => { if (!e.djId) return; const h = otH(e.djOvertime); const x = heD[e.djId] = heD[e.djId] || { h: 0, n: 0 }; x.h += h; x.n++; });

@@ -220,9 +220,10 @@ async function findByText(q, force) {
   const contacts = Object.values(idx.byId).filter(c =>
     (c.name || '').toLowerCase().includes(needle) ||
     (c.code || '').toLowerCase().includes(needle) ||
-    (c.emails || []).some(e => String(e).toLowerCase().includes(needle))
+    (c.emails || []).some(e => String(e).toLowerCase().includes(needle)) ||
+    (c.invoices || []).some(i => String(i.description || '').toLowerCase().includes(needle))
   ).map(c => ({ id: c.id, name: c.name, code: c.code, emails: c.emails, nInv: (c.invoices || []).length,
-    invoices: (c.invoices || []).map(i => ({ number: i.document_number, date: i.date, total: i.total, paid: i.payments_total })) }));
+    invoices: (c.invoices || []).map(i => ({ number: i.document_number, date: i.date, total: i.total, paid: i.payments_total, desc: i.description })).slice(0, 8) }));
   return { contactsN: idx.contactsN, invoicesN: idx.invoicesN, matches: contacts.slice(0, 20) };
 }
 
