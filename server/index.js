@@ -347,7 +347,7 @@ async function api(req, res, url) {
     });
     const heM = {};
     realized.forEach(e => { const h = otH(e.djOvertime); const m = masiaOf(e); const x = heM[m] = heM[m] || { h: 0, ev: 0 }; x.h += h; x.ev++; });
-    const horasMasia = Object.entries(heM).map(([m, x]) => ({ masia: m, horas: Math.round(x.h * 10) / 10, eventos: x.ev, media: x.ev ? Math.round(x.h / x.ev * 100) / 100 : 0 })).filter(r => r.horas > 0).sort((a, b) => b.horas - a.horas);
+    const horasMasia = Object.entries(heM).map(([m, x]) => ({ masia: m, horas: Math.round(x.h * 10) / 10, eventos: x.ev, media: x.ev ? Math.round(x.h / x.ev * 100) / 100 : 0 })).filter(r => r.horas >= 3).sort((a, b) => b.horas - a.horas);
     // Horas extra por masía desglosadas por año, desde 2025.
     const heMY = {}, heYears = new Set();
     realized.forEach(e => { const y = (e.fecha || '').slice(0, 4); if (!y || y < '2025') return; heYears.add(y); const h = otH(e.djOvertime); const m = masiaOf(e); ((heMY[m] = heMY[m] || {})[y] = (heMY[m][y] || 0) + h); });
