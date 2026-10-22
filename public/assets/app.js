@@ -475,7 +475,7 @@ function navFor(role) {
     { t: 'Servicios extras', i: 'extras', h: '#/extras' },
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
     { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' },
-    { s: 'Negocio' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
+    { s: 'Negocio' }, { t: 'Cobros de la semana', i: 'euro', h: '#/cobros' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
     { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
     // Papelera y Beneficios se han movido a "Mi cuenta → Configuración avanzada" (protegidos con contraseña).
   ];

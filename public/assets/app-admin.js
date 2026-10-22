@@ -774,6 +774,37 @@ on(/^#\/vacaciones$/, async () => {
 /* =========================================================================
    FACTURACIÓN DE EQUIPO (admin) + MIS PAGOS (dj)
    ========================================================================= */
+// Cobros pendientes de las bodas de la SEMANA EN VIGOR (lunes a domingo): de un vistazo, a quién
+// hay que cobrar esta semana. Incluye tanto las bodas próximas como las ya realizadas de la semana.
+on(/^#\/cobros$/, async () => {
+  if (!requireAdmin()) return; loading(['Cobros de la semana']);
+  const [up, done] = await Promise.all([api('events'), api('events?status=done')]);
+  const all = (up.events || []).concat(done.events || []);
+  const now = new Date();
+  const dow = (now.getDay() + 6) % 7;                 // 0 = lunes
+  const mon = new Date(now); mon.setHours(0, 0, 0, 0); mon.setDate(now.getDate() - dow);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const from = iso(mon), to = iso(sun);
+  const seen = {};
+  const rows = all
+    .filter(e => e.fecha && e.fecha >= from && e.fecha <= to && !seen[e.id] && (seen[e.id] = 1) && ((+e.pagoCliente || 0) - (+e.pagado || 0)) > 0.5)
+    .map(e => Object.assign({}, e, { pend: (+e.pagoCliente || 0) - (+e.pagado || 0) }))
+    .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+  const totalPend = rows.reduce((t, r) => t + r.pend, 0);
+  shell(`${pageHead('Cobros de la semana', `Bodas de esta semana (${dmy(from)} – ${dmy(to)}) con importe pendiente de cobro.`)}
+    <div class="grid-2" style="margin-bottom:14px">
+      <div class="stat stat--pink"><div class="k">Pendiente de cobro esta semana</div><div class="v">${fmtEur(totalPend)}</div></div>
+      <div class="stat"><div class="k">Bodas con cobro pendiente</div><div class="v">${rows.length}</div></div></div>
+    <div class="panel"><div class="panel__body">${rows.length ? table('dtCobros', { rows, order: [0, 'asc'], filters: true, cols: [
+      { t: 'Fecha', get: r => r.fecha || '', html: r => dmy(r.fecha) },
+      { t: 'Pareja', get: r => r.conyuges || '', html: r => `<a href="#/eventos/${r.id}">${esc(r.conyuges || '(sin nombre)')}</a>` },
+      { t: 'Lugar', get: r => CS.locName(r) },
+      { t: 'Total', get: r => +r.pagoCliente || 0, html: r => fmtEur(+r.pagoCliente || 0) },
+      { t: 'Pagado', get: r => +r.pagado || 0, html: r => fmtEur(+r.pagado || 0) },
+      { t: 'Pendiente', get: r => r.pend, html: r => `<b>${fmtEur(r.pend)}</b>` },
+    ] }) : '<div class="empty"><span class="script">Sin cobros</span>No hay bodas con pago pendiente esta semana.</div>'}</div></div>`, ['Cobros de la semana']);
+});
 on(/^#\/facturacion$/, async () => {
   if (!requireAdmin()) return; loading(['Facturación']);
   const { workers } = await api('finance/workers');
