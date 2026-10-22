@@ -348,12 +348,27 @@ async function api(req, res, url) {
     const heM = {};
     realized.forEach(e => { const h = otH(e.djOvertime); const m = masiaOf(e); const x = heM[m] = heM[m] || { h: 0, ev: 0 }; x.h += h; x.ev++; });
     const horasMasia = Object.entries(heM).map(([m, x]) => ({ masia: m, horas: Math.round(x.h * 10) / 10, eventos: x.ev, media: x.ev ? Math.round(x.h / x.ev * 100) / 100 : 0 })).filter(r => r.horas > 0).sort((a, b) => b.horas - a.horas);
+    // Horas extra por masía desglosadas por año, desde 2025.
+    const heMY = {}, heYears = new Set();
+    realized.forEach(e => { const y = (e.fecha || '').slice(0, 4); if (!y || y < '2025') return; heYears.add(y); const h = otH(e.djOvertime); const m = masiaOf(e); ((heMY[m] = heMY[m] || {})[y] = (heMY[m][y] || 0) + h); });
+    const horasYears = [...heYears].sort();
+    const horasMasiaYear = Object.entries(heMY).map(([masia, by]) => {
+      const byYear = {}; let total = 0;
+      horasYears.forEach(y => { const v = Math.round((by[y] || 0) * 10) / 10; byYear[y] = v; total += v; });
+      return { masia, byYear, total: Math.round(total * 10) / 10 };
+    }).filter(r => r.total > 0).sort((a, b) => b.total - a.total);
     const heD = {};
     realized.forEach(e => { if (!e.djId) return; const h = otH(e.djOvertime); const x = heD[e.djId] = heD[e.djId] || { h: 0, n: 0 }; x.h += h; x.n++; });
     const horasDj = Object.entries(heD).map(([id, x]) => ({ dj: (users.get(+id) || {}).name || ('#' + id), horas: Math.round(x.h * 10) / 10, bodas: x.n, media: x.n ? Math.round(x.h / x.n * 100) / 100 : 0 })).filter(d => d.horas > 0);
     const djPorTotal = horasDj.slice().sort((a, b) => b.horas - a.horas);
     const djPorBoda = horasDj.slice().filter(d => d.bodas >= 3).sort((a, b) => b.media - a.media);
-    const out = { years: [...years].sort(), ventasMasia, ventasPack, horasMasia, djPorTotal, djPorBoda };
+    // Wedding planners con los que más trabajamos. Excluimos los "de la casa"/finca: UAUU (Castell de
+    // Tous + Mas Vivencs), Edelweiss, Can Ribas y Mas la Boaella.
+    const EXCL_WP = /uauu|edelwe|can\s*ribas|boaella/i;
+    const wpCnt = {};
+    allEv.forEach(e => { if (!e.wpId) return; const nm = (users.get(+e.wpId) || {}).name || ''; if (!nm || EXCL_WP.test(nm)) return; wpCnt[nm] = (wpCnt[nm] || 0) + 1; });
+    const plannersTop = Object.entries(wpCnt).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
+    const out = { years: [...years].sort(), ventasMasia, ventasPack, horasMasia, horasMasiaYear, horasYears, djPorTotal, djPorBoda, plannersTop };
     if (holded.enabled()) {
       try {
         const idx = await holded.buildIndex(url.searchParams.get('refresh') === '1');
@@ -366,6 +381,8 @@ async function api(req, res, url) {
           { name: 'Can Oliver', codes: ['B08758468'] },
           { name: 'Carol Gastronomía', codes: ['B66216946'] },
           { name: 'Ajuntament de Sant Fost', codes: ['P0820800A'] },
+          { name: 'Mas Corts', codes: ['B66001959'] }, // Grup Nou Coberts, S.L.
+          { name: 'Mas la Boella', codes: ['B08231581'] }, // La Siesta Hospitality SL
         ];
         const nz = s => String(s || '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
         const codeToGroup = {}; GROUPS.forEach(g => g.codes.forEach(c => codeToGroup[nz(c)] = g.name));

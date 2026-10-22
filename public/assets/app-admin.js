@@ -1057,8 +1057,15 @@ on(/^#\/analisis$/, async () => {
     a.holdedOk ? sect('Facturación de masías por año', crossTable(a.masiaAnual, 'Masía', eur), 'Importe facturado (sin IVA) desde Holded') : sect('Facturación de masías', '<div class="empty">Holded no está activado.</div>'),
     a.holdedOk ? sect('Media económica por boda y mes', `<div class="table-wrap"><table class="dt"><thead><tr><th>Mes</th><th style="text-align:right">Facturado masías</th><th style="text-align:right">Bodas</th><th style="text-align:right">Media / boda</th></tr></thead><tbody>${econRows.map(m => `<tr><td><b>${esc(m.mes)}</b></td><td style="text-align:right">${eur(m.facturado)}</td><td style="text-align:right">${m.bodas}</td><td style="text-align:right"><b>${eur(m.media)}</b></td></tr>`).join('')}</tbody></table></div>`, 'Facturación de masías ÷ nº de bodas realizadas cada mes') : '',
     sect('Horas extra por masía', bars((a.horasMasia || []).map(r => ({ label: r.masia, value: r.horas, sub: `${r.horas} h · media ${r.media} h/boda` })), v => ''), 'Total de horas extra realizadas en cada finca'),
+    (() => {
+      const hy = a.horasYears || []; const rows = a.horasMasiaYear || [];
+      if (!hy.length || !rows.length) return sect('Horas extra por masía y año', '<div class="empty">Sin datos.</div>', 'Desde 2025');
+      const tbl = `<div class="table-wrap"><table class="dt"><thead><tr><th>Masía</th>${hy.map(y => `<th style="text-align:right">${y}</th>`).join('')}<th style="text-align:right">Total</th></tr></thead><tbody>${rows.map(r => `<tr><td><b>${esc(r.masia)}</b></td>${hy.map(y => `<td style="text-align:right">${r.byYear[y] || 0} h</td>`).join('')}<td style="text-align:right"><b>${r.total} h</b></td></tr>`).join('')}</tbody></table></div>`;
+      return sect('Horas extra por masía y año', tbl, 'Horas extra realizadas en cada finca, desglosadas por año (desde 2025)');
+    })(),
     sect('DJs con más horas extra (total)', pieChart((a.djPorTotal || []).map(r => ({ label: r.dj, value: r.horas })), { unit: 'h' }), 'Reparto del total de horas extra entre DJs'),
     sect('DJs con más horas extra por boda (media)', bars((a.djPorBoda || []).slice(0, 20).map(r => ({ label: r.dj, value: r.media, sub: `${r.media} h/boda · ${r.horas} h en ${r.bodas} bodas` })), v => ''), 'Mínimo 3 bodas para la media'),
+    sect('Wedding planners con los que más trabajamos', pieChart((a.plannersTop || []).map(r => ({ label: r.name, value: r.n })), { unit: ' bodas', topN: 14 }), 'Excluye planners ligados a finca: UAUU (Castell de Tous / Mas Vivencs), Edelweiss, Can Ribas y Mas la Boella'),
   ].join('');
   shell(`${pageHead('Análisis', 'Ventas, facturación de masías, económico por boda y horas extra. Datos de bodas realizadas.')}
     <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--sm" id="anaRefresh" title="Recargar datos de Holded">↻ Actualizar desde Holded</button></div>
