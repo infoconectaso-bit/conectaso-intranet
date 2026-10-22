@@ -530,8 +530,8 @@ function allSpotify(ev) {
   return ls.every(l => (linkService(l.url) || {}).spotify);
 }
 // Iconos por momento musical (entrada novios, anillos, platos, etc.)
-const MOMENT_ICON = { first_spouse_entry: '👰', second_spouse_entry: '🤵', rings: '💍', signatures: '✍️', exit: '🚪', readings: '📖', vehicle_entry: '🚗', vows: '💌', entry: '💑', first: '🍽️', second: '🍖', sorbet: '🍧', dessert: '🍰', wine_white: '🥂', wine_red: '🍷', cake_presentation: '🎂', cake: '🎂', dance: '💃', last_song: '🎶' };
-const momentIcon = key => MOMENT_ICON[String(key).replace(/^(ceremony|aperitif|banquet|disco)_/, '')] || '🎵';
+const MOMENT_ICON = { rings: '💍', signatures: '✍️', exit: '🚪', readings: '📖', vehicle_entry: '🚗', vows: '💌', entry: '💑', first: '🍽️', second: '🍖', sorbet: '🍧', dessert: '🍰', wine_white: '🥂', wine_red: '🍷', cake_presentation: '🎂', cake: '🎂', dance: '💃', last_song: '🎶' };
+const momentIcon = key => { const k = String(key).replace(/^(ceremony|aperitif|banquet|disco)_/, ''); if (k === 'first_spouse_entry' || k === 'second_spouse_entry') return ''; return MOMENT_ICON[k] || '🎵'; };
 // Enlace con el nombre de la plataforma (Spotify / YouTube) y color de marca. Vale para web y PDF.
 function linkChip(url) {
   const s = linkService(url); if (!s || !url) return '';
