@@ -1081,14 +1081,18 @@ async function usersApi(req, res, user, seg, method) {
   // Enlace de autologin ("entrar como") para administración: abre la sesión de ese usuario SIN
   // enviar ningún correo. Útil para revisar la intranet tal como la ve el novio/planner/DJ.
   if (seg[2] === 'magic-link' && method === 'GET') {
-    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
-    const u = users.get(id);
-    if (!u) return fail(res, 404, 'Usuario no encontrado');
-    const token = auth.createToken(u.id, 'magic');
-    const evId = u.eventId || (store.all('events').find(e => +e.userId === id) || {}).id || '';
-    const link = `${APP_URL() || ''}/#/albaran?token=${token}${evId ? '&ev=' + evId : ''}`;
-    store.audit(user.id, 'magic-link', 'users', id);
-    return ok(res, { link, user: { id: u.id, name: u.name, role: u.role }, eventId: evId });
+    try {
+      if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+      const u = users.get(id);
+      if (!u) return fail(res, 404, 'Usuario no encontrado');
+      const token = auth.createToken(id, 'magic');
+      const ownEv = store.all('events').find(e => +e.userId === id);
+      const evId = (u.eventId || (ownEv && ownEv.id)) || '';
+      const base = (APP_URL() || '') || ('http://' + (req.headers.host || '200.234.226.246'));
+      const link = `${base}/#/albaran?token=${token}${evId ? '&ev=' + evId : ''}`;
+      store.audit(user.id, 'magic-link', 'users', id);
+      return ok(res, { link, user: { id: u.id, name: u.name, role: u.role }, eventId: evId });
+    } catch (e) { return fail(res, 500, 'magic-link: ' + (e && e.message || e)); }
   }
   return fail(res, 405, 'Método no permitido');
 }
