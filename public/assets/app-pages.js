@@ -176,6 +176,11 @@ function collectForm(form) {
 on(/^#\/eventos$/, () => eventsList(false));
 on(/^#\/eventos\/realizados$/, () => eventsList(true));
 const DONE_VIEW = { sel: '12m' };  // '12m' | 'all' | '2026' ...
+// --- Furgonetas: resolver y abreviar la marca para el listado y la hoja de ruta ---
+const VEH_ABBR = { volkswagen: 'VW', vw: 'VW', ford: 'FRD', toyota: 'TYT', peugeot: 'PGT', citroen: 'CIT', 'citroën': 'CIT', renault: 'RLT', fiat: 'FIAT', mercedes: 'MB', 'mercedes-benz': 'MB', opel: 'OPL', nissan: 'NSN', iveco: 'IVC', fiorino: 'FIAT' };
+const vehById = id => (S.meta.vehicles || []).find(v => String(v.id) === String(id));
+const vehAbbr = id => { const v = vehById(id); if (!v) return ''; const b = String(v.brand || '').trim().toLowerCase(); return VEH_ABBR[b] || (v.brand ? v.brand.replace(/[^A-Za-zÀ-ÿ]/g, '').slice(0, 3).toUpperCase() : ''); };
+const vehLabel = id => { const v = vehById(id); if (!v) return ''; return (((v.brand || '') + ' ' + (v.model || '')).trim() + (v.plate ? ' · ' + v.plate : '')) || ('Furgoneta ' + id); };
 async function eventsList(done) {
   loading(['Eventos', done ? 'Realizadas' : 'Pendientes']);
   const data = await api('events' + (done ? '?status=done' : ''));
@@ -190,7 +195,7 @@ async function eventsList(done) {
     { t: 'Cónyuges', get: e => e.conyuges, html: e => `<a href="#/eventos/${e.id}">${esc(e.conyuges || 'No indicado')}</a>` },
     { t: 'Fecha', get: e => e.fecha || '', html: e => slash(e.fecha) },
     { t: 'Hora', get: e => e.hora || '' },
-    { t: 'Lugar', get: e => CS.locName(e), html: e => locBadge(e) },
+    { t: 'Lugar', get: e => CS.locName(e), html: e => locBadge(e) + (e.vehicleId ? ` <span class="veh-badge" title="${esc(vehLabel(e.vehicleId))}">🚐 ${esc(vehAbbr(e.vehicleId))}</span>` : '') },
     { t: 'DJ', get: e => djOf(e), html: e => djOf(e) ? esc(djOf(e)) : (admin ? '<span class="no-dj" title="Sin DJ asignado" aria-label="Sin DJ asignado">🚨</span>' : '<span class="muted">—</span>') },
     { t: 'Extras', get: e => svcList(e).map(s => extraName(s.servicio)).join(' '), nofilter: true, html: svcHtml },
   ];
@@ -473,6 +478,7 @@ function paneRuta(ev) {
   return `${head}
     <p class="hint">Tiempos calculados automáticamente: desplazamiento desde Martorelles a <b>${esc(destName)}</b> (${travel} min${travelKm ? ' · ' + travelKm + ' km' : ''}) y montaje según el tipo de boda: <b>${esc(mt.regla)}</b> (${mt.min} min).</p>
     ${mt.note ? `<div class="alert alert--warn" style="margin-bottom:12px">⚠ ${esc(mt.note)}</div>` : ''}
+    ${ev.vehicleId ? `<div class="ruta-veh"><span class="ruta-veh-ic">🚐</span> <b>Furgoneta asignada:</b> ${esc(vehLabel(ev.vehicleId))}</div>` : ''}
     <div class="ruta">
       ${row('🚗', 'Salida desde Martorelles', hhmm(salida), 'Desplazamiento ' + travel + ' min' + (travelKm ? ' · ' + travelKm + ' km' : ''))}
       ${row('📍', 'Llegada a ' + esc(destName), hhmm(llegada), 'Inicio del montaje')}
@@ -517,6 +523,7 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
   ${isAdmin() ? `<div class="mblock mblock--of"><h4>Asignaciones</h4><div class="inner"><div class="form-grid">
     ${fg('DJ asignado', sel('dj_vinculated', [['', 'Selecciona un DJ']].concat((S.meta.djs || []).map(u => [u.id, u.name])), ev.djId, 'data-search'))}
     ${fg('Wedding planner', sel('wp_vinculated', [['', 'Selecciona un planner']].concat((S.meta.planners || []).map(u => [u.id, u.name])), ev.wpId, 'data-search'))}
+    ${fg('Furgoneta', sel('vehicle_id', [['', 'Sin furgoneta']].concat((S.meta.vehicles || []).map(v => [v.id, ((v.brand || '') + ' ' + (v.model || '')).trim() + (v.plate ? ' · ' + v.plate : '')])), ev.vehicleId) + '<p class="hint" id="vehHint" style="margin-top:4px"></p>')}
   </div></div></div>` : ''}
   ${showSpouse ? `<div class="mblock"><h4>Datos de los cónyuges</h4><div class="inner"><div class="grid-2">
     ${sp.slice(0, 2).map((s, i) => { const p = i === 0 ? 'first' : 'second'; return `<div><h5 style="margin-bottom:10px">${i === 0 ? 'Primer' : 'Segundo'} cónyuge</h5><div class="form-grid">
@@ -1060,6 +1067,29 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   // lugar "otro"
   const locSel = form.querySelector('[name=celebration_location]');
   if (locSel) locSel.addEventListener('change', () => { const w = el('otroWrap'); if (w) w.style.display = locSel.value === 'otro' ? 'block' : 'none'; });
+  // Furgoneta: solo para fiesta/bodorrio/tinglado/extras (en recomendado/corporativo se oculta).
+  const vehSel = form.querySelector('[name=vehicle_id]');
+  const typeSel = form.querySelector('[name=wedding_type]');
+  const vehField = vehSel && vehSel.closest('.field');
+  const VEH_TYPES = /fiesta|bodorri|tinglado|extra/i;
+  const toggleVeh = () => { if (!vehField) return; const t = (typeSel && typeSel.value) || ev.tipo || ''; vehField.style.display = VEH_TYPES.test(t) ? '' : 'none'; };
+  toggleVeh();
+  if (typeSel) typeSel.addEventListener('change', toggleVeh);
+  if (vehSel) vehSel.addEventListener('change', async () => {
+    form.dataset.reassignVehicle = ''; const hint = el('vehHint'); if (hint) hint.textContent = '';
+    const vid = vehSel.value; const fecha = (form.querySelector('[name=wedding_date]') || {}).value || ev.fecha;
+    if (!vid || !fecha) return;
+    try {
+      const r = await api('vehicle-usage?date=' + encodeURIComponent(fecha) + '&exclude=' + ev.id);
+      const occ = r.used && r.used[vid];
+      if (occ) {
+        const who = occ.conyuges || ('boda #' + occ.eventId); const donde = occ.lugar ? (' · ' + occ.lugar) : '';
+        const bg = modal('Furgoneta ocupada ese día', `Esta furgoneta ya está asignada el <b>${esc(slash(fecha))}</b> a <b>${esc(who)}</b>${esc(donde)}.<br>¿Quieres <b>cambiarla de ubicación</b> y asignarla a esta boda? Se le quitará a la otra.`,
+          { okText: 'Sí, asignármela a mí', danger: true, onOk: () => { form.dataset.reassignVehicle = '1'; if (hint) hint.innerHTML = '<span style="color:var(--pink);font-weight:600">Se reasignará desde «' + esc(who) + '» al guardar.</span>'; } });
+        bg.addEventListener('click', e => { if (e.target === bg || e.target.closest('[data-x]')) { if (form.dataset.reassignVehicle !== '1') { vehSel.value = ''; if (hint) hint.textContent = ''; } } });
+      }
+    } catch (e) {}
+  });
   // importes en vivo
   if (full) ['event_total_import', 'event_payed_import'].forEach(n => { const i = form.querySelector('[name=' + n + ']'); if (i) i.addEventListener('input', () => { const t = +form.event_total_import.value || 0, p = +form.event_payed_import.value || 0; if (el('pendField')) el('pendField').value = (t - p) + ' €'; }); });
   // toggle Habilitar edición: texto Activado/Desactivado en vivo
@@ -1276,6 +1306,7 @@ function buildEventPayload(ev, form, { full, role, canEditMusic }) {
     metodo: d.payment_method, estado: +d.event_status, pagoCliente: +d.event_total_import || 0, pagado: +d.event_payed_import || 0,
     editUser: d.habilitar_edicion_para_usuario, editUnlock: d.habilitar_edicion_para_usuario,
     djId: +d.dj_vinculated || '', djOvertime: d.dj_assigned_overtime, wpId: +d.wp_vinculated || '',
+    vehicleId: +d.vehicle_id || '', reassignVehicle: form.dataset.reassignVehicle === '1',
     music: readMoments(), optionals: readOpts(), disco: readDisco(), extras: readExtras(), spouses: readSpouses(),
     opinion: d.ask_for_opinion, obsDj: d.dj_observations,
     services: $$('[data-svc]', form).map(r => ({ servicio: +$('[data-s=servicio]', r).value || '', resp: +$('[data-s=resp]', r).value || '', resp2: +$('[data-s=resp2]', r).value || '', precio: (($('[data-s=precio]', r) || {}).value || '') })).filter(s => s.servicio),
@@ -1534,6 +1565,7 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
           <div class="card"><h3>Equipo <span class="ic">🎧</span></h3>
             <div class="row"><div class="k">DJ / Técnico</div><div class="v">${val(djOf(ev))}</div></div>
             <div class="row"><div class="k">Tipo de servicio</div><div class="v sm">${val(ev.tipo)}</div></div>
+            ${ev.vehicleId ? `<div class="row"><div class="k">Furgoneta</div><div class="v sm">${val(vehLabel(ev.vehicleId))}</div></div>` : ''}
           </div>
           <div class="card"><h3>Contacto <span class="ic">📞</span></h3>
             <div class="row"><div class="k">Email</div><div class="v sm">info@conectaso.es</div></div>

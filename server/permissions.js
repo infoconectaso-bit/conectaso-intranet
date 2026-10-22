@@ -55,7 +55,7 @@ function sanitizeEvent(user, ev) {
 }
 
 const EVENT_SUMMARY = ['id', 'tipo', 'conyuges', 'fecha', 'hora', 'lugar', 'lugarOtro', 'estado', 'metodo', 'pagoCliente', 'pagado',
-  'userId', 'coUsers', 'services', 'djId', 'wpId', 'editUser', 'guests'];
+  'userId', 'coUsers', 'services', 'djId', 'wpId', 'editUser', 'guests', 'vehicleId'];
 function summarizeEvent(user, ev) {
   const s = {};
   EVENT_SUMMARY.forEach(k => { if (ev[k] !== undefined) s[k] = ev[k]; });

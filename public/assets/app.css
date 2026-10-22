@@ -67,6 +67,11 @@ html.night-dim{
 html.night-dim body{background:var(--cream);color:var(--ink)}
 /* tintes claros puntuales → variantes oscuras */
 html.night-dim .control[readonly],html.night-dim .readbox{background:#2b2417}
+/* Modo noche: los momentos DESACTIVADOS no deben deslumbrar en blanco. Tono rojo apagado que
+   deja claro que está desactivado sin cegar. */
+html.night-dim .moment--off{background:#2a1a1a}
+html.night-dim .moment--off .control{background:#3a2222;color:#d7b3b3;border-color:#5a3030}
+html.night-dim .moment--off [data-mtitle]{color:#c99a9a}
 html.night-dim table.dt tbody tr:nth-child(even) td{background:#1e1811}
 html.night-dim table.dt tbody tr:hover td{background:#2c2417}
 html.night-dim .fact-w td{background:#241d12}
@@ -847,6 +852,11 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .ruta-music .ruta-mrow{padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
 .ruta-music .ruta-mrow:last-child{border-bottom:0}
 .ruta-msec{margin:14px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#8a8390)}
+.veh-badge{display:inline-block;font-size:11px;font-weight:800;background:var(--cream,#f1ede4);border:1px solid var(--line,#e5e0d6);border-radius:6px;padding:0 6px;margin-left:4px;white-space:nowrap;vertical-align:middle}
+html.night-dim .veh-badge{background:#2c2417;border-color:#3a3020;color:var(--ink)}
+.ruta-veh{display:flex;align-items:center;gap:8px;background:var(--cream,#f6f2ea);border:1px solid var(--line,#e5e0d6);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:14px}
+.ruta-veh-ic{font-size:18px}
+html.night-dim .ruta-veh{background:#241d12;border-color:#3a3020}
 @media print{.sidebar,.topbar,.tabs,.tabs-row,.floatbar,.mtabs{display:none!important}.ruta-row{break-inside:avoid}}
 
 /* ======== Hoja de ruta · deck apaisado (portado de la demo) ======== */

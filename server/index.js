@@ -311,6 +311,18 @@ async function api(req, res, url) {
       return ok(res, { enabled: true, count: out.length, invoices: out });
     } catch (e) { return ok(res, { enabled: true, error: e.message, invoices: [] }); }
   }
+  // --- furgonetas ocupadas en una fecha (para avisar de conflicto al asignar) ---
+  if (seg[0] === 'vehicle-usage' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    const date = url.searchParams.get('date'); const exclude = +url.searchParams.get('exclude') || 0;
+    const used = {};
+    if (date) store.all('events').forEach(e => {
+      if (e.fecha === date && e.vehicleId && +e.id !== exclude) {
+        used[e.vehicleId] = { eventId: e.id, conyuges: e.conyuges || '', lugar: (store.get('locations', e.lugar) || {}).name || e.lugarOtro || '' };
+      }
+    });
+    return ok(res, { date, used });
+  }
   // --- PDF de cualquier factura de Holded (admin, para el apartado de impagos) ---
   if (seg[0] === 'holded-pdf' && method === 'GET') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
@@ -783,6 +795,8 @@ function meta(user) {
       ? { id: l.id, name: l.name, colorHex: l.colorHex, direction: l.direction, directionLink: l.directionLink, lat: l.lat, lng: l.lng, travelMin: l.travelMin, travelKm: l.travelKm, travelApprox: l.travelApprox }
       : { id: l.id, name: l.name, colorHex: l.colorHex }).sort(byName),
     extras: store.all('extras').slice().sort(byName),
+    // Furgonetas disponibles (para asignarlas a eventos fiesta/bodorrio/tinglado/extras).
+    vehicles: store.all('vehicles').map(v => ({ id: v.id, brand: v.brand || '', model: v.model || '', plate: v.license_plate || '' })),
   };
   if (staffView) {
     m.staff = staffList().slice().sort(byName);
@@ -1095,6 +1109,11 @@ async function events(req, res, user, seg, method, url) {
     try { next = perm.mergeEventUpdate(user, ev, body.event || body); }
     catch (e) { return fail(res, e.status || 400, e.message); }
     store.put('events', next);
+    // Reasignar furgoneta ("cambiarla de ubicación"): si el admin lo confirma, se la quitamos a las
+    // demás bodas del mismo día que la tuvieran asignada (una furgoneta solo puede estar en un sitio).
+    if (user.role === 'admin' && (body.reassignVehicle || (body.event && body.event.reassignVehicle)) && next.vehicleId && next.fecha) {
+      store.all('events').forEach(e => { if (+e.id !== id && e.fecha === next.fecha && +e.vehicleId === +next.vehicleId) { const e2 = Object.assign({}, e); delete e2.vehicleId; store.put('events', e2); } });
+    }
     try { notifyNewExtraRequests(user, ev, next); } catch (e) { /* no bloquear el guardado */ }
     store.audit(user.id, 'event-update', 'events', id);
     const saved = store.get('events', id);
