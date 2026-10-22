@@ -150,6 +150,15 @@ body.dark{background:var(--onyx)}
 .sumgrid b{display:block;font-family:var(--display);font-weight:900;font-size:17px}
 .sumgrid span{font-size:12px;color:rgba(249,245,225,.75)}
 ul.tips{margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+.paidbox{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.paidbox .h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.paidbox .h b{font-family:var(--display);font-weight:900;font-size:22px}
+.stack{display:flex;height:14px;border-radius:99px;overflow:hidden;border:2px solid var(--onyx);background:var(--line)}
+.stack i{display:block;height:100%}
+.stack .c1{background:var(--blue)} .stack .c2{background:var(--pink)} .stack .c3{background:var(--yellow)}
+.lg{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.lg span{display:inline-flex;align-items:center;gap:5px}
+.lg i{display:inline-block;width:10px;height:10px;border-radius:3px;border:1.5px solid var(--onyx)}
 [hidden]{display:none!important}
 @media (max-width:370px){.form,.stats,.simgrid,.toprow,.sumgrid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.bar>i,.track i,.rk .tr i{transition:none}}
@@ -234,6 +243,12 @@ ul.tips{margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:fle
         <div class="stat"><b class="num" id="sFin">—</b><span>última cuota</span></div>
         <div class="stat"><b class="num" id="sIntP">—</b><span>intereses pagados</span></div>
         <div class="stat"><b class="num" id="sIntR">—</b><span>intereses que faltan</span></div>
+      </div>
+      <div class="paidbox">
+        <div class="h"><span class="eyebrow">Ya pagado hasta hoy</span><b class="num" id="pTot">—</b></div>
+        <div class="stack" aria-hidden="true"><i class="c3" id="pE"></i><i class="c1" id="pC"></i><i class="c2" id="pI"></i></div>
+        <div class="lg num" id="pLg"></div>
+        <p class="note" id="pNote" hidden></p>
       </div>
       <p class="good" id="sAl"></p>
       <p class="good" id="sAh" hidden></p>
@@ -398,6 +413,15 @@ function mk(cfg){
   L.C0=cfg.cuota||annuity(L.I,cfg.total,L.N,L.VR);
   L.tabla=Array.isArray(cfg.tabla)&&cfg.tabla.length?cfg.tabla:null;
   L.base=schedule(L,[]);
+  // Cuotas pagadas antes de empezar a contar (p. ej. la hipoteca): se reconstruyen desde el importe inicial.
+  L.past=[];L.PA=cfg.pagadasAntes||0;
+  if(L.PA&&cfg.original&&cfg.original>cfg.total){
+    const ip=solveRate(cfg.original,L.C0,L.PA,cfg.total,L.I);let B=cfg.original;
+    for(let k=1;k<=L.PA;k++){let it=r2(B*ip),am=r2(L.C0-it);if(k===L.PA){am=r2(B-cfg.total);it=r2(L.C0-am)}B=r2(B-am);
+      const t=L.M0-1+(k-1-L.PA);const y=L.Y0+Math.floor(t/12),m=((t%12)+12)%12+1;const last=new Date(y,m,0).getDate();
+      L.past.push({k,fecha:iso(y,m,Math.min(L.DAY,last)),cuota:r2(am+it),int:it,bal:B,past:true})}
+  }
+  L.pastInt=r2(L.past.reduce((a,r)=>a+r.int,0));L.pastPaid=r2(L.past.reduce((a,r)=>a+r.cuota,0));
   return L;
 }
 function annuity(i,B,n,VR){if(n<=0)return r2(B);if(i===0)return r2((B-VR)/n);const f=Math.pow(1+i,-n);return r2((B-VR*f)*i/(1-f))}
@@ -487,7 +511,15 @@ function renderLoan(){
   const {L,advs}=LOANS[CUR];const c=L.cfg,lea=isLeasing(L);
   const sch=schedule(L,advs);
   const bal=balAt(L,sch,today);
-  let paid=0,intP=0;for(const r of sch.rows)if(r.fecha<=today){paid++;intP=r2(intP+r.int)}
+  let paid=0,intP=L.pastInt,cuoP=L.pastPaid;for(const r of sch.rows)if(r.fecha<=today){paid++;intP=r2(intP+r.int);cuoP=r2(cuoP+r.cuota)}
+  for(const e of sch.events)if(e.type==='adv'&&e.fecha<=today)cuoP=r2(cuoP+e.importe);
+  const ent=c.entrada||0,orig0=c.original||c.total;
+  const capP=r2(orig0-bal),totP=r2(cuoP+ent);
+  $('pTot').textContent=eur(totP)+(lea?' + IVA':'');
+  const W=v=>(totP?v/totP*100:0).toFixed(2)+'%';
+  $('pE').style.width=W(ent);$('pC').style.width=W(capP);$('pI').style.width=W(intP);
+  $('pLg').innerHTML=(ent?`<span><i style="background:var(--yellow)"></i>Entrada ${eur(ent)}</span>`:'')+`<span><i style="background:var(--blue)"></i>Capital ${eur(capP)}</span><span><i style="background:var(--pink)"></i>Intereses ${eur(intP)}</span>`;
+  $('pNote').hidden=!L.past.length;$('pNote').textContent=L.past.length?`Incluye las ${L.PA} cuotas pagadas desde ${mesAno(L.past[0].fecha)}. El total pagado y el capital son exactos; el reparto mes a mes de esas cuotas antiguas está reconstruido.`:'';
   const next=sch.rows.find(r=>r.fecha>today),last=sch.rows[sch.rows.length-1];
   const orig=c.original||c.total,pa=c.pagadasAntes||0;
   const dev=r2(orig-bal),pct=dev/orig*100;
@@ -503,7 +535,7 @@ function renderLoan(){
     const dd=Math.round((new Date(next.fecha+'T12:00:00')-new Date(today+'T12:00:00'))/864e5);$('nPill').textContent=dd===0?'Hoy':dd===1?'Mañana':`En ${dd} días`;
   }else{$('nCuota').textContent='¡Pagado!';$('nFecha').textContent='No queda nada por pagar.';$('nPill').textContent='Terminado'}
   $('sPag').textContent=`${paid+pa} de ${sch.rows.length+pa}`;$('sFin').textContent=last?mesAno(last.fecha):'—';
-  $('sIntP').textContent=eur(intP);$('sIntR').textContent=eur(r2(sch.intTot-intP));
+  $('sIntP').textContent=eur(intP);$('sIntR').textContent=eur(r2(sch.intTot-(intP-L.pastInt)));
   $('sAl').textContent=paid?`Al día: ${paid+pa} cuotas pagadas, la última el ${dmy(sch.rows[paid-1].fecha)}.`:pa?`Al día: ${pa} cuotas pagadas hasta hoy.`:'Todavía no ha vencido ninguna cuota.';
   const ah=r2(L.base.intTot-sch.intTot),meses=L.base.rows.length-sch.rows.length;
   $('sAh').hidden=!(advs.length&&ah>0);
@@ -518,13 +550,13 @@ function renderLoan(){
   const advBy={};for(const e of sch.events)if(e.type==='adv')(advBy[e.k]=advBy[e.k]||[]).push(e);
   const advRow=a=>`<tr class="adv"><td>+</td><td>${dmy(a.fecha)}</td><td>${eur(a.importe)}</td><td>adelanto</td><td>${eur(a.bal)}</td></tr>`;
   const cu=r=>eur(lea?bruta(L,r.cuota):r.cuota);
-  const row=r=>`<tr class="${r.fecha<=today?'paid':''}${r===next?' nx':''}"><td>${r.vr?'OC':r.k+pa}</td><td>${dmy(r.fecha)}</td><td>${cu(r)}</td><td>${eur(r.int)}</td><td>${eur(r.bal)}</td></tr>`+(advBy[r.k]||[]).map(advRow).join('');
+  const row=r=>`<tr class="${r.fecha<=today?'paid':''}${r===next?' nx':''}"><td>${r.vr?'OC':r.past?r.k:r.k+pa}</td><td>${dmy(r.fecha)}</td><td>${cu(r)}</td><td>${eur(r.int)}</td><td>${eur(r.bal)}</td></tr>`+(advBy[r.k]||[]).map(advRow).join('');
   const pre=(advBy[0]||[]).map(advRow).join('');
   const ni=sch.rows.indexOf(next),from=ni<0?Math.max(sch.rows.length-6,0):Math.max(ni-2,0);
   $('tNext').innerHTML=(from===0?pre:'')+sch.rows.slice(from,from+8).map(row).join('');
-  $('tFull').innerHTML=$('tAll').open?pre+sch.rows.map(row).join(''):'';
+  $('tFull').innerHTML=$('tAll').open?L.past.map(row).join('')+pre+sch.rows.map(row).join(''):'';
   $('thC').textContent=$('thC2').textContent=lea?'Factura':'Cuota';
-  $('tAllS').textContent=`Ver las ${sch.rows.length} cuotas`;
+  $('tAllS').textContent=`Ver las ${sch.rows.length+L.past.length} cuotas`;
   $('tNote').textContent=(lea?'«Factura» es la cuota con IVA; intereses y pendiente van sin IVA. «OC» es la opción de compra. ':'')+`Cada cuota se da por pagada el día ${L.DAY} de su mes, porque está domiciliada.`;
   // datos
   const facts=[...(c.datos||[]),[lea?'Capital financiado':c.original?'Pendiente al empezar a contar':'Total prestado',eur(c.total)],['Interés',`${c.tabla&&lea&&c.id!=='kona'?'≈ ':''}${pctTxt(c.tasa)} nominal anual`],
@@ -666,7 +698,7 @@ function renderCmp(){
     'El «Préstamo socios» lo pagáis vosotros y los intereses los cobra vuestra propia empresa: ese dinero no se pierde, se queda en casa (aunque la empresa tributa por él).',
     'Los leasing los paga la empresa. Sus intereses son gasto deducible y el IVA de las facturas también se recupera, así que el ahorro real después de impuestos es algo menor que el que ves aquí.',
     'Al adelantar capital en un leasing, el banco suele facturar ese capital con IVA (la empresa lo recupera después).'];
-  const bb=LOANS.bbva&&LOANS.bbva.L.cfg.comision;if(bb&&bb.pct==null)tips.push('Del leasing de BBVA no tengo la comisión de cancelación: hasta que la pongas en «Cambiar datos», se calcula como si no tuviera.');
+  const bb=LOANS.bbva&&LOANS.bbva.L.cfg.comision;if(bb&&bb.pct==null)tips.push('Del leasing de la nave no tengo la comisión de cancelación: hasta que la pongas en «Cambiar datos», se calcula como si no tuviera.');
   if(LOANS.hipoteca)tips.push('La hipoteca es la que tiene el interés más bajo (1,45 %) y fijo, y además tiene comisión, así que amortizarla es lo que menos ahorra.');
   if(LOANS.kona)tips.push('El leasing del Kona (Cetelem) no admite amortizaciones parciales: solo se puede cancelar entero, con un 5 % de comisión (mínimo 250 €).');
   $('tips').innerHTML=tips.map(t=>`<li>${esc(t)}</li>`).join('');
@@ -757,6 +789,11 @@ async function start(){
   for(const def of (window.PRESTAMOS_INICIALES||[])){
     const ex=P[def.id];
     if(!ex){try{const r=await call('PUT','/api/prestamos/'+def.id,{config:def.config});P[def.id]={config:r.config,adelantos:[]}}catch(e){}}
+    else if((def.id==='bbva'&&ex.config.nombre==='Leasing BBVA')||(def.config.entrada!=null&&ex.config.entrada==null)){ // nombre de la nave y entradas
+      const c=Object.assign({},ex.config,def.id==='bbva'&&ex.config.nombre==='Leasing BBVA'?{nombre:def.config.nombre,datos:def.config.datos}:{},{entrada:def.config.entrada});
+      if(c.comision&&c.comision.pct==null)c.comision=Object.assign({},c.comision,{nota:def.config.comision.nota});
+      try{const r=await call('PUT','/api/prestamos/bbva',{config:c});ex.config=r.config}catch(e){}
+    }
     else if(def.id==='socios'&&!ex.config.nombre){ // préstamo creado con la versión anterior: se completa con los datos nuevos
       const c=Object.assign({},def.config,{total:ex.config.total,tasa:ex.config.tasa,n:ex.config.n||ex.config.anos*12,firma:ex.config.firma,primeraCuota:ex.config.primeraCuota});
       try{const r=await call('PUT','/api/prestamos/socios',{config:c});ex.config=r.config}catch(e){}
