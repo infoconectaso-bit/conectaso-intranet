@@ -996,6 +996,46 @@ async function events(req, res, user, seg, method, url) {
     return ok(res, { token, eventId: ev.id, workerId: wid, workerName: w.name || '', hourly: !!fact.HOURLY_RATE[String(wid)] });
   }
 
+  // --- facturas de Holded del cliente de esta boda (admin y los propios novios) ---
+  if (seg[2] === 'holded-invoices' && method === 'GET') {
+    const owner = +ev.userId === +user.id || (ev.coUsers || []).some(x => +x === +user.id);
+    if (user.role !== 'admin' && !owner) return fail(res, 403, 'Sin acceso a la facturación de esta boda.');
+    if (!holded.enabled()) return ok(res, { enabled: false, invoices: [] });
+    const emails = [], nifs = [], names = [];
+    const pushU = uid => { const u = users.get(uid); if (u && u.email) emails.push(u.email); };
+    if (ev.userId) pushU(ev.userId);
+    (ev.coUsers || []).forEach(pushU);
+    (ev.spouses || []).forEach(s => { if (s && s.email) emails.push(s.email); if (s && s.dni) nifs.push(s.dni); if (s && s.name) names.push(s.name); });
+    if (ev.conyuges) String(ev.conyuges).split(/\s+y\s+|&/i).forEach(n => { const t = n.trim(); if (t) names.push(t); });
+    try {
+      const force = url.searchParams.get('refresh') === '1' && user.role === 'admin';
+      const r = await holded.invoicesForClient({ emails, nifs, names }, force);
+      const totals = r.invoices.reduce((a, i) => ({ total: a.total + i.total, paid: a.paid + i.paid, pending: a.pending + i.pending }), { total: 0, paid: 0, pending: 0 });
+      return ok(res, { enabled: true, matchedBy: r.matchedBy, contact: r.contact, invoices: r.invoices, totals, indexInfo: user.role === 'admin' ? r.indexInfo : undefined });
+    } catch (e) { return ok(res, { enabled: true, error: e.message, invoices: [] }); }
+  }
+
+  // --- PDF de una factura de Holded (verifica que es del cliente de esta boda) ---
+  if (seg[2] === 'holded-invoice-pdf' && method === 'GET') {
+    const owner = +ev.userId === +user.id || (ev.coUsers || []).some(x => +x === +user.id);
+    if (user.role !== 'admin' && !owner) return fail(res, 403, 'Sin acceso');
+    const invId = url.searchParams.get('inv');
+    if (!invId) return fail(res, 400, 'Falta la factura.');
+    const emails = [], nifs = [], names = [];
+    const pushU = uid => { const u = users.get(uid); if (u && u.email) emails.push(u.email); };
+    if (ev.userId) pushU(ev.userId);
+    (ev.coUsers || []).forEach(pushU);
+    (ev.spouses || []).forEach(s => { if (s && s.email) emails.push(s.email); if (s && s.dni) nifs.push(s.dni); if (s && s.name) names.push(s.name); });
+    if (ev.conyuges) String(ev.conyuges).split(/\s+y\s+|&/i).forEach(n => { const t = n.trim(); if (t) names.push(t); });
+    try {
+      const r = await holded.invoicesForClient({ emails, nifs, names });
+      if (!r.invoices.some(i => i.id === invId)) return fail(res, 403, 'Esa factura no pertenece a esta boda.');
+      const buf = await holded.getInvoicePdf(invId);
+      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="factura-${invId}.pdf"`, 'Content-Length': buf.length });
+      return res.end(buf);
+    } catch (e) { return fail(res, 502, 'No se pudo obtener el PDF: ' + e.message); }
+  }
+
   if (method === 'GET') {
     const out = perm.sanitizeEvent(user, ev);
     enrichEvent(out, ev, user);
