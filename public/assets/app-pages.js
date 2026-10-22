@@ -158,6 +158,11 @@ function autoExtraKeys(ev) {
   return set;
 }
 const SEC_OF = { ceremony: 'C', aperitif: 'A', banquet: 'B' };
+// Sección REAL de un momento personalizado. Los momentos heredados del volcado no tenían
+// sección fiable: el código viejo los metía en Ceremonia ('C') o los dejaba sin sec, y el
+// autoguardado llegó a sellar algunos como 'C'. Por eso 'C' y vacío se tratan como
+// "personalizados" (pestaña 'X'). Solo A/B/D/E son secciones elegidas de verdad.
+const optSec = o => { const s = o && o.sec; return (s === 'A' || s === 'B' || s === 'D' || s === 'E') ? s : 'X'; };
 
 /* helpers de formulario */
 const fg = (label, ctl) => `<label>${label}</label><div>${ctl}</div>`;
@@ -570,7 +575,7 @@ function momentRow(ev, key, title, { readonly }) {
 }
 function optRow(o, { readonly }) {
   const ro = readonly ? 'readonly' : '';
-  return `<div class="moment" data-moment data-opt data-oid="${esc(o.id || '')}" data-kind="${esc(o.kind || 'optionals')}" data-area="${esc(o.area || 'ceremony')}" data-sec="${esc(o.sec || 'X')}">
+  return `<div class="moment" data-moment data-opt data-oid="${esc(o.id || '')}" data-kind="${esc(o.kind || 'optionals')}" data-area="${esc(o.area || 'ceremony')}" data-sec="${esc(optSec(o))}">
     <h5>${toolsHtml(readonly, true)}<span>${readonly ? esc(o.title || 'Momento') : 'Momento personalizado'}</span></h5>
     <div class="mgrid">
       <div><label class="mlab">Momento / destinatario</label><input class="control" data-f="title" value="${esc(o.title || '')}" placeholder="Ej: Padres, Votos…" ${ro}></div>
@@ -583,7 +588,7 @@ function paneMusica(ev, canEdit) {
   const readonly = !canEdit;
   // Los personalizados SIN sección (heredados del volcado) van a su propia pestaña 'X'
   // (Momentos personalizados), NO a Ceremonia. Los que tienen sección explícita (C/A/B/D/E) se respetan.
-  const optsIn = sec => (ev.optionals || []).filter(o => (o.sec || 'X') === sec).sort((a, b) => (+a.order || 99) - (+b.order || 99));
+  const optsIn = sec => (ev.optionals || []).filter(o => optSec(o) === sec).sort((a, b) => (+a.order || 99) - (+b.order || 99));
   const sectionBody = (sec, fixedKeys) => {
     // fijos y personalizados se mezclan y se ordenan por el orden guardado (lo que permite arrastrar entre ellos)
     const rows = [];
@@ -610,7 +615,7 @@ function paneMusica(ev, canEdit) {
   const radset = (name, opts, cur) => `<div class="radset">${opts.map(([v, l]) => `<label class="chk chk--radio"><input type="radio" name="${name}" value="${esc(v)}" ${String(cur) === String(v) ? 'checked' : ''} ${roS}> <span>${esc(l)}</span></label>`).join('')}</div>`;
   // Momentos personalizados heredados de la intranet anterior (no tenían sección asignada).
   // Se muestran juntos en su propia pestaña, como lista, en vez de amontonarse en Ceremonia.
-  const hasLegacyOpts = (ev.optionals || []).some(o => !o.sec || o.sec === 'X');
+  const hasLegacyOpts = (ev.optionals || []).some(o => optSec(o) === 'X');
   if (hasLegacyOpts) sections.push({ key: 'personalizados', label: 'Momentos personalizados', body: `<div class="inner"><div class="alert alert--info">Momentos que se añadieron en la intranet anterior. No estaban asignados a una sección concreta (ceremonia, banquete, fiesta…), así que los reunimos aquí para que no se mezclen con la ceremonia.</div>${sectionBody('X', [])}</div>` });
   sections.push({ key: 'entregas', label: 'Entregas', body: `<div class="inner">${sectionBody('E', [])}</div>` });
   sections.push({ key: 'fiesta', label: 'Fiesta', body: `<div class="inner"><div class="form-grid">
@@ -1344,11 +1349,11 @@ on(/^#\/eventos\/(\d+)\/pdf$/, async m => {
     const fixed = (key === 'disco' ? DISCO_MOMENTS : musicAreasFor(ev).find(a => a.key === key).moments)
       .map((mm, i) => { const k = key + '_' + mm[0], mu = (ev.music || {})[k] || {}; return { on: mu.on, order: +mu.order || (i + 1), html: `<div><span class="m-ic">${momentIcon(k)}</span> <b>${esc(label(k, mm[1]))}</b> : ${pv(mu.song)} ${linkChip(mu.link)}</div>` }; })
       .filter(x => !x.on);
-    const extra = opts.filter(o => (o.sec || 'X') === (SEC_OF[key] || (key === 'disco' ? 'D' : ''))).map(o => ({ order: +o.order || 60, html: `<div>• <b>${esc(o.title)}</b> : ${pv(o.value)} ${linkChip(o.link)}</div>` }));
+    const extra = opts.filter(o => optSec(o) === (SEC_OF[key] || (key === 'disco' ? 'D' : ''))).map(o => ({ order: +o.order || 60, html: `<div>• <b>${esc(o.title)}</b> : ${pv(o.value)} ${linkChip(o.link)}</div>` }));
     return fixed.concat(extra).sort((a, b) => a.order - b.order).map(x => x.html).join('');
   };
-  const ent = opts.filter(o => (o.sec || 'X') === 'E').map(o => `<div>• <b>Entrega para: ${esc(o.title)}</b> : ${pv(o.value)} ${linkChip(o.link)}</div>`).join('');
-  const pers = opts.filter(o => !o.sec || o.sec === 'X').map(o => `<div>• <b>${esc(o.title)}</b> : ${pv(o.value)} ${linkChip(o.link)}</div>`).join('');
+  const ent = opts.filter(o => optSec(o) === 'E').map(o => `<div>• <b>Entrega para: ${esc(o.title)}</b> : ${pv(o.value)} ${linkChip(o.link)}</div>`).join('');
+  const pers = opts.filter(o => optSec(o) === 'X').map(o => `<div>• <b>${esc(o.title)}</b> : ${pv(o.value)} ${linkChip(o.link)}</div>`).join('');
   const extrasList = EXTRAS_CLIENTE.filter(x => ev.extras && ev.extras[x[0]]).map(x => `<div>• ${esc(x[1])}</div>`).join('');
   const sp = ev.spouses || [{}, {}];
   const head = `<div class="pdf-head"><img src="assets/brand/logo-principal-azul.svg" alt="Conecta So"><div style="text-align:right;color:#777;font-size:10px">Configuración musical de boda<br>${esc(ev.conyuges)}<br>${dmy(ev.fecha)}</div></div>`;
