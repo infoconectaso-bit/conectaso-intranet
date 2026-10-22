@@ -38,12 +38,18 @@ body{background:var(--cream);color:var(--ink);font-family:var(--body);font-size:
 .brand{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
 .brand .s{font-family:var(--script);color:var(--yellow);font-size:30px;line-height:1;text-shadow:2px 2px 0 var(--pink);transform:rotate(-4deg);display:inline-block}
 .brand .k{font-family:var(--display);font-weight:900;font-size:15px;letter-spacing:.08em}
-.tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -4px 16px;padding:2px 4px}
-.tabs::-webkit-scrollbar{display:none}
-.tabs .tgl{flex:none;align-self:center;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:rgba(249,245,225,.5);padding:0 2px 0 6px}
-.tabs .tgl:first-child{padding-left:0}
-.tabs button{flex:none;font:inherit;font-size:13px;font-weight:700;border:2px solid var(--onyx-soft);background:transparent;color:rgba(249,245,225,.8);border-radius:99px;padding:7px 13px;cursor:pointer;white-space:nowrap}
-.tabs button[aria-selected="true"]{background:var(--yellow);color:var(--onyx);border-color:var(--yellow)}
+.grp{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--onyx-soft);padding:4px;border-radius:14px;margin-bottom:10px}
+.grp button{font:inherit;font-family:var(--display);font-weight:900;font-size:13px;letter-spacing:.03em;border:0;border-radius:10px;padding:11px 4px;background:transparent;color:rgba(249,245,225,.75);cursor:pointer}
+.grp button[aria-selected="true"]{background:var(--yellow);color:var(--onyx)}
+.grp button small{display:block;font-family:var(--body);font-weight:600;font-size:11px;letter-spacing:0;opacity:.75;margin-top:2px}
+.lns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
+.lns button{font:inherit;text-align:left;border:2px solid var(--onyx-soft);background:transparent;color:var(--cream);border-radius:12px;padding:10px 12px;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-width:0}
+.lns button b{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lns button span{font-size:12px;color:rgba(249,245,225,.65);font-variant-numeric:tabular-nums}
+.lns button[aria-selected="true"]{border-color:var(--yellow);background:rgba(240,232,90,.1)}
+.lns button[aria-selected="true"] b{color:var(--yellow)}
+.lns:empty{display:none}
+.lns button:last-child:nth-child(odd){grid-column:1/-1}
 .eyebrow{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)}
 .top .eyebrow{color:rgba(249,245,225,.7)}
 .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1.5px solid rgba(249,245,225,.4);border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:2px}
@@ -212,7 +218,8 @@ ul.tips{margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:fle
 <section id="vApp" hidden>
   <header class="top gut"><div class="in">
     <div class="brand"><span class="s">Préstamo</span><span class="k">CONECTA</span></div>
-    <nav class="tabs" id="tabs" role="tablist" aria-label="Contratos"></nav>
+    <nav class="grp" id="grp" role="tablist" aria-label="Grupos"></nav>
+    <nav class="lns" id="tabs" aria-label="Contratos"></nav>
 
     <div id="hLoan">
       <div class="eyebrow"><span id="hLbl">Te queda por devolver hoy</span><span class="tag" id="hTag"></span></div>
@@ -505,13 +512,20 @@ let LOANS={},ORDER=[],CUR=null,mode='plazo',amt=0,cancelAll=false,kMode='plazo',
 const isLeasing=L=>L.cfg.tipo==='leasing';
 const bruta=(L,c)=>r2(c*(1+L.IVA));
 
+let LAST={personal:null,empresa:null};
+function groupOf(id){return id==='__cmp'?'__cmp':(LOANS[id]&&LOANS[id].L.G==='personal'?'personal':'empresa')}
+function pendLabel(id){const {L,advs}=LOANS[id];if(today<L.cfg.firma)return `Se firma el ${dmy(L.cfg.firma)}`;return eur0(balAt(L,schedule(L,advs),today))+' pendiente'}
+function go(id){CUR=id;amt=0;cancelAll=false;if(id!=='__cmp')LAST[groupOf(id)]=id;try{localStorage.setItem('pc_tab',CUR)}catch(e){}render();window.scrollTo(0,0)}
 function tabs(){
-  const btn=id=>`<button type="button" role="tab" data-id="${id}" aria-selected="${CUR===id}">${esc(LOANS[id].L.cfg.nombre)}</button>`;
-  const per=ORDER.filter(id=>LOANS[id].L.G==='personal'),emp=ORDER.filter(id=>LOANS[id].L.G!=='personal');
-  $('tabs').innerHTML=(per.length?'<span class="tgl">Personal</span>'+per.map(btn).join(''):'')+(emp.length?'<span class="tgl">Empresa</span>'+emp.map(btn).join(''):'')
-    +`<span class="tgl">·</span><button type="button" role="tab" data-id="__cmp" aria-selected="${CUR==='__cmp'}">Comparar</button>`;
-  [...$('tabs').querySelectorAll('button')].forEach(b=>b.onclick=()=>{CUR=b.dataset.id;amt=0;cancelAll=false;try{localStorage.setItem('pc_tab',CUR)}catch(e){}render();window.scrollTo(0,0)});
-  const sel=$('tabs').querySelector('[aria-selected="true"]');if(sel)sel.scrollIntoView({block:'nearest',inline:'center'});
+  const G=groupOf(CUR);
+  const per=ORDER.filter(id=>groupOf(id)==='personal'),emp=ORDER.filter(id=>groupOf(id)==='empresa');
+  const gb=(key,label,n)=>`<button type="button" role="tab" data-g="${key}" aria-selected="${G===key}">${label}${n!=null?`<small>${n} ${n===1?'contrato':'contratos'}</small>`:'<small>dónde ahorro más</small>'}</button>`;
+  $('grp').innerHTML=gb('personal','Personal',per.length)+gb('empresa','Empresa',emp.length)+gb('__cmp','Comparar',null);
+  [...$('grp').children].forEach(b=>b.onclick=()=>{const g=b.dataset.g;if(g==='__cmp')return go('__cmp');
+    const list=g==='personal'?per:emp;go(LAST[g]&&list.includes(LAST[g])?LAST[g]:list[0])});
+  const list=G==='personal'?per:G==='empresa'?emp:[];
+  $('tabs').innerHTML=list.map(id=>`<button type="button" data-id="${id}" aria-selected="${CUR===id}"><b>${esc(LOANS[id].L.cfg.nombre)}</b><span>${esc(pendLabel(id))}</span></button>`).join('');
+  [...$('tabs').children].forEach(b=>b.onclick=()=>go(b.dataset.id));
 }
 function render(){
   tabs();
