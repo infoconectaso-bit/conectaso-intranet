@@ -449,9 +449,10 @@ function schedule(L,advs){
   return {rows,events,intTot};
 }
 function balAt(L,sch,date){let b=L.cfg.total;for(const e of sch.events)if(e.fecha<=date)b=e.bal;return b}
-function commission(L,amt,total){
+function commission(L,amt,total,fecha){
   const c=L.cfg.comision||{};if(c.pct==null)return 0;if(!(amt>0))return 0;
-  return r2(Math.max(amt*c.pct/100,c.min||0));
+  const pct=c.pct2!=null&&c.desde2&&fecha&&fecha>=c.desde2?c.pct2:c.pct;
+  return r2(Math.max(amt*pct/100,c.min||0));
 }
 // Simula adelantar `amt` en `fecha`. Devuelve ahorro de intereses, comisión, etc.
 function simulateL(L,advs,amt,fecha,modo){
@@ -461,7 +462,7 @@ function simulateL(L,advs,amt,fecha,modo){
   amt=Math.min(amt,pend);
   const sim=amt>0?schedule(L,[...advs,{id:'_',importe:amt,fecha,modo}]):cur;
   const ah=Math.max(0,r2(cur.intTot-sim.intTot));
-  const com=amt>0?commission(L,amt,total):0;
+  const com=amt>0?commission(L,amt,total,fecha):0;
   return {cur,sim,amt,pend,ah,com,net:r2(ah-com),total};
 }
 
@@ -488,21 +489,22 @@ function renderLoan(){
   const bal=balAt(L,sch,today);
   let paid=0,intP=0;for(const r of sch.rows)if(r.fecha<=today){paid++;intP=r2(intP+r.int)}
   const next=sch.rows.find(r=>r.fecha>today),last=sch.rows[sch.rows.length-1];
-  const dev=r2(c.total-bal),pct=dev/c.total*100;
+  const orig=c.original||c.total,pa=c.pagadasAntes||0;
+  const dev=r2(orig-bal),pct=dev/orig*100;
   $('hLbl').textContent=lea?'Capital pendiente hoy (sin IVA)':'Te queda por devolver hoy';
-  $('hTag').textContent=lea?'Leasing · '+(c.quien||'Empresa'):(c.quien||'');$('hTag').hidden=!$('hTag').textContent;
+  $('hTag').textContent=lea?'Leasing · '+(c.quien||'Empresa'):c.tipo==='hipoteca'?'Hipoteca · '+(c.quien||''):(c.quien||'');$('hTag').hidden=!$('hTag').textContent;
   $('hPend').textContent=eur(bal);$('hDev').textContent=eur(dev);
   $('hPct').textContent=pct.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1})+' %';
   $('hBar').style.width=Math.max(pct,.8).toFixed(2)+'%';$('hBarW').setAttribute('aria-valuenow',pct.toFixed(1));
   if(next){
     $('nLbl').textContent=lea?(next.vr?'Opción de compra':'Próxima factura (con IVA)'):'Próxima cuota';
     $('nCuota').textContent=eur(lea?bruta(L,next.cuota):next.cuota);
-    $('nFecha').textContent=(lea?`${eur(next.cuota)} + IVA · `:'')+`Cuota ${next.k} de ${sch.rows.length} · ${largo(next.fecha)}`;
+    $('nFecha').textContent=(lea?`${eur(next.cuota)} + IVA · `:'')+`Cuota ${next.k+pa} de ${sch.rows.length+pa} · ${largo(next.fecha)}`;
     const dd=Math.round((new Date(next.fecha+'T12:00:00')-new Date(today+'T12:00:00'))/864e5);$('nPill').textContent=dd===0?'Hoy':dd===1?'Mañana':`En ${dd} días`;
   }else{$('nCuota').textContent='¡Pagado!';$('nFecha').textContent='No queda nada por pagar.';$('nPill').textContent='Terminado'}
-  $('sPag').textContent=`${paid} de ${sch.rows.length}`;$('sFin').textContent=last?mesAno(last.fecha):'—';
+  $('sPag').textContent=`${paid+pa} de ${sch.rows.length+pa}`;$('sFin').textContent=last?mesAno(last.fecha):'—';
   $('sIntP').textContent=eur(intP);$('sIntR').textContent=eur(r2(sch.intTot-intP));
-  $('sAl').textContent=paid?`Al día: ${paid} ${paid===1?'cuota pagada':'cuotas pagadas'}, la última el ${dmy(sch.rows[paid-1].fecha)}.`:'Todavía no ha vencido ninguna cuota.';
+  $('sAl').textContent=paid?`Al día: ${paid+pa} cuotas pagadas, la última el ${dmy(sch.rows[paid-1].fecha)}.`:pa?`Al día: ${pa} cuotas pagadas hasta hoy.`:'Todavía no ha vencido ninguna cuota.';
   const ah=r2(L.base.intTot-sch.intTot),meses=L.base.rows.length-sch.rows.length;
   $('sAh').hidden=!(advs.length&&ah>0);
   $('sAh').textContent=`Con tus adelantos te ahorras ${eur(ah)} en intereses`+(meses>0?` y terminas ${dur(meses)} antes.`:'.');
@@ -516,7 +518,7 @@ function renderLoan(){
   const advBy={};for(const e of sch.events)if(e.type==='adv')(advBy[e.k]=advBy[e.k]||[]).push(e);
   const advRow=a=>`<tr class="adv"><td>+</td><td>${dmy(a.fecha)}</td><td>${eur(a.importe)}</td><td>adelanto</td><td>${eur(a.bal)}</td></tr>`;
   const cu=r=>eur(lea?bruta(L,r.cuota):r.cuota);
-  const row=r=>`<tr class="${r.fecha<=today?'paid':''}${r===next?' nx':''}"><td>${r.vr?'OC':r.k}</td><td>${dmy(r.fecha)}</td><td>${cu(r)}</td><td>${eur(r.int)}</td><td>${eur(r.bal)}</td></tr>`+(advBy[r.k]||[]).map(advRow).join('');
+  const row=r=>`<tr class="${r.fecha<=today?'paid':''}${r===next?' nx':''}"><td>${r.vr?'OC':r.k+pa}</td><td>${dmy(r.fecha)}</td><td>${cu(r)}</td><td>${eur(r.int)}</td><td>${eur(r.bal)}</td></tr>`+(advBy[r.k]||[]).map(advRow).join('');
   const pre=(advBy[0]||[]).map(advRow).join('');
   const ni=sch.rows.indexOf(next),from=ni<0?Math.max(sch.rows.length-6,0):Math.max(ni-2,0);
   $('tNext').innerHTML=(from===0?pre:'')+sch.rows.slice(from,from+8).map(row).join('');
@@ -525,8 +527,8 @@ function renderLoan(){
   $('tAllS').textContent=`Ver las ${sch.rows.length} cuotas`;
   $('tNote').textContent=(lea?'«Factura» es la cuota con IVA; intereses y pendiente van sin IVA. «OC» es la opción de compra. ':'')+`Cada cuota se da por pagada el día ${L.DAY} de su mes, porque está domiciliada.`;
   // datos
-  const facts=[...(c.datos||[]),[lea?'Capital financiado':'Total prestado',eur(c.total)],['Interés',`${c.tabla&&lea&&c.id!=='kona'?'≈ ':''}${pctTxt(c.tasa)} nominal anual`],
-    ['Cuotas',`${c.n}${L.VR?' + opción de compra':''}`],['Intereses totales',eur(L.base.intTot)]];
+  const facts=[...(c.datos||[]),[lea?'Capital financiado':c.original?'Pendiente al empezar a contar':'Total prestado',eur(c.total)],['Interés',`${c.tabla&&lea&&c.id!=='kona'?'≈ ':''}${pctTxt(c.tasa)} nominal anual`],
+    ['Cuotas',`${c.n}${L.VR?' + opción de compra':''}${pa?` (desde ${dmy(c.primeraCuota)})`:''}`],['Intereses totales',eur(L.base.intTot)]];
   $('facts').innerHTML=facts.map(([a,b])=>`<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join('');
   renderHist();setupRange();
 }
@@ -665,6 +667,7 @@ function renderCmp(){
     'Los leasing los paga la empresa. Sus intereses son gasto deducible y el IVA de las facturas también se recupera, así que el ahorro real después de impuestos es algo menor que el que ves aquí.',
     'Al adelantar capital en un leasing, el banco suele facturar ese capital con IVA (la empresa lo recupera después).'];
   const bb=LOANS.bbva&&LOANS.bbva.L.cfg.comision;if(bb&&bb.pct==null)tips.push('Del leasing de BBVA no tengo la comisión de cancelación: hasta que la pongas en «Cambiar datos», se calcula como si no tuviera.');
+  if(LOANS.hipoteca)tips.push('La hipoteca es la que tiene el interés más bajo (1,45 %) y fijo, y además tiene comisión, así que amortizarla es lo que menos ahorra.');
   if(LOANS.kona)tips.push('El leasing del Kona (Cetelem) no admite amortizaciones parciales: solo se puede cancelar entero, con un 5 % de comisión (mínimo 250 €).');
   $('tips').innerHTML=tips.map(t=>`<li>${esc(t)}</li>`).join('');
 }
@@ -674,8 +677,8 @@ function renderRank(){
     const {L,advs}=LOANS[id];const cm=L.cfg.comision||{};
     const sch=schedule(L,advs);const pend=balAt(L,sch,f);
     if(pend<=0.004){res.push({id,L,txt:'Ya está pagado.',net:-1e9});continue}
-    if(cm.parcial===false&&kAmt<pend+commission(L,pend,true)){
-      const need=r2(pend+commission(L,pend,true));
+    if(cm.parcial===false&&kAmt<pend+commission(L,pend,true,f)){
+      const need=r2(pend+commission(L,pend,true,f));
       res.push({id,L,net:-1e8,blocked:true,txt:`Solo se puede cancelar entero: necesitas ${eur0(need)} (+ IVA).`});continue}
     const use=Math.min(kAmt,pend);
     const s=simulateL(L,advs,use,f,cm.parcial===false?'plazo':kMode);

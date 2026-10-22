@@ -102,11 +102,13 @@ function cleanConfig(c) {
   let n = num(c.n, 1, 720); if (n == null && c.anos != null) { const a = num(c.anos, 1, 60); n = a == null ? null : a * 12; }
   if (total == null || tasa == null || n == null || !Number.isInteger(n)) return null;
   if (!isDate(c.primeraCuota) || !isDate(c.firma)) return null;
-  const out = { nombre: str(c.nombre || 'Préstamo', 40), tipo: c.tipo === 'leasing' ? 'leasing' : 'prestamo', quien: str(c.quien, 40),
+  const out = { nombre: str(c.nombre || 'Préstamo', 40), tipo: ['leasing', 'hipoteca'].includes(c.tipo) ? c.tipo : 'prestamo', quien: str(c.quien, 40),
     total: Math.round(total * 100) / 100, tasa, n, primeraCuota: c.primeraCuota, firma: c.firma,
-    cuota: num(c.cuota, 0.01, 1e7), vr: num(c.vr, 0, 1e7) || 0, iva: num(c.iva, 0, 30) || 0 };
+    cuota: num(c.cuota, 0.01, 1e7), vr: num(c.vr, 0, 1e7) || 0, iva: num(c.iva, 0, 30) || 0,
+    original: num(c.original, 0.01, 1e8), pagadasAntes: num(c.pagadasAntes, 0, 720) || 0 };
   const cm = c.comision && typeof c.comision === 'object' ? c.comision : {};
-  out.comision = { parcial: cm.parcial !== false, pct: cm.pct == null || cm.pct === '' ? null : num(cm.pct, 0, 20), min: num(cm.min, 0, 1e6) || 0, nota: str(cm.nota, 300) };
+  out.comision = { parcial: cm.parcial !== false, pct: cm.pct == null || cm.pct === '' ? null : num(cm.pct, 0, 20), min: num(cm.min, 0, 1e6) || 0, nota: str(cm.nota, 300),
+    pct2: cm.pct2 == null || cm.pct2 === '' ? null : num(cm.pct2, 0, 20), desde2: isDate(cm.desde2) ? cm.desde2 : null };
   out.datos = Array.isArray(c.datos) ? c.datos.slice(0, 20).filter(d => Array.isArray(d) && d.length === 2).map(([a, b]) => [str(a, 60), str(b, 200)]) : [];
   if (Array.isArray(c.tabla)) {
     const t = c.tabla.slice(0, 800).filter(r => Array.isArray(r) && r.length === 4 && isDate(r[0]) && [1, 2, 3].every(i => num(r[i], 0, 1e8) != null))
