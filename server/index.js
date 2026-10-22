@@ -319,20 +319,24 @@ async function api(req, res, url) {
     const locName = id => (store.get('locations', id) || {}).name || '';
     // Agrupa las fincas que son la misma masía con varios espacios (Can Oliver 200/400/Carpa/Rústico,
     // Can Ribas Cirerers/Exclusivo/Oliveres, etc.) en un único nombre de masía.
-    const venueGroup = n => { const s = String(n || '').trim(); if (/can\s*oliver/i.test(s)) return 'Can Oliver'; if (/can\s*ribas/i.test(s)) return 'Can Ribas'; if (/mas\s*bad[oó]/i.test(s)) return 'Mas Badó'; return s || 'Otros'; };
     const vnorm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-    // Catálogo de fincas oficiales (normalizadas) → nombre de masía agrupado, para casar los
-    // nombres escritos a mano en "Otros" que son prácticamente la misma finca.
-    const CANON = {}; store.all('locations').forEach(l => { if (l.name) CANON[vnorm(l.name)] = venueGroup(l.name); });
-    const masiaOf = e => {
-      const raw = locName(e.lugar) || e.lugarOtro || '';
-      if (e.lugar) return venueGroup(raw); // finca oficial
-      const nq = vnorm(raw); if (!nq) return 'Otros';
-      if (CANON[nq]) return CANON[nq]; // coincide exactamente con una finca conocida
-      for (const k in CANON) { if (k.length >= 6 && (nq === k || nq.includes(k) || k.includes(nq))) return CANON[k]; }
-      return venueGroup(raw);
-    };
+    const prefixGroup = s => { if (/can\s*oliver/i.test(s)) return 'Can Oliver'; if (/can\s*ribas/i.test(s)) return 'Can Ribas'; if (/mas\s*bad[oó]/i.test(s)) return 'Mas Badó'; return null; };
+    const rawVenue = e => locName(e.lugar) || e.lugarOtro || '';
+    // Clave de agrupación: grupo de prefijo (Can Oliver/Ribas…) o nombre normalizado (sin acentos/
+    // mayúsculas), para que "Masia Piguillem", "Masia piguillem" y "Masía Piguillem" sean la misma.
+    const vkey = s => { const g = prefixGroup(s); return g ? ('G:' + g) : (vnorm(s) || 'otros'); };
     const allEv = store.all('events');
+    // Nombre a mostrar por clave: finca oficial si existe; si no, la grafía más frecuente.
+    const spellCount = {};
+    allEv.forEach(e => { const raw = rawVenue(e).trim(); if (!raw) return; const k = vkey(raw); (spellCount[k] = spellCount[k] || {})[raw] = (spellCount[k][raw] || 0) + 1; });
+    const officialByKey = {}; store.all('locations').forEach(l => { if (l.name) { const k = vkey(l.name); if (!officialByKey[k]) officialByKey[k] = prefixGroup(l.name) || l.name.trim(); } });
+    const displayByKey = {};
+    Object.keys(spellCount).forEach(k => {
+      if (k.indexOf('G:') === 0) { displayByKey[k] = k.slice(2); return; }
+      if (officialByKey[k]) { displayByKey[k] = officialByKey[k]; return; }
+      const sp = spellCount[k]; displayByKey[k] = Object.keys(sp).sort((a, b) => sp[b] - sp[a])[0];
+    });
+    const masiaOf = e => { const raw = rawVenue(e).trim(); if (!raw) return 'Otros'; return displayByKey[vkey(raw)] || raw || 'Otros'; };
     const realized = allEv.filter(e => evFinished(e));
     // Ventas por masía/pack: TODAS las bodas (pasadas y futuras ya previstas), no solo las realizadas.
     const ventasMasia = {}, ventasPack = {}, years = new Set();
