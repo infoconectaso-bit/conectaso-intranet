@@ -1199,7 +1199,11 @@ const userName = id => (users.get(id) || {}).name || '';
 // Nombre seguro para disco y ruta organizada por boda: uploads/boda-<id>/<fileid>-<nombre>
 const safeName = n => String(n || 'archivo').normalize('NFKD').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120) || 'archivo';
 const colPrefix = c => (c === 'maintenance' ? 'mant-' : c === 'payslip' ? 'nomina-' : 'boda-');
-const fileFull = f => path.join(UPLOADS, colPrefix(f.collection) + f.record_id, f.id + '-' + safeName(f.name));
+// Carpeta en disco de una nómina: nomina-<trabajador>/<año>/<mes> (organizado por trabajador, año y mes).
+const payslipDir = (uid, period) => { const m = String(period || '').match(/^(\d{4})-(\d{2})/); return path.join(UPLOADS, 'nomina-' + uid, m ? path.join(m[1], m[2]) : 'sin-fecha'); };
+const fileFull = f => (f.collection === 'payslip')
+  ? path.join(payslipDir(f.record_id, f.description), f.id + '-' + safeName(f.name))
+  : path.join(UPLOADS, colPrefix(f.collection) + f.record_id, f.id + '-' + safeName(f.name));
 /* ---------- planos de montaje ----------
  * Imagen (vista aérea) guardada en disco; símbolos ("marks") en un setting.
  * Clave = keyBase: plantilla de finca "<locId>_<pack>" o copia de evento "ev_<id>".
@@ -1274,7 +1278,7 @@ async function filesApi(req, res, user, seg, method, url) {
     for (const p of parts.filter(p => p.filename && p.content.length)) {
       if (p.content.length > MAX_UPLOAD) return fail(res, 413, 'Archivo demasiado grande');
       const id = crypto.randomBytes(12).toString('hex');
-      const dir = path.join(UPLOADS, colPrefix(col) + rid);
+      const dir = (col === 'payslip') ? payslipDir(rid, momento) : path.join(UPLOADS, colPrefix(col) + rid);
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, id + '-' + safeName(p.filename)), p.content);
       db().prepare('INSERT INTO files (id, collection, record_id, name, description, mime, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
