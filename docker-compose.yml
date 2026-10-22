@@ -10,3 +10,13 @@ services:
     volumes:
       # Base de datos y archivos subidos (persisten aunque se reconstruya el contenedor).
       - ./data:/data
+
+  # App del préstamo: independiente de la intranet (otro contenedor, puerto 8080 y datos propios).
+  prestamo:
+    build: ./prestamo
+    container_name: conectaso-prestamo
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data-prestamo:/data
