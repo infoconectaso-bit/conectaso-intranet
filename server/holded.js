@@ -7,7 +7,7 @@
  */
 const { store } = require('./db');
 
-const BASE = 'https://api.holded.com/api/invoicing/v1';
+const BASE = 'https://api.holded.com/api/v2';
 
 function getConfig() { return store.setting('holdedConfig') || {}; }
 function enabled() { const c = getConfig(); return !!(c.enabled && c.apiKey); }
@@ -35,18 +35,18 @@ async function apiGet(path) {
   throw new Error('Holded respondió con error: ' + lastErr);
 }
 
-/** Comprueba que la clave funciona (pide 1 contacto). Devuelve {ok, info}. */
+/** Comprueba que la clave funciona (pide contactos). Devuelve {ok, info}. */
 async function testConnection() {
-  const data = await apiGet('/contacts?page=1');
-  const n = Array.isArray(data) ? data.length : (data && data.total) || 0;
+  const data = await apiGet('/contacts');
+  const n = Array.isArray(data) ? data.length : (data && (data.total || (data.data && data.data.length))) || 0;
   return { ok: true, sample: n };
 }
 
-/** Lista las facturas (documentos tipo invoice). Holded pagina; traemos varias páginas. */
+/** Lista las facturas de venta (API v2). Holded pagina; traemos varias páginas. */
 async function listInvoices({ maxPages = 10 } = {}) {
   const out = [];
   for (let p = 1; p <= maxPages; p++) {
-    const page = await apiGet('/documents/invoice?page=' + p);
+    const page = await apiGet('/invoices?page=' + p);
     const arr = Array.isArray(page) ? page : (page && page.data) || [];
     if (!arr.length) break;
     out.push(...arr);
@@ -56,6 +56,6 @@ async function listInvoices({ maxPages = 10 } = {}) {
 }
 
 /** Devuelve una factura concreta (para inspeccionar campos: base imponible, estado de pago…). */
-function getInvoice(id) { return apiGet('/documents/invoice/' + encodeURIComponent(id)); }
+function getInvoice(id) { return apiGet('/invoices/' + encodeURIComponent(id)); }
 
 module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice };
