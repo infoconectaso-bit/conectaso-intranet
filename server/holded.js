@@ -115,11 +115,21 @@ async function testPayslips() {
       probes[label] = shape;
     } catch (e) { probes[label] = { error: String(e.message).slice(0, 120) }; }
   };
-  await tryGet('payslips', '/payslips?limit=5');
-  await tryGet('payslips_draftFalse', '/payslips?limit=5&is_draft=false');
-  await tryGet('payslips_dates', '/payslips?limit=5&start_date=2024-01-01&end_date=2026-12-31');
-  await tryGet('payrolls', '/payrolls?limit=5');
-  await tryGet('employees', '/employees?limit=5');
+  await tryGet('payslips_draftTrue', '/payslips?limit=5&is_draft=true');
+  let empId = null;
+  try {
+    const e = await apiGet('/employees?limit=50');
+    const items = (e && (e.items || e.data)) || (Array.isArray(e) ? e : []);
+    empId = items[0] && (items[0].id || items[0]._id);
+    probes.firstEmp = { count: items.length, id: empId, keys: items[0] ? Object.keys(items[0]).slice(0, 25) : [] };
+  } catch (e) { probes.firstEmp = { error: String(e.message).slice(0, 120) }; }
+  if (empId) {
+    await tryGet('emp_full', '/employees/' + empId);
+    await tryGet('emp_documents', '/employees/' + empId + '/documents');
+    await tryGet('emp_payslips', '/employees/' + empId + '/payslips');
+    await tryGet('emp_files', '/employees/' + empId + '/files');
+  }
+  await tryGet('documents', '/documents?limit=5');
   return { ok: true, probes };
 }
 
