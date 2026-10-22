@@ -617,7 +617,7 @@ function renderTable(id) {
   for (let p = start; p < Math.min(pages, start + 5); p++) pb.push(`<button data-pg="${p}" class="${p === st.page ? 'cur' : ''}">${p + 1}</button>`);
   return `<div class="dt-top"><label>Mostrar <select class="control control--sm" data-len style="width:auto">${[25, 50, 100].map(n => `<option ${n === st.len ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       <label>Buscar <input class="control control--sm dt-search" data-q value="${esc(st.q)}"></label></div>
-    <div class="table-wrap"><table class="dt"><thead><tr>${ths}</tr>${filt}</thead><tbody>${body}</tbody></table></div>
+    <div class="table-wrap"><table class="dt${cfg.dense ? ' dt--dense' : ''}"><thead><tr>${ths}</tr>${filt}</thead><tbody>${body}</tbody></table></div>
     <div class="dt-foot"><div>${total ? `${from}–${to} de ${total.toLocaleString('es-ES')}` : '0 registros'}</div>
       <div class="pager"><button data-pg="0" ${st.page === 0 ? 'disabled' : ''}>«</button>${pb.join('')}<button data-pg="${pages - 1}" ${st.page >= pages - 1 ? 'disabled' : ''}>»</button></div></div>`;
 }
