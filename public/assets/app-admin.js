@@ -977,6 +977,43 @@ function benefGate(label) {
   $('#benefForm').onsubmit = e => { e.preventDefault(); const v = ($('#benefPass') || {}).value || ''; if (v === BENEF_PASS) { try { sessionStorage.setItem('conecta_benef_ok', '1'); } catch (x) {} if (CS.route) CS.route(); else location.reload(); } else { const m = $('#benefMsg'); m.style.display = 'block'; m.innerHTML = '<span style="color:#d9534f;font-weight:700">Contraseña incorrecta.</span>'; } };
   $('#benefForgot').onclick = () => { const m = $('#benefMsg'); m.style.display = 'block'; m.innerHTML = 'Te hemos enviado la contraseña a tu email de administración (<b>' + esc(S.user.email || 'tu email') + '</b>).<br><span class="muted">Nota demo: aún no hay envío de correo real. La contraseña es <b>lamusica20</b>.</span>'; };
 }
+// ANÁLISIS (admin, bajo contraseña): ventas, facturación de masías, económico y horas extra.
+on(/^#\/analisis$/, async () => {
+  if (!requireAdmin()) return;
+  if (!benefOk()) return benefGate('Análisis');
+  loading(['Análisis']);
+  const a = await api('analisis').catch(() => ({}));
+  const years = a.years || [];
+  const eur = n => (Math.round(+n || 0)).toLocaleString('es-ES') + ' €';
+  const sum = o => Object.values(o || {}).reduce((s, v) => s + v, 0);
+  const crossTable = (obj, firstHdr, fmt) => {
+    const keys = Object.keys(obj || {}).sort((x, y) => sum(obj[y]) - sum(obj[x]));
+    if (!keys.length) return '<div class="empty">Sin datos.</div>';
+    const f = fmt || (v => v || 0);
+    return `<div class="table-wrap"><table class="dt"><thead><tr><th>${esc(firstHdr)}</th>${years.map(y => `<th style="text-align:right">${y}</th>`).join('')}<th style="text-align:right">Total</th></tr></thead><tbody>${keys.map(k => `<tr><td><b>${esc(k)}</b></td>${years.map(y => `<td style="text-align:right">${f(obj[k][y] || 0)}</td>`).join('')}<td style="text-align:right"><b>${f(sum(obj[k]))}</b></td></tr>`).join('')}</tbody></table></div>`;
+  };
+  const bars = (rows, fmt) => {
+    if (!rows || !rows.length) return '<div class="empty">Sin datos.</div>';
+    const max = Math.max(1, ...rows.map(r => r.value));
+    return `<div class="bars">${rows.map(r => `<div class="bar-row"><div class="bar-lbl" title="${esc(r.label)}">${esc(r.label)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(2, Math.round(r.value / max * 100))}%"></div></div><div class="bar-val">${fmt ? fmt(r.value) : r.value}${r.sub ? ` <span class="muted">${esc(r.sub)}</span>` : ''}</div></div>`).join('')}</div>`;
+  };
+  const sect = (title, body, sub) => `<div class="panel"><div class="panel__head"><h3>${esc(title)}</h3>${sub ? `<span class="muted" style="font-size:12px">${esc(sub)}</span>` : ''}</div><div class="panel__body">${body}</div></div>`;
+  const econ = a.economico || [];
+  const econRows = econ.slice(-18).reverse();
+  const html = [
+    sect('Bodas por masía y año', crossTable(a.ventasMasia, 'Masía')),
+    sect('Bodas por pack y año', crossTable(a.ventasPack, 'Pack')),
+    a.holdedOk ? sect('Facturación de masías por año', crossTable(a.masiaAnual, 'Masía', eur), 'Importe facturado (sin IVA) desde Holded') : sect('Facturación de masías', '<div class="empty">Holded no está activado.</div>'),
+    a.holdedOk ? sect('Media económica por boda y mes', `<div class="table-wrap"><table class="dt"><thead><tr><th>Mes</th><th style="text-align:right">Facturado masías</th><th style="text-align:right">Bodas</th><th style="text-align:right">Media / boda</th></tr></thead><tbody>${econRows.map(m => `<tr><td><b>${esc(m.mes)}</b></td><td style="text-align:right">${eur(m.facturado)}</td><td style="text-align:right">${m.bodas}</td><td style="text-align:right"><b>${eur(m.media)}</b></td></tr>`).join('')}</tbody></table></div>`, 'Facturación de masías ÷ nº de bodas realizadas cada mes') : '',
+    sect('Horas extra por masía', bars((a.horasMasia || []).map(r => ({ label: r.masia, value: r.horas, sub: `${r.horas} h · media ${r.media} h/boda` })), v => ''), 'Total de horas extra realizadas en cada finca'),
+    sect('DJs con más horas extra (total)', bars((a.djPorTotal || []).slice(0, 20).map(r => ({ label: r.dj, value: r.horas, sub: `${r.horas} h · ${r.bodas} bodas` })), v => '')),
+    sect('DJs con más horas extra por boda (media)', bars((a.djPorBoda || []).slice(0, 20).map(r => ({ label: r.dj, value: r.media, sub: `${r.media} h/boda · ${r.horas} h en ${r.bodas} bodas` })), v => ''), 'Mínimo 3 bodas para la media'),
+  ].join('');
+  shell(`${pageHead('Análisis', 'Ventas, facturación de masías, económico por boda y horas extra. Datos de bodas realizadas.')}
+    <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--sm" id="anaRefresh" title="Recargar datos de Holded">↻ Actualizar desde Holded</button></div>
+    ${html}`, ['Análisis']);
+  const rf = el('anaRefresh'); if (rf) rf.onclick = async () => { rf.disabled = true; rf.textContent = 'Actualizando…'; try { await api('analisis?refresh=1'); } catch (e) {} location.reload(); };
+});
 on(/^#\/beneficios$/, async () => {
   if (!requireAdmin()) return;
   if (!benefOk()) return benefGate();
@@ -1186,7 +1223,7 @@ on(/^#\/cuenta$/, async () => {
     <div class="panel" style="margin-top:4px"><div class="panel__head"><h3>⚙ Configuración avanzada</h3></div><div class="panel__body">
       <p class="hint" style="margin-bottom:12px">Secciones de uso puntual, protegidas con contraseña.</p>
       ${benefOk()
-      ? `<div class="btn-row"><a class="btn btn--primary" href="#/beneficios">€ Beneficios</a> <a class="btn" href="#/papelera">🗑 Papelera de eventos</a></div>
+      ? `<div class="btn-row"><a class="btn btn--primary" href="#/beneficios">€ Beneficios</a> <a class="btn" href="#/analisis">📊 Análisis</a> <a class="btn" href="#/papelera">🗑 Papelera de eventos</a></div>
          <p class="hint" style="margin-top:10px">Desbloqueado en este dispositivo durante esta sesión.</p>
          <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
          <h4 style="margin:0 0 6px">📧 Configuración del correo</h4>

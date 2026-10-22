@@ -311,6 +311,57 @@ async function api(req, res, url) {
       return ok(res, { enabled: true, count: out.length, invoices: out });
     } catch (e) { return ok(res, { enabled: true, error: e.message, invoices: [] }); }
   }
+  // --- ANÁLISIS (admin): ventas por masía/pack, horas extra por masía/DJ, facturación masías y económico ---
+  if (seg[0] === 'analisis' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    const OT = { 'sin horas extra': 0, 'media hora': 0.5, '1 hora': 1, '1 hora y media': 1.5, '2 horas': 2, '2 hora y media': 2.5, '3 horas': 3, '3 hora y media': 3.5, '4 horas': 4, '4 hora y media': 4.5, '5 horas': 5 };
+    const otH = s => OT[String(s || '').trim().toLowerCase()] || 0;
+    const locName = id => (store.get('locations', id) || {}).name || '';
+    const realized = store.all('events').filter(e => evFinished(e));
+    const ventasMasia = {}, ventasPack = {}, years = new Set();
+    realized.forEach(e => {
+      const y = (e.fecha || '').slice(0, 4); if (!y) return; years.add(y);
+      const m = locName(e.lugar) || e.lugarOtro || 'Otros'; (ventasMasia[m] = ventasMasia[m] || {})[y] = (ventasMasia[m][y] || 0) + 1;
+      const p = e.tipo || '—'; (ventasPack[p] = ventasPack[p] || {})[y] = (ventasPack[p][y] || 0) + 1;
+    });
+    const heM = {};
+    realized.forEach(e => { const h = otH(e.djOvertime); const m = locName(e.lugar) || e.lugarOtro || 'Otros'; const x = heM[m] = heM[m] || { h: 0, ev: 0 }; x.h += h; x.ev++; });
+    const horasMasia = Object.entries(heM).map(([m, x]) => ({ masia: m, horas: Math.round(x.h * 10) / 10, eventos: x.ev, media: x.ev ? Math.round(x.h / x.ev * 100) / 100 : 0 })).filter(r => r.horas > 0).sort((a, b) => b.horas - a.horas);
+    const heD = {};
+    realized.forEach(e => { if (!e.djId) return; const h = otH(e.djOvertime); const x = heD[e.djId] = heD[e.djId] || { h: 0, n: 0 }; x.h += h; x.n++; });
+    const horasDj = Object.entries(heD).map(([id, x]) => ({ dj: (users.get(+id) || {}).name || ('#' + id), horas: Math.round(x.h * 10) / 10, bodas: x.n, media: x.n ? Math.round(x.h / x.n * 100) / 100 : 0 })).filter(d => d.horas > 0);
+    const djPorTotal = horasDj.slice().sort((a, b) => b.horas - a.horas);
+    const djPorBoda = horasDj.slice().filter(d => d.bodas >= 3).sort((a, b) => b.media - a.media);
+    const out = { years: [...years].sort(), ventasMasia, ventasPack, horasMasia, djPorTotal, djPorBoda };
+    if (holded.enabled()) {
+      try {
+        const idx = await holded.buildIndex(url.searchParams.get('refresh') === '1');
+        const GROUPS = [
+          { name: 'Can Ribas', codes: ['B59998286', 'B67342568'] },
+          { name: 'Hotel Edelweiss', codes: ['B55215800'] },
+          { name: 'Rosa dels Vents', codes: ['B82573338'] },
+          { name: 'Mas Can Ferrer', codes: ['J55059406'] },
+          { name: 'Can Oliver', codes: ['B08758468'] },
+          { name: 'Carol Gastronomía', codes: ['B66216946'] },
+        ];
+        const nz = s => String(s || '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+        const codeToGroup = {}; GROUPS.forEach(g => g.codes.forEach(c => codeToGroup[nz(c)] = g.name));
+        const masiaMensual = {}, masiaAnual = {};
+        GROUPS.forEach(g => { masiaMensual[g.name] = {}; masiaAnual[g.name] = {}; });
+        Object.values(idx.byId).forEach(c => {
+          const g = codeToGroup[nz(c.code)]; if (!g) return;
+          (c.invoices || []).forEach(inv => { const m = holded.mapInvoice(inv); const mm = (m.date || '').slice(0, 7), yy = (m.date || '').slice(0, 4); if (!mm) return; masiaMensual[g][mm] = (masiaMensual[g][mm] || 0) + m.total; masiaAnual[g][yy] = (masiaAnual[g][yy] || 0) + m.total; });
+        });
+        const bodasMes = {}; realized.forEach(e => { const mm = (e.fecha || '').slice(0, 7); if (mm) bodasMes[mm] = (bodasMes[mm] || 0) + 1; });
+        const factMes = {}; GROUPS.forEach(g => Object.entries(masiaMensual[g.name]).forEach(([mm, v]) => factMes[mm] = (factMes[mm] || 0) + v));
+        const economico = Object.keys(factMes).sort().map(mm => ({ mes: mm, facturado: Math.round(factMes[mm]), bodas: bodasMes[mm] || 0, media: bodasMes[mm] ? Math.round(factMes[mm] / bodasMes[mm]) : 0 }));
+        Object.keys(masiaMensual).forEach(g => { const o = {}; Object.keys(masiaMensual[g]).forEach(mm => o[mm] = Math.round(masiaMensual[g][mm])); masiaMensual[g] = o; });
+        Object.keys(masiaAnual).forEach(g => { const o = {}; Object.keys(masiaAnual[g]).forEach(yy => o[yy] = Math.round(masiaAnual[g][yy])); masiaAnual[g] = o; });
+        Object.assign(out, { masiaMensual, masiaAnual, economico, holdedOk: true });
+      } catch (e) { out.holdedError = e.message; }
+    }
+    return ok(res, out);
+  }
   // --- furgonetas ocupadas en una fecha (para avisar de conflicto al asignar) ---
   if (seg[0] === 'vehicle-usage' && method === 'GET') {
     if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');

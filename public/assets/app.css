@@ -857,6 +857,15 @@ html.night-dim .veh-badge{background:#2c2417;border-color:#3a3020;color:var(--in
 .ruta-veh{display:flex;align-items:center;gap:8px;background:var(--cream,#f6f2ea);border:1px solid var(--line,#e5e0d6);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:14px}
 .ruta-veh-ic{font-size:18px}
 html.night-dim .ruta-veh{background:#241d12;border-color:#3a3020}
+/* Gráficos de barras horizontales (Análisis) */
+.bars{display:flex;flex-direction:column;gap:7px}
+.bar-row{display:grid;grid-template-columns:160px 1fr auto;align-items:center;gap:10px;font-size:13px}
+.bar-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.bar-track{background:var(--cream,#f1ede4);border-radius:999px;height:16px;overflow:hidden}
+.bar-fill{height:100%;background:var(--pink,#E82C88);border-radius:999px;min-width:2px}
+.bar-val{white-space:nowrap;font-variant-numeric:tabular-nums}
+html.night-dim .bar-track{background:#2a2217}
+@media(max-width:640px){.bar-row{grid-template-columns:110px 1fr auto;font-size:12px}.bar-lbl{font-size:12px}}
 @media print{.sidebar,.topbar,.tabs,.tabs-row,.floatbar,.mtabs{display:none!important}.ruta-row{break-inside:avoid}}
 
 /* ======== Hoja de ruta · deck apaisado (portado de la demo) ======== */
