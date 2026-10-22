@@ -633,13 +633,13 @@ function refreshTable(id, focus) {
 // a enganchar tras cada refresco (orden, filtro, paginación). Portado de la demo.
 function bindTable(id, cb) { const st = TBL[id]; if (st) st.onRender = cb; if (typeof cb === 'function') { try { cb(); } catch (x) {} } }
 document.addEventListener('input', e => {
-  const w = e.target.closest('.dt'); if (!w || !TBL[w.id]) return; const st = TBL[w.id];
+  const w = e.target.closest('.dt[id]'); if (!w || !TBL[w.id]) return; const st = TBL[w.id];
   if (e.target.dataset.q !== undefined) { st.q = e.target.value; st.page = 0; refreshTable(w.id, true); }
   if (e.target.dataset.cf !== undefined) { st.f[e.target.dataset.cf] = e.target.value; st.page = 0; refreshTable(w.id, true); }
 });
-document.addEventListener('change', e => { const w = e.target.closest('.dt'); if (w && TBL[w.id] && e.target.dataset.len !== undefined) { TBL[w.id].len = +e.target.value; TBL[w.id].page = 0; refreshTable(w.id); } });
+document.addEventListener('change', e => { const w = e.target.closest('.dt[id]'); if (w && TBL[w.id] && e.target.dataset.len !== undefined) { TBL[w.id].len = +e.target.value; TBL[w.id].page = 0; refreshTable(w.id); } });
 document.addEventListener('click', e => {
-  const w = e.target.closest('.dt'); if (!w || !TBL[w.id]) return; const st = TBL[w.id];
+  const w = e.target.closest('.dt[id]'); if (!w || !TBL[w.id]) return; const st = TBL[w.id];
   const th = e.target.closest('th[data-sort]'); if (th && th.dataset.sort !== '') { const c = +th.dataset.sort; st.order = [c, st.order[0] === c && st.order[1] === 'asc' ? 'desc' : 'asc']; refreshTable(w.id); }
   const pg = e.target.closest('[data-pg]'); if (pg && !pg.disabled) { st.page = +pg.dataset.pg; refreshTable(w.id); }
 });
