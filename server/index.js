@@ -358,7 +358,8 @@ async function api(req, res, url) {
       try {
         const idx = await holded.buildIndex(url.searchParams.get('refresh') === '1');
         const GROUPS = [
-          { name: 'Can Ribas', codes: ['B59998286', 'B67342568'] },
+          { name: 'Can Ribas', codes: ['B59998286'] },
+          { name: 'Mas Llombart', codes: ['B67342568'] }, // SINSOFOOD 1996 S.L.
           { name: 'Hotel Edelweiss', codes: ['B55215800'] },
           { name: 'Rosa dels Vents', codes: ['B82573338'] },
           { name: 'Mas Can Ferrer', codes: ['J55059406'] },
