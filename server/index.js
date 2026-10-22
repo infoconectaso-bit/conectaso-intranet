@@ -279,6 +279,12 @@ async function api(req, res, url) {
     try { const r = await holded.testPayslips(); return ok(res, r); }
     catch (e) { return ok(res, { ok: false, error: e.message }); }
   }
+  // --- diagnóstico: buscar contacto/factura por texto (admin) ---
+  if (seg[0] === 'holded-find' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    try { return ok(res, await holded.findByText(url.searchParams.get('q') || '')); }
+    catch (e) { return ok(res, { ok: false, error: e.message }); }
+  }
   // --- diagnóstico: muestra de FACTURAS de Holded para entender su forma (admin) ---
   if (seg[0] === 'holded-invoices-test' && (method === 'POST' || method === 'GET')) {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
@@ -1009,14 +1015,11 @@ async function events(req, res, user, seg, method, url) {
     if (ev.conyuges) String(ev.conyuges).split(/\s+y\s+|&/i).forEach(n => { const t = n.trim(); if (t) names.push(t); });
     try {
       const force = url.searchParams.get('refresh') === '1' && user.role === 'admin';
-      const r = await holded.invoicesForClient({ emails, nifs, names }, force);
-      // Seguridad: a un novio solo le mostramos facturas conciliadas por email o NIF (identificadores
-      // únicos). Las coincidencias solo por NOMBRE (posible homónimo) quedan únicamente para admin.
-      if (r.matchedBy === 'name' && user.role !== 'admin') {
-        return ok(res, { enabled: true, matchedBy: null, invoices: [], totals: { total: 0, paid: 0, pending: 0 } });
-      }
+      // Un novio solo ve facturas conciliadas por email o NIF (identificadores únicos), nunca solo por
+      // nombre (posible homónimo). Admin incluye también las coincidencias por nombre.
+      const r = await holded.invoicesForClient({ emails, nifs, names }, force, { includeName: user.role === 'admin' });
       const totals = r.invoices.reduce((a, i) => ({ total: a.total + i.total, paid: a.paid + i.paid, pending: a.pending + i.pending }), { total: 0, paid: 0, pending: 0 });
-      return ok(res, { enabled: true, matchedBy: r.matchedBy, contact: r.contact, invoices: r.invoices, totals, indexInfo: user.role === 'admin' ? r.indexInfo : undefined });
+      return ok(res, { enabled: true, matchedBy: r.matchedBy, contact: r.contact, contacts: user.role === 'admin' ? r.contacts : undefined, invoices: r.invoices, totals, indexInfo: user.role === 'admin' ? r.indexInfo : undefined });
     } catch (e) { return ok(res, { enabled: true, error: e.message, invoices: [] }); }
   }
 

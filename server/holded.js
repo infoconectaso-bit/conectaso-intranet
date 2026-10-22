@@ -167,17 +167,40 @@ function mapInvoice(inv) {
 }
 
 /** Dado un conjunto de candidatos (emails, nifs, nombres) del cliente de una boda,
- * resuelve su contacto en Holded y devuelve { contact, invoices[], matchedBy }. */
-async function invoicesForClient({ emails = [], nifs = [], names = [] } = {}, force) {
+ * busca TODOS sus contactos en Holded (cada cónyuge puede tener el suyo) y UNE sus facturas.
+ * opts.includeName=false ignora las coincidencias solo por nombre (para la vista de novios). */
+async function invoicesForClient({ emails = [], nifs = [], names = [] } = {}, force, opts = {}) {
+  const includeName = opts.includeName !== false;
   const idx = await buildIndex(force);
-  let cid = null, matchedBy = null;
-  for (const e of emails) { const id = idx.byEmail[normEmail(e)]; if (id) { cid = id; matchedBy = 'email'; break; } }
-  if (!cid) for (const n of nifs) { const id = idx.byNif[normNif(n)]; if (id) { cid = id; matchedBy = 'nif'; break; } }
-  if (!cid) for (const nm of names) { const id = idx.byName[normName(nm)]; if (id) { cid = id; matchedBy = 'name'; break; } }
-  if (!cid) return { contact: null, invoices: [], matchedBy: null, indexInfo: { contactsN: idx.contactsN, invoicesN: idx.invoicesN } };
-  const c = idx.byId[cid];
-  const invoices = (c.invoices || []).map(mapInvoice).sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  return { contact: { id: c.id, name: c.name, emails: c.emails, code: c.code }, invoices, matchedBy, indexInfo: { contactsN: idx.contactsN, invoicesN: idx.invoicesN } };
+  const hits = []; const seen = new Set();
+  const add = (cid, by) => { if (cid && !seen.has(cid)) { seen.add(cid); hits.push({ cid, by }); } };
+  emails.forEach(e => add(idx.byEmail[normEmail(e)], 'email'));
+  nifs.forEach(n => add(idx.byNif[normNif(n)], 'nif'));
+  if (includeName) names.forEach(nm => add(idx.byName[normName(nm)], 'name'));
+  const invMap = {}; const methods = new Set(); const contacts = [];
+  hits.forEach(h => {
+    const c = idx.byId[h.cid]; if (!c) return;
+    methods.add(h.by);
+    contacts.push({ id: c.id, name: c.name, by: h.by, nInv: (c.invoices || []).length });
+    (c.invoices || []).forEach(inv => { invMap[inv.id] = inv; });
+  });
+  const invoices = Object.values(invMap).map(mapInvoice).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const matchedBy = methods.has('email') ? 'email' : methods.has('nif') ? 'nif' : (methods.has('name') ? 'name' : null);
+  const primary = contacts.find(c => c.nInv > 0) || contacts[0] || null;
+  return { contact: primary ? { id: primary.id, name: primary.name } : null, contacts, invoices, matchedBy, indexInfo: { contactsN: idx.contactsN, invoicesN: idx.invoicesN } };
+}
+
+/** Diagnóstico: busca en contactos y facturas por subcadena (nombre/NIF/email). Admin. */
+async function findByText(q, force) {
+  const idx = await buildIndex(force);
+  const needle = String(q || '').toLowerCase();
+  const contacts = Object.values(idx.byId).filter(c =>
+    (c.name || '').toLowerCase().includes(needle) ||
+    (c.code || '').toLowerCase().includes(needle) ||
+    (c.emails || []).some(e => String(e).toLowerCase().includes(needle))
+  ).map(c => ({ id: c.id, name: c.name, code: c.code, emails: c.emails, nInv: (c.invoices || []).length,
+    invoices: (c.invoices || []).map(i => ({ number: i.document_number, date: i.date, total: i.total, paid: i.payments_total })) }));
+  return { contactsN: idx.contactsN, invoicesN: idx.invoicesN, matches: contacts.slice(0, 20) };
 }
 
 /* =========================================================================
@@ -255,4 +278,4 @@ async function testPayslips() {
   return { ok: true, probes };
 }
 
-module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, parseAmount, listPayslips, getPayslipPdf, testPayslips };
+module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };
