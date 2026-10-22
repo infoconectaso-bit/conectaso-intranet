@@ -144,15 +144,25 @@ async function buildIndex(force) {
   return _idx;
 }
 
-/** Mapea una factura de Holded a la forma que usa la intranet (importes numéricos). */
+/** Mapea una factura de Holded a la forma que usa la intranet.
+ * IMPORTANTE: en la intranet los importes del evento van SIN IVA. Holded da el total y
+ * los pagos CON IVA, así que calculamos la parte sin IVA de forma proporcional:
+ *   base   = subtotal (base imponible, sin IVA)
+ *   pagado = pagado_con_iva · base/total   (quita el IVA del importe pagado)
+ *   pendiente = base − pagado
+ * Se conservan también los importes con IVA (totalConIva, paidConIva) por si hacen falta. */
 function mapInvoice(inv) {
-  const total = parseAmount(inv.total);
-  const paid = parseAmount(inv.payments_total);
-  const pending = inv.payments_pending != null ? parseAmount(inv.payments_pending) : Math.max(0, total - paid);
+  const totalConIva = parseAmount(inv.total);
+  const base = parseAmount(inv.subtotal);
+  const tax = parseAmount(inv.tax);
+  const paidConIva = parseAmount(inv.payments_total);
+  const ratio = totalConIva > 0 ? base / totalConIva : 1; // proporción sin IVA
+  const paid = Math.round(paidConIva * ratio * 100) / 100; // pagado SIN IVA
+  const pending = Math.max(0, Math.round((base - paid) * 100) / 100); // pendiente SIN IVA
   return {
     id: inv.id, number: inv.document_number || '', date: inv.date || '', dueDate: inv.due_date || '',
-    desc: inv.description || '', total, paid, pending, status: inv.status || '',
-    paidFull: pending <= 0.009 && total > 0,
+    desc: inv.description || '', total: base, paid, pending, tax, totalConIva, paidConIva, status: inv.status || '',
+    paidFull: pending <= 0.009 && base > 0,
   };
 }
 

@@ -874,7 +874,7 @@ async function loadHoldedFacturas(ev) {
       <td><b>${esc(i.number || '—')}</b></td>
       <td>${esc(slash(i.date) || '')}</td>
       <td>${esc(i.desc || '')}</td>
-      <td style="text-align:right">${eur(i.total)}</td>
+      <td style="text-align:right" title="Total con IVA: ${eur(i.totalConIva)}">${eur(i.total)}</td>
       <td style="text-align:right">${eur(i.paid)}</td>
       <td style="text-align:right">${i.pending > 0 ? eur(i.pending) : '—'}</td>
       <td>${statusChip(i)}</td>
@@ -882,9 +882,10 @@ async function loadHoldedFacturas(ev) {
     </tr>`).join('');
   const t = r.totals || { total: 0, paid: 0, pending: 0 };
   box.innerHTML = `<div class="panel">${head}<div class="panel__body">
-    <div class="table-wrap"><table class="dt"><thead><tr><th>Nº</th><th>Fecha</th><th>Concepto</th><th style="text-align:right">Total</th><th style="text-align:right">Pagado</th><th style="text-align:right">Pendiente</th><th>Estado</th><th></th></tr></thead>
+    <p class="hint">Importes <b>sin IVA</b> (base imponible), igual que el pagado del evento. Pasa el ratón por el importe para ver el total con IVA.</p>
+    <div class="table-wrap"><table class="dt"><thead><tr><th>Nº</th><th>Fecha</th><th>Concepto</th><th style="text-align:right">Importe (sin IVA)</th><th style="text-align:right">Pagado</th><th style="text-align:right">Pendiente</th><th>Estado</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr class="fact-sub"><td colspan="3"><b>Totales</b></td><td style="text-align:right"><b>${eur(t.total)}</b></td><td style="text-align:right"><b>${eur(t.paid)}</b></td><td style="text-align:right"><b>${t.pending > 0 ? eur(t.pending) : '—'}</b></td><td colspan="2"></td></tr></tfoot>
+      <tfoot><tr class="fact-sub"><td colspan="3"><b>Totales (sin IVA)</b></td><td style="text-align:right"><b>${eur(t.total)}</b></td><td style="text-align:right"><b>${eur(t.paid)}</b></td><td style="text-align:right"><b>${t.pending > 0 ? eur(t.pending) : '—'}</b></td><td colspan="2"></td></tr></tfoot>
     </table></div>
     ${admin ? `<div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn--sm" id="holdedRefresh" title="Vuelve a leer contactos y facturas de Holded">↻ Actualizar desde Holded</button></div>` : ''}
   </div></div>`;
