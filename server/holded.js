@@ -42,15 +42,20 @@ async function testConnection() {
   return { ok: true, sample: n };
 }
 
-/** Lista las facturas de venta (API v2). Holded pagina; traemos varias páginas. */
-async function listInvoices({ maxPages = 10 } = {}) {
+/** Lista las facturas de venta (API v2). La respuesta es { items, cursor, has_more }
+ * (paginación por cursor, igual que nóminas). */
+async function listInvoices({ maxPages = 50, limit = 200, filters = {} } = {}) {
   const out = [];
-  for (let p = 1; p <= maxPages; p++) {
-    const page = await apiGet('/invoices?page=' + p);
-    const arr = Array.isArray(page) ? page : (page && page.data) || [];
-    if (!arr.length) break;
+  let cursor = null;
+  for (let p = 0; p < maxPages; p++) {
+    const qs = new URLSearchParams({ limit: String(limit) });
+    if (cursor) qs.set('cursor', cursor);
+    for (const [k, v] of Object.entries(filters)) if (v != null && v !== '') qs.set(k, String(v));
+    const page = await apiGet('/invoices?' + qs.toString());
+    const arr = (page && Array.isArray(page.items)) ? page.items : (Array.isArray(page) ? page : (page && page.data) || []);
     out.push(...arr);
-    if (arr.length < 50) break; // última página
+    cursor = page && page.cursor;
+    if (!cursor || (page && page.has_more === false) || !arr.length) break;
   }
   return out;
 }

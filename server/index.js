@@ -282,20 +282,18 @@ async function api(req, res, url) {
   // --- diagnóstico: muestra de FACTURAS de Holded para entender su forma (admin) ---
   if (seg[0] === 'holded-invoices-test' && (method === 'POST' || method === 'GET')) {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
-    const probes = {};
-    const paths = ['/invoices', '/documents/invoice', '/documents?type=invoice', '/sales/invoices',
-      '/invoicing/invoices', '/documents', '/contacts', '/numberingseries'];
-    for (const p of paths) {
-      try {
-        const d = await holded.apiGet(p);
-        let shape;
-        if (Array.isArray(d)) shape = { type: 'array', n: d.length, keys0: d[0] ? Object.keys(d[0]).slice(0, 18) : [], first: d[0] || null };
-        else if (d && typeof d === 'object') shape = { type: 'object', keys: Object.keys(d).slice(0, 15), itemsN: Array.isArray(d.items) ? d.items.length : (Array.isArray(d.data) ? d.data.length : null) };
-        else shape = { type: typeof d, value: String(d).slice(0, 80) };
-        probes[p] = shape;
-      } catch (e) { probes[p] = { error: String(e.message).slice(0, 140) }; }
-    }
-    return ok(res, { ok: true, probes });
+    try {
+      const page = await holded.apiGet('/invoices?limit=3');
+      const items = (page && page.items) || [];
+      const first = items[0] || null;
+      const contactKeys = first && first.contact && typeof first.contact === 'object' ? Object.keys(first.contact) : null;
+      const sample = items.map(x => ({
+        id: x.id, docNumber: x.docNumber || x.number, date: x.date, status: x.status, paymentStatus: x.payment_status || x.paymentStatus,
+        total: x.total, paid: x.paid || x.paid_amount, pending: x.pending || x.pending_amount,
+        contact: x.contact, contactName: x.contact_name || x.contactName, contactEmail: x.contact_email || x.contactEmail,
+      }));
+      return ok(res, { ok: true, total: items.length, itemKeys: first ? Object.keys(first) : [], contactShape: contactKeys, sample });
+    } catch (e) { return ok(res, { ok: false, error: e.message }); }
   }
 
   // --- recolocación de momentos personalizados en su sección real (admin) ---
