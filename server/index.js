@@ -1269,7 +1269,7 @@ async function filesApi(req, res, user, seg, method, url) {
     } else if (col === 'payslip') {
       // Nóminas: rid = id del trabajador. Admin puede subir a cualquiera; un trabajador solo a lo suyo.
       if (user.role !== 'admin' && +rid !== +user.id) return fail(res, 403, 'Sin acceso');
-      if (!store.get('users', rid)) return fail(res, 404, 'Trabajador no encontrado');
+      if (!users.get(rid)) return fail(res, 404, 'Trabajador no encontrado');
     } else return fail(res, 400, 'Colección no admitida');
     const parts = await parseMultipart(req);
     const momPart = parts.find(p => p.name === 'momento' && !p.filename);
