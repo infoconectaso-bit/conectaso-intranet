@@ -270,6 +270,58 @@ async function handle(req, res, seg, method, url) {
     return send(res, 200, { ok: true, done, skipped, errors });
   }
 
+  // RECOLOCAR momentos personalizados en su sección real, leyendo cada ficha original.
+  // El volcado guardó TODOS los optionals como 'ceremony'; la sección verdadera viene de la
+  // POSICIÓN del campo en el formulario original (los personalizados se renderizan dentro de
+  // la sección a la que pertenecen, aunque el nombre del campo sea ceremony_optionals_).
+  // Empareja por id de optional (se conservó en la réplica). Body: { ids, cookie, ua }.
+  if (action === 'resection-optionals') {
+    const dbm = require('./db'); const store = dbm.store;
+    const ids = (body.ids || []).map(Number);
+    const SM = { ceremony: 'C', aperitif: 'A', banquet: 'B', disco: 'D' };
+    const AREA = { C: 'ceremony', A: 'aperitif', B: 'banquet', D: 'disco' };
+    const sectionsFromHtml = (html) => {
+      const names = (html.match(/name=["'][^"']+["']/g) || []).map(s => s.slice(6, -1));
+      const out = {}; let curSec = null; const idx = {};
+      for (const n of names) {
+        let m;
+        if ((m = n.match(/^(ceremony|aperitif|banquet|disco)_([a-z_]+)$/)) && !/_optionals_|^(check|order|link|comment)_/.test(n) && !/_(restrictions|observations|logo_fotomaton_image|logo_fotomato|logo)/.test(n)) {
+          curSec = SM[m[1]]; idx[curSec] = (idx[curSec] || 0) + 1;
+        } else if (m = n.match(/^(ceremony|aperitif|banquet|disco)_optionals_(\d+)_title$/)) {
+          const sec = curSec || 'C'; idx[sec] = (idx[sec] || 0) + 1; out[m[2]] = { sec, order: idx[sec] };
+        }
+      }
+      return out;
+    };
+    let processed = 0, changedEv = 0, changedOpt = 0, noFicha = 0; const errors = [];
+    const queue = ids.slice();
+    const worker = async () => {
+      while (queue.length) {
+        const id = queue.shift();
+        try {
+          const ev = store.get('events', id);
+          if (!ev || !Array.isArray(ev.optionals) || !ev.optionals.length) { processed++; continue; }
+          const r = await srcFetch('/admin/events/update/' + id, cookie, ua);
+          processed++;
+          const html = r.text || '';
+          if (!/name=["']wedding_date["']/.test(html)) { noFicha++; continue; } // sesión caducada o ficha no accesible
+          const map = sectionsFromHtml(html);
+          let ch = false;
+          ev.optionals.forEach(o => {
+            const mm = map[String(o.id)];
+            if (!mm || !AREA[mm.sec]) return;
+            o.sec = mm.sec; o.area = AREA[mm.sec]; o.order = String(mm.order);
+            ch = true; changedOpt++;
+          });
+          if (ch) { store.put('events', ev); changedEv++; }
+        } catch (e) { errors.push(id + ':' + e.message); processed++; }
+      }
+    };
+    const N = Math.min(8, ids.length || 1);
+    await Promise.all(Array.from({ length: N }, worker));
+    return send(res, 200, { ok: true, processed, changedEv, changedOpt, noFicha, errors: errors.slice(0, 15), errorCount: errors.length });
+  }
+
   // QA (protegido por secreto): utilidades puntuales para limpiar pruebas y verificar el volcado.
   if (action === 'qa') {
     const dbm = require('./db'); const store = dbm.store, users = dbm.users; const authm = require('./auth');
