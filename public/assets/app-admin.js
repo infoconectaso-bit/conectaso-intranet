@@ -1044,6 +1044,15 @@ on(/^#\/analisis$/, async () => {
     sect('Bodas por masía y año', crossTable(a.ventasMasia, 'Masía', null, 2), 'Solo masías con 2 o más bodas'),
     (() => { const vm = a.ventasMasia || {}; const top = Object.keys(vm).map(k => [k, sum(vm[k])]).sort((x, y) => y[1] - x[1]).slice(0, 8); const series = top.map((t, i) => ({ label: t[0], color: PIE_COLORS[i % PIE_COLORS.length], values: years.map(y => vm[t[0]][y] || 0) })); return sect('Evolución de bodas por masía (por año)', lineChartMulti(years, series), 'Top 8 masías por volumen'); })(),
     sect('Bodas por pack y año', crossTable(a.ventasPack, 'Pack')),
+    (() => {
+      // Total de bodas por año = solo packs de boda (Recomendado, Fiesta, Bodorrio, Tinglado); sin Extras ni Corporativos.
+      const vp = a.ventasPack || {}; const isWed = p => /recomendad|fiesta|bodorri|tinglado/i.test(p);
+      const totYear = {}; years.forEach(y => { totYear[y] = Object.keys(vp).filter(isWed).reduce((s, p) => s + ((vp[p] || {})[y] || 0), 0); });
+      const gran = Object.values(totYear).reduce((s, v) => s + v, 0);
+      const tbl = `<div class="table-wrap"><table class="dt"><thead><tr><th>Concepto</th>${years.map(y => `<th style="text-align:right">${y}</th>`).join('')}<th style="text-align:right">Total</th></tr></thead><tbody><tr><td><b>Total bodas</b></td>${years.map(y => `<td style="text-align:right"><b>${totYear[y]}</b></td>`).join('')}<td style="text-align:right"><b>${gran}</b></td></tr></tbody></table></div>`;
+      const chart = lineChartMulti(years, [{ label: 'Total bodas', color: '#E82C88', values: years.map(y => totYear[y]) }]);
+      return sect('Total de bodas por año', tbl + chart, 'Recomendado + Fiesta + Bodorrio + Tinglado (sin extras ni corporativos)');
+    })(),
     (() => { const vp = a.ventasPack || {}; const keys = Object.keys(vp); const series = keys.map((k, i) => ({ label: k, color: PIE_COLORS[i % PIE_COLORS.length], values: years.map(y => vp[k][y] || 0) })); return sect('Evolución de bodas por pack (por año)', lineChartMulti(years, series)); })(),
     a.holdedOk ? sect('Facturación de masías por año', crossTable(a.masiaAnual, 'Masía', eur), 'Importe facturado (sin IVA) desde Holded') : sect('Facturación de masías', '<div class="empty">Holded no está activado.</div>'),
     a.holdedOk ? sect('Media económica por boda y mes', `<div class="table-wrap"><table class="dt"><thead><tr><th>Mes</th><th style="text-align:right">Facturado masías</th><th style="text-align:right">Bodas</th><th style="text-align:right">Media / boda</th></tr></thead><tbody>${econRows.map(m => `<tr><td><b>${esc(m.mes)}</b></td><td style="text-align:right">${eur(m.facturado)}</td><td style="text-align:right">${m.bodas}</td><td style="text-align:right"><b>${eur(m.media)}</b></td></tr>`).join('')}</tbody></table></div>`, 'Facturación de masías ÷ nº de bodas realizadas cada mes') : '',
