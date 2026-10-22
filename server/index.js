@@ -361,10 +361,11 @@ async function api(req, res, url) {
           { name: 'Can Ribas', codes: ['B59998286'] },
           { name: 'Mas Llombart', codes: ['B67342568'] }, // SINSOFOOD 1996 S.L.
           { name: 'Hotel Edelweiss', codes: ['B55215800'] },
-          { name: 'Rosa dels Vents', codes: ['B82573338'] },
+          { name: 'Rosa dels Vents / Broquetas', codes: ['B82573338'] }, // RV Hotels (Mas Badó, Broquetas)
           { name: 'Mas Can Ferrer', codes: ['J55059406'] },
           { name: 'Can Oliver', codes: ['B08758468'] },
           { name: 'Carol Gastronomía', codes: ['B66216946'] },
+          { name: 'Ajuntament de Sant Fost', codes: ['P0820800A'] },
         ];
         const nz = s => String(s || '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
         const codeToGroup = {}; GROUPS.forEach(g => g.codes.forEach(c => codeToGroup[nz(c)] = g.name));
