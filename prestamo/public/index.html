@@ -17,10 +17,11 @@
 @font-face{font-family:'Lacquer';src:url('/fonts/lacquer.ttf') format('truetype');font-display:swap}
 @font-face{font-family:'Outer Sans';src:url('/fonts/outer-sans-black.woff2') format('woff2');font-weight:900;font-display:swap}
 @font-face{font-family:'Evolve Sans';src:url('/fonts/evolve-sans.woff2') format('woff2');font-display:swap}
-/* Una columna tipo app: cabecera negra con la cifra clave, tarjetas crema debajo */
+/* Una columna tipo app: cabecera negra con pestañas y la cifra clave, tarjetas crema debajo */
 :root{
   --onyx:#130F17; --onyx-soft:#2a2530; --cream:#F9F5E1; --paper:#FFFDF4; --pink:#E82C88; --pink-d:#c81e70;
   --blue:#31B9CB; --yellow:#F0E85A; --ink:#130F17; --muted:#6a6472; --line:#e3ddd0; --ok:#0B8043; --okbg:#E3F2E8;
+  --warn:#9a4a00; --warnbg:#FFF0D6;
   --body:'Evolve Sans',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
   --display:'Outer Sans','Arial Black',var(--body);
   --script:'Lacquer','Outer Sans',var(--body);
@@ -30,14 +31,20 @@
 html,body{margin:0}
 body{background:var(--cream);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;
   padding-top:env(safe-area-inset-top,0px);padding-bottom:max(24px,env(safe-area-inset-bottom,0px))}
-.top{background:var(--onyx);color:var(--cream);padding:18px max(16px,env(safe-area-inset-left,0px)) 26px max(16px,env(safe-area-inset-right,0px))}
-.top-in,.wrap{max-width:560px;margin:0 auto}
-.wrap{display:flex;flex-direction:column;gap:14px;padding:16px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))}
-.brand{display:flex;align-items:baseline;gap:10px;margin-bottom:18px}
+.gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top{background:var(--onyx);color:var(--cream);padding-top:16px;padding-bottom:24px}
+.in{max-width:560px;margin:0 auto}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding-top:16px}
+.brand{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
 .brand .s{font-family:var(--script);color:var(--yellow);font-size:30px;line-height:1;text-shadow:2px 2px 0 var(--pink);transform:rotate(-4deg);display:inline-block}
 .brand .k{font-family:var(--display);font-weight:900;font-size:15px;letter-spacing:.08em}
+.tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -4px 16px;padding:2px 4px}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;font:inherit;font-size:13px;font-weight:700;border:2px solid var(--onyx-soft);background:transparent;color:rgba(249,245,225,.8);border-radius:99px;padding:7px 13px;cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected="true"]{background:var(--yellow);color:var(--onyx);border-color:var(--yellow)}
 .eyebrow{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)}
 .top .eyebrow{color:rgba(249,245,225,.7)}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1.5px solid rgba(249,245,225,.4);border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:2px}
 .big{font-family:var(--display);font-weight:900;font-size:38px;line-height:1.05;color:var(--yellow);margin-top:4px}
 .num{font-variant-numeric:tabular-nums}
 .bar{height:10px;background:var(--onyx-soft);border-radius:99px;overflow:hidden;margin-top:16px}
@@ -51,15 +58,17 @@ h2{font-family:var(--display);font-weight:900;font-size:16px;margin:0;letter-spa
 .next{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
 .next .amt{font-family:var(--display);font-weight:900;font-size:26px}
 .pill{font-size:12px;font-weight:700;padding:5px 11px;border-radius:99px;background:var(--onyx);color:var(--yellow);white-space:nowrap}
+.pill.ok{background:var(--okbg);color:var(--ok)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .stat{background:var(--cream);border-radius:10px;padding:10px 12px}
 .stat b{display:block;font-family:var(--display);font-weight:900;font-size:15px}
 .stat span{font-size:12px;color:var(--muted)}
 .note{font-size:13px;color:var(--muted);margin:0}
 .good{font-size:13px;color:var(--ok);background:var(--okbg);padding:10px 12px;border-radius:10px;margin:0;font-weight:600}
+.warn{font-size:13px;color:var(--warn);background:var(--warnbg);padding:10px 12px;border-radius:10px;margin:0;font-weight:600}
 label{font-size:13px;font-weight:700;color:var(--muted);display:flex;flex-direction:column;gap:6px}
-input{font:inherit;font-size:16px;color:var(--ink);background:#fff;border:2px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
-input:focus{outline:none;border-color:var(--onyx)}
+input,select{font:inherit;font-size:16px;color:var(--ink);background:#fff;border:2px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
+input:focus,select:focus{outline:none;border-color:var(--onyx)}
 button:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 .form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .full{grid-column:1/-1}
@@ -87,6 +96,7 @@ input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;bac
 .chips button[aria-pressed="true"]{background:var(--onyx);color:var(--yellow)}
 .viz{background:var(--onyx);color:var(--cream);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:14px}
 .saving b{display:block;font-family:var(--display);font-weight:900;font-size:32px;color:var(--yellow);line-height:1.1;margin-top:2px}
+.saving small{display:block;font-size:12px;color:rgba(249,245,225,.75);margin-top:4px}
 .cmp{display:flex;flex-direction:column;gap:5px}
 .cmpl{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:rgba(249,245,225,.75)}
 .cmpl b{color:var(--cream);font-size:13px}
@@ -99,7 +109,6 @@ input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;bac
 .chart svg{width:100%;height:auto;display:block}
 .legend{display:flex;gap:14px;font-size:12px;color:rgba(249,245,225,.75);margin-top:4px}
 .legend i{display:inline-block;width:14px;height:4px;border-radius:2px;vertical-align:middle;margin-right:6px}
-details.more summary{font-size:13px}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
 .row:first-child{border-top:0}
 .row small{display:block;color:var(--muted);font-size:12px}
@@ -128,9 +137,22 @@ dt{color:var(--muted)} dd{margin:0;text-align:right;font-weight:600}
 body.dark{background:var(--onyx)}
 .links{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
 .links button{font:inherit;font-size:13px;font-weight:700;color:var(--muted);background:none;border:0;cursor:pointer;text-decoration:underline;padding:6px}
+.rank{display:flex;flex-direction:column;gap:10px}
+.rk{border:2px solid var(--onyx);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--paper)}
+.rk.best{box-shadow:4px 4px 0 var(--pink);background:#FFFBD6}
+.rk .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.rk .h b{font-family:var(--display);font-weight:900;font-size:15px}
+.rk .v{font-family:var(--display);font-weight:900;font-size:22px}
+.rk .sub{font-size:12px;color:var(--muted)}
+.rk .tr{height:10px;border-radius:99px;background:var(--line);overflow:hidden}
+.rk .tr i{display:block;height:100%;background:var(--pink);border-radius:99px;transition:width .25s ease}
+.sumgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
+.sumgrid b{display:block;font-family:var(--display);font-weight:900;font-size:17px}
+.sumgrid span{font-size:12px;color:rgba(249,245,225,.75)}
+ul.tips{margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
 [hidden]{display:none!important}
-@media (max-width:370px){.form,.stats,.simgrid,.toprow{grid-template-columns:1fr}}
-@media (prefers-reduced-motion:reduce){.bar>i{transition:none}}
+@media (max-width:370px){.form,.stats,.simgrid,.toprow,.sumgrid{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.bar>i,.track i,.rk .tr i{transition:none}}
 </style>
 </head>
 <body>
@@ -147,23 +169,29 @@ body.dark{background:var(--onyx)}
   </form>
 </section>
 
-<!-- Configuración del préstamo -->
+<!-- Editar datos de un contrato -->
 <section id="vSetup" hidden>
-  <header class="top"><div class="top-in"><div class="brand"><span class="s">Préstamo</span><span class="k">CONECTA</span></div>
-    <div class="big" style="font-size:24px;color:var(--cream)">Datos del préstamo</div></div></header>
-  <div class="wrap">
+  <header class="top gut"><div class="in"><div class="brand"><span class="s">Préstamo</span><span class="k">CONECTA</span></div>
+    <div class="big" style="font-size:24px;color:var(--cream)" id="sTitle">Datos del contrato</div></div></header>
+  <div class="wrap gut">
     <form class="card" id="fSetup">
-      <p class="note" id="sTxt">Revisa los datos y pulsa «Guardar».</p>
+      <p class="note" id="sTxt"></p>
       <div class="form">
-        <label class="full">Importe total prestado (€)<input id="cTotal" type="number" inputmode="decimal" step="0.01" min="1" required></label>
-        <label>Interés anual (%)<input id="cTasa" type="number" inputmode="decimal" step="0.01" min="0" required></label>
-        <label>Años<input id="cAnos" type="number" inputmode="numeric" step="1" min="1" max="60" required></label>
-        <label>Fecha de firma<input id="cFirma" type="date" required></label>
-        <label>Primera cuota<input id="cPrim" type="date" required></label>
+        <label class="full">Nombre<input id="cNombre" type="text" maxlength="40" required></label>
+        <div class="full form" id="cLoanFields" style="display:contents">
+          <label class="full">Capital prestado (€)<input id="cTotal" type="number" inputmode="decimal" step="0.01" min="1"></label>
+          <label>Interés anual (%)<input id="cTasa" type="number" inputmode="decimal" step="0.01" min="0"></label>
+          <label>Nº de cuotas<input id="cN" type="number" inputmode="numeric" step="1" min="1" max="720"></label>
+          <label>Fecha de firma<input id="cFirma" type="date"></label>
+          <label>Primera cuota<input id="cPrim" type="date"></label>
+        </div>
+        <p class="note full" id="cTablaNote" hidden>Este contrato usa el cuadro oficial del banco, que no se cambia desde aquí.</p>
+        <label class="full" style="flex-direction:row;align-items:center;gap:10px;color:var(--ink)"><input id="cParcial" type="checkbox" style="width:22px;height:22px;flex:none"> Permite amortizar una parte</label>
+        <label>Comisión por amortizar (%)<input id="cPct" type="number" inputmode="decimal" step="0.01" min="0" max="20" placeholder="Desconocida"></label>
+        <label>Mínimo de comisión (€)<input id="cMin" type="number" inputmode="decimal" step="1" min="0"></label>
       </div>
-      <p class="note">Las cuotas se pagan cada mes el mismo día que la primera.</p>
       <button class="btn" type="submit">Guardar</button>
-      <button class="btn ghost" type="button" id="sCancel" hidden>Cancelar</button>
+      <button class="btn ghost" type="button" id="sCancel">Cancelar</button>
       <p class="msg err" id="sMsg" role="alert"></p>
     </form>
   </div>
@@ -171,21 +199,34 @@ body.dark{background:var(--onyx)}
 
 <!-- App -->
 <section id="vApp" hidden>
-  <header class="top"><div class="top-in">
+  <header class="top gut"><div class="in">
     <div class="brand"><span class="s">Préstamo</span><span class="k">CONECTA</span></div>
-    <div class="eyebrow">Te queda por devolver hoy</div>
-    <div class="big num" id="hPend">—</div>
-    <div class="bar" role="progressbar" aria-label="Capital devuelto" id="hBarW"><i id="hBar" style="width:0%"></i></div>
-    <div class="toprow">
-      <div><b class="num" id="hDev">—</b><span>capital ya devuelto</span></div>
-      <div><b class="num" id="hPct">—</b><span>del préstamo pagado</span></div>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Contratos"></nav>
+
+    <div id="hLoan">
+      <div class="eyebrow"><span id="hLbl">Te queda por devolver hoy</span><span class="tag" id="hTag"></span></div>
+      <div class="big num" id="hPend">—</div>
+      <div class="bar" role="progressbar" aria-label="Capital devuelto" id="hBarW"><i id="hBar" style="width:0%"></i></div>
+      <div class="toprow">
+        <div><b class="num" id="hDev">—</b><span>capital ya devuelto</span></div>
+        <div><b class="num" id="hPct">—</b><span>del total pagado</span></div>
+      </div>
+    </div>
+    <div id="hCmp" hidden>
+      <div class="eyebrow">Deuda total pendiente hoy</div>
+      <div class="big num" id="gPend">—</div>
+      <div class="sumgrid">
+        <div><b class="num" id="gMes">—</b><span>pagos al mes (con IVA)</span></div>
+        <div><b class="num" id="gInt">—</b><span>intereses que faltan</span></div>
+      </div>
     </div>
   </div></header>
 
-  <div class="wrap">
+  <!-- Vista de un contrato -->
+  <div class="wrap gut" id="vLoan">
     <section class="card hero" aria-label="Próxima cuota">
       <div class="next">
-        <div><div class="eyebrow">Próxima cuota</div><div class="amt num" id="nCuota">—</div><div class="note" id="nFecha"></div></div>
+        <div><div class="eyebrow" id="nLbl">Próxima cuota</div><div class="amt num" id="nCuota">—</div><div class="note" id="nFecha"></div></div>
         <span class="pill" id="nPill">—</span>
       </div>
       <div class="stats">
@@ -194,48 +235,60 @@ body.dark{background:var(--onyx)}
         <div class="stat"><b class="num" id="sIntP">—</b><span>intereses pagados</span></div>
         <div class="stat"><b class="num" id="sIntR">—</b><span>intereses que faltan</span></div>
       </div>
+      <p class="good" id="sAl"></p>
       <p class="good" id="sAh" hidden></p>
     </section>
 
     <section class="card" aria-labelledby="t1">
-      <h2 id="t1">Amortizar parte del préstamo</h2>
-      <p class="note">Mueve la barra para ver qué pasa si adelantas dinero.</p>
-      <div class="amtbox">
-        <span class="eyebrow">Cantidad a adelantar</span>
-        <div class="amtrow"><span class="amtbig num" id="aBig">0 €</span>
-          <input id="aImp" type="number" inputmode="decimal" min="0" step="1" aria-label="Cantidad exacta" placeholder="Exacta"></div>
-        <input type="range" id="aRange" min="0" max="120000" step="500" value="0" aria-label="Cantidad a adelantar">
-        <div class="rangeticks num"><span>0 €</span><span id="aMax">—</span></div>
-        <div class="chips" id="aChips"></div>
+      <h2 id="t1">Amortizar parte</h2>
+      <p class="note" id="comNote"></p>
+
+      <div id="partBox">
+        <div class="amtbox">
+          <span class="eyebrow">Cantidad a adelantar</span>
+          <div class="amtrow"><span class="amtbig num" id="aBig">0 €</span>
+            <input id="aImp" type="number" inputmode="decimal" min="0" step="1" aria-label="Cantidad exacta" placeholder="Exacta"></div>
+          <input type="range" id="aRange" min="0" max="1000" step="100" value="0" aria-label="Cantidad a adelantar">
+          <div class="rangeticks num"><span>0 €</span><span id="aMax">—</span></div>
+          <div class="chips" id="aChips"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px">
+          <span style="font-size:13px;font-weight:700;color:var(--muted)">¿Qué quieres que baje?</span>
+          <div class="seg" role="group" aria-label="Qué baja">
+            <button type="button" id="mPlazo" aria-pressed="true">Menos tiempo</button>
+            <button type="button" id="mCuota" aria-pressed="false">Cuota más baja</button>
+          </div>
+        </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <span style="font-size:13px;font-weight:700;color:var(--muted)">¿Qué quieres que baje?</span>
-        <div class="seg" role="group" aria-label="Qué baja">
-          <button type="button" id="mPlazo" aria-pressed="true">Menos años</button>
-          <button type="button" id="mCuota" aria-pressed="false">Cuota más baja</button>
+      <div id="totalBox" hidden>
+        <div class="seg" role="group" aria-label="Cancelar todo">
+          <button type="button" id="tOff" aria-pressed="true">Seguir pagando</button>
+          <button type="button" id="tOn" aria-pressed="false">Cancelarlo todo</button>
         </div>
       </div>
 
-      <div class="viz" id="viz">
-        <div class="saving"><span class="eyebrow" style="color:rgba(249,245,225,.7)">Te ahorras en intereses</span>
-          <b class="num" id="simAh">0,00 €</b></div>
+      <div class="viz">
+        <div class="saving"><span class="eyebrow" style="color:rgba(249,245,225,.7)">Ahorro neto</span>
+          <b class="num" id="simNet">0,00 €</b><small id="simNetTxt"></small></div>
         <div class="cmp">
           <div class="cmpl"><span>Intereses sin adelantar</span><b class="num" id="cNow">—</b></div>
           <div class="track"><i id="bNow" style="width:100%"></i></div>
-          <div class="cmpl"><span>Intereses con este adelanto</span><b class="num" id="cNew">—</b></div>
+          <div class="cmpl"><span>Intereses + comisión con el adelanto</span><b class="num" id="cNew">—</b></div>
           <div class="track"><i id="bNew" class="pk" style="width:100%"></i></div>
         </div>
         <div class="simgrid">
+          <div><span>Intereses que te ahorras</span><b class="num" id="simAh">—</b></div>
+          <div><span>Comisión</span><b class="num" id="simCom">—</b></div>
           <div><span id="simLbl">Terminas antes</span><b class="num" id="simA">—</b></div>
           <div><span>Última cuota</span><b class="num" id="simFin">—</b></div>
-          <div><span>Cuota mensual</span><b class="num" id="simCuota">—</b></div>
-          <div><span>Te quedaría por devolver</span><b class="num" id="simPend">—</b></div>
+          <div><span id="simCuotaLbl">Cuota mensual</span><b class="num" id="simCuota">—</b></div>
+          <div><span>Pagarías ahora</span><b class="num" id="simPay">—</b></div>
         </div>
         <div class="chart"><svg id="chart" viewBox="0 0 320 150" role="img" aria-label="Capital pendiente con y sin adelanto"></svg>
           <div class="legend"><span><i style="background:var(--cream)"></i>Sin adelantar</span><span><i style="background:var(--yellow)"></i>Con el adelanto</span></div></div>
       </div>
 
-      <details class="more"><summary>Fecha y nota del adelanto</summary>
+      <details class="more" id="moreBox"><summary>Fecha y nota del adelanto</summary>
         <div class="form" style="margin-top:10px">
           <label>Fecha<input id="aFecha" type="date"></label>
           <label>Nota (opcional)<input id="aNota" type="text" maxlength="80" placeholder="Ej.: paga extra"></label>
@@ -252,9 +305,9 @@ body.dark{background:var(--onyx)}
 
     <section class="card" aria-labelledby="t3">
       <h2 id="t3">Cuadro de pagos</h2>
-      <div class="tbl"><table class="num"><thead><tr><th>Nº</th><th>Fecha</th><th>Cuota</th><th>Intereses</th><th>Pendiente</th></tr></thead><tbody id="tNext"></tbody></table></div>
+      <div class="tbl"><table class="num"><thead><tr><th>Nº</th><th>Fecha</th><th id="thC">Cuota</th><th>Intereses</th><th>Pendiente</th></tr></thead><tbody id="tNext"></tbody></table></div>
       <details id="tAll"><summary id="tAllS">Ver todas las cuotas</summary>
-        <div class="tbl" style="max-height:65vh;overflow:auto"><table class="num"><thead><tr><th>Nº</th><th>Fecha</th><th>Cuota</th><th>Intereses</th><th>Pendiente</th></tr></thead><tbody id="tFull"></tbody></table></div>
+        <div class="tbl" style="max-height:65vh;overflow:auto"><table class="num"><thead><tr><th>Nº</th><th>Fecha</th><th id="thC2">Cuota</th><th>Intereses</th><th>Pendiente</th></tr></thead><tbody id="tFull"></tbody></table></div>
       </details>
       <p class="note" id="tNote"></p>
     </section>
@@ -263,9 +316,34 @@ body.dark{background:var(--onyx)}
       <h2 id="t4">Datos del contrato</h2>
       <dl class="num" id="facts"></dl>
     </section>
+  </div>
 
+  <!-- Comparar -->
+  <div class="wrap gut" id="vCmp" hidden>
+    <section class="card hero">
+      <h2>¿Dónde me sale más a cuenta amortizar?</h2>
+      <p class="note">Elige cuánto dinero tienes para adelantar y te ordeno los contratos por lo que te ahorras, ya descontadas las comisiones.</p>
+      <div class="amtbox">
+        <div class="amtrow"><span class="amtbig num" id="kBig">0 €</span>
+          <input id="kImp" type="number" inputmode="decimal" min="0" step="1" aria-label="Cantidad exacta" placeholder="Exacta"></div>
+        <input type="range" id="kRange" min="0" max="50000" step="500" value="10000" aria-label="Cantidad a adelantar">
+        <div class="rangeticks num"><span>0 €</span><span id="kMax">—</span></div>
+      </div>
+      <div class="seg" role="group" aria-label="Qué baja">
+        <button type="button" id="kPlazo" aria-pressed="true">Menos tiempo</button>
+        <button type="button" id="kCuota" aria-pressed="false">Cuota más baja</button>
+      </div>
+      <div class="rank" id="rank"></div>
+    </section>
+    <section class="card">
+      <h2>Ten en cuenta</h2>
+      <ul class="tips" id="tips"></ul>
+    </section>
+  </div>
+
+  <div class="wrap gut">
     <div class="links">
-      <button type="button" id="bEdit">Cambiar datos del préstamo</button>
+      <button type="button" id="bEdit">Cambiar datos de este contrato</button>
       <button type="button" id="bPass">Cambiar contraseña</button>
       <button type="button" id="bOut">Salir</button>
     </div>
@@ -279,20 +357,24 @@ body.dark{background:var(--onyx)}
   </div>
 </section>
 
+<script src="/defaults.js"></script>
 <script>
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
 const r2=x=>Math.round(x*100)/100;
-const fmt=new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',useGrouping:'always'});
-const eur=x=>fmt.format(x);
+const F2=new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',useGrouping:'always'});
+const F0=new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0,useGrouping:'always'});
+const eur=x=>F2.format(x),eur0=x=>F0.format(x);
 const MES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const iso=(y,m,d)=>`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 const dmy=s=>{const[a,b,c]=s.split('-');return `${c}/${b}/${a}`};
 const largo=s=>{const[a,b,c]=s.split('-');return `${+c} de ${MES[b-1]} de ${a}`};
 const mesAno=s=>{const[a,b]=s.split('-');return `${MES[b-1]} ${a}`};
-const now=new Date(); const today=iso(now.getFullYear(),now.getMonth()+1,now.getDate());
+const now=new Date();const today=iso(now.getFullYear(),now.getMonth()+1,now.getDate());
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pctTxt=x=>String(x).replace('.',',')+' %';
+const dur=m=>m<=0?'—':m>=12?`${Math.floor(m/12)} ${Math.floor(m/12)===1?'año':'años'}${m%12?' y '+(m%12)+' m':''}`:`${m} ${m===1?'mes':'meses'}`;
 
 async function call(method,url,data){
   const r=await fetch(url,{method,headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,credentials:'same-origin'});
@@ -302,98 +384,180 @@ async function call(method,url,data){
 }
 function show(v){['vLogin','vSetup','vApp'].forEach(x=>$(x).hidden=x!==v);document.body.classList.toggle('dark',v==='vLogin');window.scrollTo(0,0)}
 
-/* ---------- cálculo ---------- */
-const DEFAULT_CFG={total:120000,tasa:3.25,anos:25,firma:'2026-10-23',primeraCuota:'2026-11-20',datos:[['Primer pago','40.000,00 € · 07/07/2026'],['Segundo pago','80.000,00 € · 23/10/2026'],['Finalidad','Compra de la vivienda habitual']]};
-let CFG=null,I=0,N=0,C0=0,Y0=0,M0=0,DAY=20;
-function setCfg(c){CFG=c;I=c.tasa/100/12;N=c.anos*12;C0=annuity(c.total,N);const[a,b,d]=c.primeraCuota.split('-');Y0=+a;M0=+b;DAY=+d}
-function annuity(B,n){if(n<=0)return B;if(I===0)return r2(B/n);return r2(B*I/(1-Math.pow(1+I,-n)))}
-function dueDate(k){const t=M0-1+(k-1);const y=Y0+Math.floor(t/12),m=t%12+1;const last=new Date(y,m,0).getDate();return iso(y,m,Math.min(DAY,last))}
+/* =====================================================================
+   MOTOR DE CÁLCULO (sistema francés con valor residual opcional)
+   - Préstamo sin cuadro oficial: se calcula desde el principio.
+   - Leasing con cuadro oficial del banco: se usa tal cual; si hay adelantos,
+     a partir del primero se recalcula con el tipo que reproduce exactamente
+     las cuotas que quedan (así el ahorro sale coherente con el banco).
+   ===================================================================== */
+function mk(cfg){
+  const L={cfg,id:cfg.__id,N:cfg.n,VR:cfg.vr||0,IVA:(cfg.iva||0)/100};
+  const[a,b,d]=cfg.primeraCuota.split('-');L.Y0=+a;L.M0=+b;L.DAY=+d;
+  L.I=cfg.tasa/100/12;
+  L.C0=cfg.cuota||annuity(L.I,cfg.total,L.N,L.VR);
+  L.tabla=Array.isArray(cfg.tabla)&&cfg.tabla.length?cfg.tabla:null;
+  L.base=schedule(L,[]);
+  return L;
+}
+function annuity(i,B,n,VR){if(n<=0)return r2(B);if(i===0)return r2((B-VR)/n);const f=Math.pow(1+i,-n);return r2((B-VR*f)*i/(1-f))}
+function remaining(i,B,C,VR){if(i===0)return Math.ceil((B-VR)/C);const a=C/i;if(a<=B)return 1200;const x=(a-VR)/(a-B);return Math.max(1,Math.ceil(Math.log(x)/Math.log(1+i)-1e-9))}
+function solveRate(B,C,n,VR,guess){ // tipo mensual que, con cuota C y n cuotas, deja exactamente VR
+  const end=i=>{let b=B;for(let k=0;k<n;k++)b=b*(1+i)-C;return b-VR};
+  let lo=0,hi=0.05;if(end(lo)>0)return guess;for(let t=0;t<80;t++){const m=(lo+hi)/2;if(end(m)>0)hi=m;else lo=m}return (lo+hi)/2;
+}
+function dueDate(L,k){const t=L.M0-1+(k-1);const y=L.Y0+Math.floor(t/12),m=t%12+1;const last=new Date(y,m,0).getDate();return iso(y,m,Math.min(L.DAY,last))}
 function dayBefore(d){const t=new Date(d+'T12:00:00');t.setDate(t.getDate()-1);return iso(t.getFullYear(),t.getMonth()+1,t.getDate())}
-function remaining(B,C){if(I===0)return Math.ceil(B/C);const x=1-B*I/C;if(x<=0)return 1200;return Math.ceil(-Math.log(x)/Math.log(1+I)-1e-9)}
-// Un adelanto entre dos cuotas se descuenta antes de calcular los intereses de la cuota siguiente.
-function schedule(advs){
-  const list=[...advs].sort((a,b)=>a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0);
-  let B=CFG.total,C=C0,k=0,ai=0,intTot=0,end=N;const rows=[],events=[];
-  while(B>0.004&&k<1200){
-    k++;const d=dueDate(k),lim=dayBefore(d);let any=false,mode=null;
+function schedule(L,advs){
+  const list=[...advs].filter(a=>a.importe>0).sort((a,b)=>a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0);
+  const rows=[],events=[];let intTot=0,B=L.cfg.total,k=0,C=L.C0,i=L.I;
+  const regN=L.N;
+  // 1) tramo oficial (leasing) hasta el primer adelanto
+  if(L.tabla){
+    const cut=list.length?list[0].fecha:'9999-12-31';
+    for(const t of L.tabla){
+      const isVR=L.VR>0&&t[2]===0&&t[3]===0&&rows.length>=regN;
+      const lim=dayBefore(t[0]);
+      if(lim>=cut)break;
+      k++;B=t[3];intTot=r2(intTot+t[2]);
+      rows.push({k,fecha:t[0],cuota:t[1],int:t[2],bal:B,vr:isVR});events.push({type:'q',fecha:t[0],bal:B,k});
+    }
+    if(!list.length)return {rows,events,intTot};
+    if(k>=regN)return {rows,events,intTot};
+    const nextC=L.tabla[k]?L.tabla[k][1]:L.C0;C=nextC;
+    i=solveRate(B,C,regN-k,L.VR,L.I);
+  }
+  // 2) tramo calculado
+  let end=regN,ai=0;
+  while(k<regN&&B>L.VR+0.004){
+    k++;const d=dueDate(L,k),lim=dayBefore(d);let any=false,mode=null;
     while(ai<list.length&&list[ai].fecha<=lim){const a=list[ai++];const amt=Math.min(a.importe,B);if(amt<=0)continue;B=r2(B-amt);any=true;mode=a.modo;events.push({type:'adv',fecha:a.fecha,importe:amt,bal:B,k:k-1})}
-    if(B<=0.004)break;
-    if(any){if(mode==='cuota')C=annuity(B,end-(k-1));else end=(k-1)+remaining(B,C)}
-    const it=r2(B*I);let c=C,am=r2(c-it);
-    if(am>=B||(k>=end&&B-am<5)){am=B;c=r2(B+it)}
+    if(B<=0.004){k--;break}
+    if(any&&B>L.VR){if(mode==='cuota')C=annuity(i,B,end-(k-1),L.VR);else end=(k-1)+remaining(i,B,C,L.VR)}
+    if(B<=L.VR+0.004){k--;break}
+    const it=r2(B*i);let c=C,am=r2(c-it);
+    if(am>=B-L.VR||k>=end){am=r2(B-L.VR);c=r2(am+it)}
     B=r2(B-am);intTot=r2(intTot+it);
-    rows.push({k,fecha:d,cuota:c,int:it,bal:B});events.push({type:'q',fecha:d,bal:B,k});
+    rows.push({k,fecha:d,cuota:c,int:it,bal:B,vr:false});events.push({type:'q',fecha:d,bal:B,k});
+    if(k>=end)break;
+  }
+  // adelantos posteriores a la última cuota normal (p. ej. pagar la opción de compra)
+  while(ai<list.length&&B>0.004){const a=list[ai++];const amt=Math.min(a.importe,B);B=r2(B-amt);events.push({type:'adv',fecha:a.fecha,importe:amt,bal:B,k})}
+  if(B>0.004){ // valor residual / opción de compra
+    k++;const d=dueDate(L,k);rows.push({k,fecha:d,cuota:B,int:0,bal:0,vr:true});events.push({type:'q',fecha:d,bal:0,k});B=0;
   }
   return {rows,events,intTot};
 }
+function balAt(L,sch,date){let b=L.cfg.total;for(const e of sch.events)if(e.fecha<=date)b=e.bal;return b}
+function commission(L,amt,total){
+  const c=L.cfg.comision||{};if(c.pct==null)return 0;if(!(amt>0))return 0;
+  return r2(Math.max(amt*c.pct/100,c.min||0));
+}
+// Simula adelantar `amt` en `fecha`. Devuelve ahorro de intereses, comisión, etc.
+function simulateL(L,advs,amt,fecha,modo){
+  const cur=schedule(L,advs);
+  const pend=balAt(L,cur,fecha);
+  const total=amt>=pend-0.004;
+  amt=Math.min(amt,pend);
+  const sim=amt>0?schedule(L,[...advs,{id:'_',importe:amt,fecha,modo}]):cur;
+  const ah=Math.max(0,r2(cur.intTot-sim.intTot));
+  const com=amt>0?commission(L,amt,total):0;
+  return {cur,sim,amt,pend,ah,com,net:r2(ah-com),total};
+}
 
 /* ---------- estado ---------- */
-let advs=[],mode='plazo',BASE=null;
+let LOANS={},ORDER=[],CUR=null,mode='plazo',amt=0,cancelAll=false,kMode='plazo',kAmt=10000;
+const isLeasing=L=>L.cfg.tipo==='leasing';
+const bruta=(L,c)=>r2(c*(1+L.IVA));
+
+function tabs(){
+  $('tabs').innerHTML=ORDER.map(id=>`<button type="button" role="tab" data-id="${id}" aria-selected="${CUR===id}">${esc(LOANS[id].L.cfg.nombre)}</button>`).join('')
+    +`<button type="button" role="tab" data-id="__cmp" aria-selected="${CUR==='__cmp'}">Comparar</button>`;
+  [...$('tabs').children].forEach(b=>b.onclick=()=>{CUR=b.dataset.id;amt=0;cancelAll=false;try{localStorage.setItem('pc_tab',CUR)}catch(e){}render();window.scrollTo(0,0)});
+}
 function render(){
-  if(!CFG)return;
-  const sch=schedule(advs);
-  let bal=CFG.total,paid=0,intP=0;
-  for(const e of sch.events)if(e.fecha<=today)bal=e.bal;
-  for(const r of sch.rows)if(r.fecha<=today){paid++;intP=r2(intP+r.int)}
+  tabs();
+  const cmp=CUR==='__cmp';
+  $('hLoan').hidden=cmp;$('hCmp').hidden=!cmp;$('vLoan').hidden=cmp;$('vCmp').hidden=!cmp;$('bEdit').hidden=cmp;
+  if(cmp)return renderCmp();
+  renderLoan();
+}
+function renderLoan(){
+  const {L,advs}=LOANS[CUR];const c=L.cfg,lea=isLeasing(L);
+  const sch=schedule(L,advs);
+  const bal=balAt(L,sch,today);
+  let paid=0,intP=0;for(const r of sch.rows)if(r.fecha<=today){paid++;intP=r2(intP+r.int)}
   const next=sch.rows.find(r=>r.fecha>today),last=sch.rows[sch.rows.length-1];
-  const dev=r2(CFG.total-bal),pct=dev/CFG.total*100;
+  const dev=r2(c.total-bal),pct=dev/c.total*100;
+  $('hLbl').textContent=lea?'Capital pendiente hoy (sin IVA)':'Te queda por devolver hoy';
+  $('hTag').textContent=lea?'Leasing · '+(c.quien||'Empresa'):(c.quien||'');$('hTag').hidden=!$('hTag').textContent;
   $('hPend').textContent=eur(bal);$('hDev').textContent=eur(dev);
   $('hPct').textContent=pct.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1})+' %';
   $('hBar').style.width=Math.max(pct,.8).toFixed(2)+'%';$('hBarW').setAttribute('aria-valuenow',pct.toFixed(1));
-  if(next){$('nCuota').textContent=eur(next.cuota);$('nFecha').textContent=`Cuota ${next.k} de ${sch.rows.length} · ${largo(next.fecha)}`;
-    const dd=Math.round((new Date(next.fecha+'T12:00:00')-new Date(today+'T12:00:00'))/864e5);$('nPill').textContent=dd===0?'Hoy':dd===1?'Mañana':`En ${dd} días`}
-  else{$('nCuota').textContent='¡Pagado!';$('nFecha').textContent='No queda nada por devolver.';$('nPill').textContent='Terminado'}
+  if(next){
+    $('nLbl').textContent=lea?(next.vr?'Opción de compra':'Próxima factura (con IVA)'):'Próxima cuota';
+    $('nCuota').textContent=eur(lea?bruta(L,next.cuota):next.cuota);
+    $('nFecha').textContent=(lea?`${eur(next.cuota)} + IVA · `:'')+`Cuota ${next.k} de ${sch.rows.length} · ${largo(next.fecha)}`;
+    const dd=Math.round((new Date(next.fecha+'T12:00:00')-new Date(today+'T12:00:00'))/864e5);$('nPill').textContent=dd===0?'Hoy':dd===1?'Mañana':`En ${dd} días`;
+  }else{$('nCuota').textContent='¡Pagado!';$('nFecha').textContent='No queda nada por pagar.';$('nPill').textContent='Terminado'}
   $('sPag').textContent=`${paid} de ${sch.rows.length}`;$('sFin').textContent=last?mesAno(last.fecha):'—';
   $('sIntP').textContent=eur(intP);$('sIntR').textContent=eur(r2(sch.intTot-intP));
-  const ah=r2(BASE.intTot-sch.intTot),meses=BASE.rows.length-sch.rows.length;
+  $('sAl').textContent=paid?`Al día: ${paid} ${paid===1?'cuota pagada':'cuotas pagadas'}, la última el ${dmy(sch.rows[paid-1].fecha)}.`:'Todavía no ha vencido ninguna cuota.';
+  const ah=r2(L.base.intTot-sch.intTot),meses=L.base.rows.length-sch.rows.length;
   $('sAh').hidden=!(advs.length&&ah>0);
-  $('sAh').textContent=`Con tus adelantos te ahorras ${eur(ah)} en intereses`+(meses>0?` y terminas ${meses} ${meses===1?'mes':'meses'} antes.`:'.');
+  $('sAh').textContent=`Con tus adelantos te ahorras ${eur(ah)} en intereses`+(meses>0?` y terminas ${dur(meses)} antes.`:'.');
+  // comisión / parcial
+  const cm=c.comision||{};
+  $('comNote').textContent=cm.nota||(cm.pct?`Comisión: ${pctTxt(cm.pct)}${cm.min?` (mínimo ${eur0(cm.min)})`:''}.`:'Sin comisión.');
+  $('comNote').className=cm.pct==null?'warn':'note';
+  $('partBox').hidden=cm.parcial===false;$('totalBox').hidden=cm.parcial!==false;
+  $('t1').textContent=cm.parcial===false?'Cancelar el contrato':'Amortizar parte';
   // cuadro
   const advBy={};for(const e of sch.events)if(e.type==='adv')(advBy[e.k]=advBy[e.k]||[]).push(e);
   const advRow=a=>`<tr class="adv"><td>+</td><td>${dmy(a.fecha)}</td><td>${eur(a.importe)}</td><td>adelanto</td><td>${eur(a.bal)}</td></tr>`;
-  const row=r=>`<tr class="${r.fecha<=today?'paid':''}${r===next?' nx':''}"><td>${r.k}</td><td>${dmy(r.fecha)}</td><td>${eur(r.cuota)}</td><td>${eur(r.int)}</td><td>${eur(r.bal)}</td></tr>`+(advBy[r.k]||[]).map(advRow).join('');
+  const cu=r=>eur(lea?bruta(L,r.cuota):r.cuota);
+  const row=r=>`<tr class="${r.fecha<=today?'paid':''}${r===next?' nx':''}"><td>${r.vr?'OC':r.k}</td><td>${dmy(r.fecha)}</td><td>${cu(r)}</td><td>${eur(r.int)}</td><td>${eur(r.bal)}</td></tr>`+(advBy[r.k]||[]).map(advRow).join('');
   const pre=(advBy[0]||[]).map(advRow).join('');
-  const ni=sch.rows.indexOf(next),from=ni<0?Math.max(sch.rows.length-6,0):Math.max(ni-1,0);
-  $('tNext').innerHTML=(from===0?pre:'')+sch.rows.slice(from,from+7).map(row).join('');
+  const ni=sch.rows.indexOf(next),from=ni<0?Math.max(sch.rows.length-6,0):Math.max(ni-2,0);
+  $('tNext').innerHTML=(from===0?pre:'')+sch.rows.slice(from,from+8).map(row).join('');
   $('tFull').innerHTML=$('tAll').open?pre+sch.rows.map(row).join(''):'';
+  $('thC').textContent=$('thC2').textContent=lea?'Factura':'Cuota';
   $('tAllS').textContent=`Ver las ${sch.rows.length} cuotas`;
-  $('tNote').textContent=`Cada cuota se da por pagada el día ${DAY} de su mes, porque tienes la transferencia automática.`;
+  $('tNote').textContent=(lea?'«Factura» es la cuota con IVA; intereses y pendiente van sin IVA. «OC» es la opción de compra. ':'')+`Cada cuota se da por pagada el día ${L.DAY} de su mes, porque está domiciliada.`;
   // datos
-  const facts=[...CFG.datos,['Total prestado',eur(CFG.total)],['Interés',`${String(CFG.tasa).replace('.',',')} % nominal anual`],
-    ['Plazo',`${CFG.anos} años · ${N} cuotas`],['Firma',dmy(CFG.firma)],['Cuota inicial',`${eur(C0)} el día ${DAY}`],['Intereses previstos',eur(BASE.intTot)]];
+  const facts=[...(c.datos||[]),[lea?'Capital financiado':'Total prestado',eur(c.total)],['Interés',`${c.tabla&&lea&&c.id!=='kona'?'≈ ':''}${pctTxt(c.tasa)} nominal anual`],
+    ['Cuotas',`${c.n}${L.VR?' + opción de compra':''}`],['Intereses totales',eur(L.base.intTot)]];
   $('facts').innerHTML=facts.map(([a,b])=>`<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join('');
   renderHist();setupRange();
 }
-$('tAll').addEventListener('toggle',render);
+$('tAll').addEventListener('toggle',()=>{if(CUR!=='__cmp')renderLoan()});
 
 function renderHist(){
-  const h=$('hist');
-  if(!advs.length){h.innerHTML='<p class="note">Todavía no has hecho ningún adelanto. Cuando guardes uno, aparecerá aquí y todo se recalculará.</p>';return}
+  const {advs}=LOANS[CUR];const h=$('hist');
+  if(!advs.length){h.innerHTML='<p class="note">Todavía no has hecho ningún adelanto en este contrato.</p>';return}
   h.innerHTML='';
   [...advs].sort((a,b)=>a.fecha<b.fecha?1:-1).forEach(a=>{
     const r=document.createElement('div');r.className='row';
     const l=document.createElement('div');
     const t=document.createElement('div');t.className='num';t.style.fontWeight='800';t.textContent=eur(a.importe);
-    const s=document.createElement('small');s.textContent=`${dmy(a.fecha)} · ${a.modo==='cuota'?'baja la cuota':'menos años'}${a.nota?' · '+a.nota:''}`;
+    const s=document.createElement('small');s.textContent=`${dmy(a.fecha)} · ${a.modo==='cuota'?'baja la cuota':'menos tiempo'}${a.nota?' · '+a.nota:''}`;
     l.append(t,s);
     const x=document.createElement('button');x.className='x';x.textContent='Borrar';
     x.onclick=()=>{const c=document.createElement('div');c.className='confirm';
       const y=document.createElement('button');y.className='btn small';y.textContent='Sí, borrar';
       const n=document.createElement('button');n.className='btn small ghost';n.textContent='No';
       n.onclick=()=>c.replaceWith(x);
-      y.onclick=async()=>{y.disabled=true;try{await call('DELETE','/api/adelantos/'+a.id);advs=advs.filter(z=>z.id!==a.id);render()}catch(e){if(e.status===401)return start();$('aMsg').textContent=e.message;y.disabled=false}};
+      y.onclick=async()=>{y.disabled=true;try{await call('DELETE',`/api/prestamos/${CUR}/adelantos/${a.id}`);LOANS[CUR].advs=LOANS[CUR].advs.filter(z=>z.id!==a.id);render()}catch(e){if(e.status===401)return start();$('aMsg').textContent=e.message;y.disabled=false}};
       c.append(y,n);x.replaceWith(c)};
     r.append(l,x);h.append(r);
   });
 }
 
-/* ---------- simulador de adelantos (barra deslizante) ---------- */
-$('aFecha').value=today;
-let amt=0,pendNow=0;
-function eur0(x){return new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0,useGrouping:'always'}).format(x)}
+/* ---------- simulador de un contrato ---------- */
+let pendNow=0;
 function setAmt(v,from){
   v=Math.max(0,Math.min(r2(+v||0),pendNow));amt=v;
-  if(from!=='range')$('aRange').value=Math.round(v/500)*500;
+  if(from!=='range')$('aRange').value=v;
   if(from!=='input')$('aImp').value=v?String(v):'';
   $('aRange').style.setProperty('--p',(pendNow?Math.min(100,v/pendNow*100):0)+'%');
   $('aBig').textContent=eur0(v);
@@ -402,87 +566,156 @@ function setAmt(v,from){
 }
 $('aRange').addEventListener('input',e=>setAmt(+e.target.value,'range'));
 $('aImp').addEventListener('input',e=>setAmt(parseFloat(String(e.target.value).replace(',','.')),'input'));
+function advDate(L){let f=$('aFecha').value;if(!f||f<L.cfg.firma)f=today<L.cfg.firma?L.cfg.firma:today;$('aFecha').value=f;return f}
 function setupRange(){
-  const sch=schedule(advs);let bal=CFG.total;for(const e of sch.events)if(e.fecha<=today)bal=e.bal;
-  if(!$('aFecha').value||$('aFecha').value<CFG.firma)$('aFecha').value=today<CFG.firma?CFG.firma:today;
-  pendNow=bal;$('aRange').max=String(Math.max(500,Math.floor(bal/500)*500));
+  const {L,advs}=LOANS[CUR];const f=advDate(L);
+  const bal=balAt(L,schedule(L,advs),f);pendNow=bal;
+  const step=bal>50000?500:100;$('aRange').step=String(step);$('aRange').max=String(Math.max(step,Math.floor(bal/step)*step));
   $('aMax').textContent=eur0(bal);
-  const opts=[1000,5000,10000,20000].filter(v=>v<bal);
+  const opts=[1000,5000,10000,20000,50000].filter(v=>v<bal).slice(0,4);
   $('aChips').innerHTML=opts.map(v=>`<button type="button" data-v="${v}">${eur0(v)}</button>`).join('')+`<button type="button" data-v="${r2(bal)}">Todo</button>`;
   [...$('aChips').children].forEach(b=>b.onclick=()=>setAmt(+b.dataset.v));
-  setAmt(Math.min(amt,bal));
+  if(LOANS[CUR].L.cfg.comision&&LOANS[CUR].L.cfg.comision.parcial===false){amt=cancelAll?bal:0;simulate()}
+  else setAmt(Math.min(amt,bal));
 }
-function draft(){const f=$('aFecha').value;if(!(amt>0)||!f)return null;return{id:'_',importe:amt,fecha:f,modo:mode,nota:$('aNota').value.trim()}}
-function drawChart(cur,sim){
+function drawChart(L,cur,sim){
   const svg=$('chart'),W=320,H=150,P={l:40,r:8,t:10,b:20};
-  const pts=s=>{const a=[[CFG.firma,CFG.total]];s.events.forEach(e=>a.push([e.fecha,e.bal]));return a};
+  const pts=s=>{const a=[[L.cfg.firma,L.cfg.total]];s.events.forEach(e=>a.push([e.fecha,e.bal]));return a};
   const A=pts(cur),B=pts(sim);
   const t=d=>new Date(d+'T12:00:00').getTime();
-  const x0=t(CFG.firma),x1=t(A[A.length-1][0]);
-  const X=d=>P.l+(t(d)-x0)/(x1-x0||1)*(W-P.l-P.r),Y=v=>P.t+(1-v/CFG.total)*(H-P.t-P.b);
+  const x0=t(L.cfg.firma),x1=t(A[A.length-1][0]);
+  const X=d=>P.l+(t(d)-x0)/(x1-x0||1)*(W-P.l-P.r),Y=v=>P.t+(1-v/L.cfg.total)*(H-P.t-P.b);
   const path=a=>a.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1)).join('');
   const y0=new Date(x0).getFullYear(),y1=new Date(x1).getFullYear();let ticks='';
   const step=Math.max(1,Math.ceil((y1-y0)/5));
   for(let y=Math.ceil((y0+1)/step)*step;y<=y1;y+=step){const xx=X(iso(y,1,1));if(xx>P.l+10&&xx<W-P.r)ticks+=`<text x="${xx.toFixed(1)}" y="${H-5}" text-anchor="middle">${y}</text>`}
-  const g=[0,.5,1].map(f=>`<line x1="${P.l}" x2="${W-P.r}" y1="${Y(CFG.total*f).toFixed(1)}" y2="${Y(CFG.total*f).toFixed(1)}" stroke="rgba(249,245,225,.12)"/><text x="${P.l-5}" y="${(Y(CFG.total*f)+3).toFixed(1)}" text-anchor="end">${Math.round(CFG.total*f/1000)}k</text>`).join('');
-  const endB=B[B.length-1];
+  const kf=v=>v>=1000?Math.round(v/1000)+'k':Math.round(v);
+  const g=[0,.5,1].map(f=>`<line x1="${P.l}" x2="${W-P.r}" y1="${Y(L.cfg.total*f).toFixed(1)}" y2="${Y(L.cfg.total*f).toFixed(1)}" stroke="rgba(249,245,225,.12)"/><text x="${P.l-5}" y="${(Y(L.cfg.total*f)+3).toFixed(1)}" text-anchor="end">${kf(L.cfg.total*f)}</text>`).join('');
+  const tx=X(today);const endB=B[B.length-1];
   svg.innerHTML=`<g fill="rgba(249,245,225,.6)" font-size="9" font-family="Evolve Sans,system-ui,sans-serif">${g}${ticks}</g>
+    ${tx>P.l&&tx<W-P.r?`<line x1="${tx.toFixed(1)}" x2="${tx.toFixed(1)}" y1="${P.t}" y2="${H-P.b}" stroke="rgba(49,185,203,.6)" stroke-dasharray="3 3"/><text x="${(tx+3).toFixed(1)}" y="${P.t+8}" fill="#31B9CB" font-size="9">hoy</text>`:''}
     <path d="${path(A)}" fill="none" stroke="#F9F5E1" stroke-width="2" opacity=".55"/>
     <path d="${path(B)}" fill="none" stroke="#F0E85A" stroke-width="2.5"/>
     <circle cx="${X(endB[0]).toFixed(1)}" cy="${Y(0).toFixed(1)}" r="4" fill="#F0E85A" stroke="#130F17" stroke-width="2"/>`;
 }
 function simulate(){
-  if(!CFG)return;
-  const d=draft();$('aSave').disabled=!d;
-  const okDate=!d||d.fecha>=CFG.firma;
-  if(!okDate){$('aSave').disabled=true;$('aMsg').textContent='La fecha tiene que ser posterior a la firma.'}
-  else if($('aMsg').textContent.startsWith('La fecha'))$('aMsg').textContent='';
-  const cur=schedule(advs),sim=d&&okDate?schedule([...advs,d]):cur;
-  const ah=Math.max(0,r2(cur.intTot-sim.intTot));
-  $('simAh').textContent=eur(ah);
-  $('cNow').textContent=eur(cur.intTot);$('cNew').textContent=eur(sim.intTot);
-  $('bNow').style.width='100%';$('bNew').style.width=(cur.intTot?Math.max(0,sim.intTot/cur.intTot*100):0).toFixed(1)+'%';
-  let bal=CFG.total;const ref=d?d.fecha:today;for(const e of sim.events)if(e.fecha<=ref)bal=e.bal;
-  $('simPend').textContent=eur(bal);
-  const na=sim.rows.find(r=>r.fecha>ref);$('simCuota').textContent=na?eur(na.cuota):'—';
-  const m=cur.rows.length-sim.rows.length;
-  $('simLbl').textContent=mode==='cuota'?'Cuota baja':'Terminas antes';
-  if(mode==='cuota'){const ca=cur.rows.find(r=>r.fecha>ref);$('simA').textContent=ca&&na?(ca.cuota-na.cuota>0.004?'−'+eur(ca.cuota-na.cuota)+'/mes':'—'):'—'}
-  else $('simA').textContent=m>0?(m>=12?`${Math.floor(m/12)} años${m%12?' y '+(m%12)+' m':''}`:`${m} ${m===1?'mes':'meses'}`):'—';
-  $('simFin').textContent=sim.rows.length?mesAno(sim.rows[sim.rows.length-1].fecha):'Ya';
-  drawChart(cur,sim);
+  if(!CUR||CUR==='__cmp')return;
+  const {L,advs}=LOANS[CUR];const lea=isLeasing(L);const f=advDate(L);
+  const s=simulateL(L,advs,amt,f,mode);
+  $('aSave').disabled=!(s.amt>0);
+  $('simNet').textContent=eur(s.net);
+  $('simNet').style.color=s.net<0?'#ff8fc4':'';
+  $('simNetTxt').textContent=!s.amt?'Mueve la barra para ver cuánto te ahorras.':
+    s.net<0?'La comisión es mayor que los intereses que te ahorras: no compensa.':
+    `Por cada 1.000 € adelantados ahorras ${eur(s.net/s.amt*1000)}.`;
+  $('cNow').textContent=eur(s.cur.intTot);$('cNew').textContent=eur(r2(s.sim.intTot+s.com));
+  const mx=Math.max(s.cur.intTot,s.sim.intTot+s.com)||1;
+  $('bNow').style.width=(s.cur.intTot/mx*100).toFixed(1)+'%';$('bNew').style.width=((s.sim.intTot+s.com)/mx*100).toFixed(1)+'%';
+  $('simAh').textContent=eur(s.ah);$('simCom').textContent=s.com?eur(s.com):(L.cfg.comision&&L.cfg.comision.pct==null?'¿?':'0 €');
+  const na=s.sim.rows.find(r=>r.fecha>f&&!r.vr),ca=s.cur.rows.find(r=>r.fecha>f&&!r.vr);
+  const m=s.cur.rows.length-s.sim.rows.length;
+  if(mode==='cuota'&&!s.total){$('simLbl').textContent='La cuota baja';$('simA').textContent=ca&&na&&ca.cuota-na.cuota>0.004?'−'+eur(lea?bruta(L,ca.cuota-na.cuota):ca.cuota-na.cuota):'—'}
+  else{$('simLbl').textContent='Terminas antes';$('simA').textContent=s.total&&s.amt?'Hoy mismo':dur(m)}
+  $('simFin').textContent=s.total&&s.amt?'Ninguna':(s.sim.rows.length?mesAno(s.sim.rows[s.sim.rows.length-1].fecha):'—');
+  $('simCuotaLbl').textContent=lea?'Factura mensual':'Cuota mensual';
+  $('simCuota').textContent=s.total&&s.amt?'0 €':(na?eur(lea?bruta(L,na.cuota):na.cuota):'—');
+  const pay=r2(s.amt+s.com);
+  $('simPay').textContent=lea&&s.amt?`${eur(pay)} + IVA`:eur(pay);
+  $('moreBox').hidden=!s.amt;
+  drawChart(L,s.cur,s.sim);
 }
-$('aFecha').addEventListener('input',simulate);
+$('aFecha').addEventListener('input',()=>setupRange());
 function setMode(m){mode=m;$('mPlazo').setAttribute('aria-pressed',m==='plazo');$('mCuota').setAttribute('aria-pressed',m==='cuota');simulate()}
 $('mPlazo').onclick=()=>setMode('plazo');$('mCuota').onclick=()=>setMode('cuota');
+function setCancel(on){cancelAll=on;$('tOn').setAttribute('aria-pressed',on);$('tOff').setAttribute('aria-pressed',!on);amt=on?pendNow:0;simulate()}
+$('tOn').onclick=()=>setCancel(true);$('tOff').onclick=()=>setCancel(false);
 $('aSave').onclick=async()=>{
-  const d=draft();if(!d)return;$('aSave').disabled=true;$('aMsg').textContent='Guardando…';
-  try{const r=await call('POST','/api/adelantos',{importe:d.importe,fecha:d.fecha,modo:d.modo,nota:d.nota});advs.push(r.adelanto);
-    amt=0;$('aNota').value='';$('aMsg').textContent=`Adelanto de ${eur(d.importe)} guardado. Todo está recalculado.`;render()}
+  const {L}=LOANS[CUR];const f=advDate(L);if(!(amt>0))return;
+  $('aSave').disabled=true;$('aMsg').textContent='Guardando…';
+  try{const r=await call('POST',`/api/prestamos/${CUR}/adelantos`,{importe:Math.min(amt,pendNow),fecha:f,modo:cancelAll?'plazo':mode,nota:$('aNota').value.trim()});
+    LOANS[CUR].advs.push(r.adelanto);const v=amt;amt=0;cancelAll=false;$('aNota').value='';
+    $('aMsg').textContent=`Adelanto de ${eur(v)} guardado. Todo está recalculado.`;render()}
   catch(e){if(e.status===401)return start();$('aMsg').textContent=e.message;simulate()}
 };
 
-/* ---------- configuración ---------- */
-function setupFromHash(){
-  const m=/^#setup=([A-Za-z0-9_-]+)$/.exec(location.hash);if(!m)return null;
-  try{const s=m[1].replace(/-/g,'+').replace(/_/g,'/');const bin=atob(s+'==='.slice((s.length+3)%4));
-    return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0))))}catch(e){return null}
+/* ---------- comparar ---------- */
+function setK(v,from){
+  v=Math.max(0,r2(+v||0));kAmt=v;
+  if(from!=='range')$('kRange').value=v;
+  if(from!=='input')$('kImp').value=v?String(v):'';
+  $('kRange').style.setProperty('--p',Math.min(100,v/(+$('kRange').max||1)*100)+'%');
+  $('kBig').textContent=eur0(v);
+  renderRank();
 }
-let pendingDatos=null;
-function openSetup(c,editing){
-  pendingDatos=c&&Array.isArray(c.datos)?c.datos:(CFG?CFG.datos:[]);
-  $('cTotal').value=c?c.total:'';$('cTasa').value=c?c.tasa:'';$('cAnos').value=c?c.anos:'';
-  $('cFirma').value=c?c.firma:'';$('cPrim').value=c?c.primeraCuota:'';
-  $('sTxt').textContent=editing?'Cambia lo que necesites. Los adelantos guardados se mantienen.':(c?'Revisa los datos y pulsa «Guardar».':'Rellena los datos del préstamo para empezar.');
-  $('sCancel').hidden=!editing;$('sMsg').textContent='';show('vSetup');
+$('kRange').addEventListener('input',e=>setK(+e.target.value,'range'));
+$('kImp').addEventListener('input',e=>setK(parseFloat(String(e.target.value).replace(',','.')),'input'));
+function setKMode(m){kMode=m;$('kPlazo').setAttribute('aria-pressed',m==='plazo');$('kCuota').setAttribute('aria-pressed',m==='cuota');renderRank()}
+$('kPlazo').onclick=()=>setKMode('plazo');$('kCuota').onclick=()=>setKMode('cuota');
+function renderCmp(){
+  let pend=0,mes=0,intR=0,maxP=0;
+  for(const id of ORDER){const {L,advs}=LOANS[id];const sch=schedule(L,advs);const b=balAt(L,sch,today);pend+=b;maxP=Math.max(maxP,b);
+    const nx=sch.rows.find(r=>r.fecha>today&&!r.vr);if(nx)mes+=isLeasing(L)?bruta(L,nx.cuota):nx.cuota;
+    for(const r of sch.rows)if(r.fecha>today)intR+=r.int}
+  $('gPend').textContent=eur(pend);$('gMes').textContent=eur(mes);$('gInt').textContent=eur(r2(intR));
+  const mx=Math.max(1000,Math.ceil(maxP/1000)*1000);$('kRange').max=String(mx);$('kMax').textContent=eur0(mx);
+  setK(Math.min(kAmt,mx));
+  const tips=[
+    'El ahorro es en intereses y ya tiene restada la comisión de cada contrato. No incluye impuestos.',
+    'El «Préstamo socios» lo pagáis vosotros y los intereses los cobra vuestra propia empresa: ese dinero no se pierde, se queda en casa (aunque la empresa tributa por él).',
+    'Los leasing los paga la empresa. Sus intereses son gasto deducible y el IVA de las facturas también se recupera, así que el ahorro real después de impuestos es algo menor que el que ves aquí.',
+    'Al adelantar capital en un leasing, el banco suele facturar ese capital con IVA (la empresa lo recupera después).'];
+  const bb=LOANS.bbva&&LOANS.bbva.L.cfg.comision;if(bb&&bb.pct==null)tips.push('Del leasing de BBVA no tengo la comisión de cancelación: hasta que la pongas en «Cambiar datos», se calcula como si no tuviera.');
+  if(LOANS.kona)tips.push('El leasing del Kona (Cetelem) no admite amortizaciones parciales: solo se puede cancelar entero, con un 5 % de comisión (mínimo 250 €).');
+  $('tips').innerHTML=tips.map(t=>`<li>${esc(t)}</li>`).join('');
+}
+function renderRank(){
+  const f=today;const res=[];
+  for(const id of ORDER){
+    const {L,advs}=LOANS[id];const cm=L.cfg.comision||{};
+    const sch=schedule(L,advs);const pend=balAt(L,sch,f);
+    if(pend<=0.004){res.push({id,L,txt:'Ya está pagado.',net:-1e9});continue}
+    if(cm.parcial===false&&kAmt<pend+commission(L,pend,true)){
+      const need=r2(pend+commission(L,pend,true));
+      res.push({id,L,net:-1e8,blocked:true,txt:`Solo se puede cancelar entero: necesitas ${eur0(need)} (+ IVA).`});continue}
+    const use=Math.min(kAmt,pend);
+    const s=simulateL(L,advs,use,f,cm.parcial===false?'plazo':kMode);
+    const m=s.cur.rows.length-s.sim.rows.length;
+    res.push({id,L,s,net:s.net,use,txt:`${s.total?'Lo cancelas entero':'Adelantas '+eur0(use)}${s.com?` · comisión ${eur(s.com)}`:''}${m>0&&!s.total?` · terminas ${dur(m)} antes`:''}`});
+  }
+  res.sort((a,b)=>b.net-a.net);
+  const best=res.find(r=>r.s&&r.net>0);
+  const maxNet=Math.max(1,...res.filter(r=>r.s).map(r=>r.net));
+  $('rank').innerHTML=res.map(r=>{
+    const per=r.s&&r.use?` · ${eur(r.net/r.use*1000)} por cada 1.000 €`:'';
+    return `<div class="rk${r===best?' best':''}"><div class="h"><b>${r===best?'⭐ ':''}${esc(r.L.cfg.nombre)}</b><span class="sub">${esc(r.L.cfg.quien||'')}${isLeasing(r.L)?' · leasing':''}</span></div>
+      ${r.s?`<div class="v num" style="${r.net<0?'color:var(--pink-d)':''}">${r.net<0?'':'+'}${eur(r.net)}</div><div class="tr"><i style="width:${Math.max(0,r.net/maxNet*100).toFixed(1)}%"></i></div>`:''}
+      <div class="sub">${esc(r.txt)}${per}${r.s&&r.L.cfg.comision&&r.L.cfg.comision.pct==null?' · comisión desconocida':''}</div></div>`}).join('')
+    +(kAmt>0?'':'<p class="note">Mueve la barra para comparar.</p>');
+}
+
+/* ---------- editar datos ---------- */
+let editing=null;
+function openSetup(id){
+  editing=id;const c=LOANS[id].L.cfg;const cm=c.comision||{};
+  $('sTitle').textContent=c.nombre;$('sTxt').textContent='Cambia lo que necesites. Los adelantos guardados se mantienen.';
+  $('cNombre').value=c.nombre;$('cTotal').value=c.total;$('cTasa').value=c.tasa;$('cN').value=c.n;$('cFirma').value=c.firma;$('cPrim').value=c.primeraCuota;
+  const tab=!!(c.tabla&&c.tabla.length);$('cLoanFields').hidden=tab;$('cTablaNote').hidden=!tab;
+  $('cParcial').checked=cm.parcial!==false;$('cPct').value=cm.pct==null?'':cm.pct;$('cMin').value=cm.min||'';
+  $('sMsg').textContent='';show('vSetup');
 }
 $('fSetup').onsubmit=async e=>{e.preventDefault();
-  const c={total:+$('cTotal').value,tasa:+String($('cTasa').value).replace(',','.'),anos:+$('cAnos').value,firma:$('cFirma').value,primeraCuota:$('cPrim').value,datos:pendingDatos||[]};
-  try{const r=await call('PUT','/api/config',{config:c});history.replaceState(null,'',location.pathname);setCfg(r.config);BASE=schedule([]);show('vApp');render()}
+  const old=LOANS[editing].L.cfg;const c=JSON.parse(JSON.stringify(old));delete c.__id;
+  c.nombre=$('cNombre').value.trim()||old.nombre;
+  if(!(old.tabla&&old.tabla.length)){c.total=+$('cTotal').value;c.tasa=+String($('cTasa').value).replace(',','.');c.n=+$('cN').value;c.firma=$('cFirma').value;c.primeraCuota=$('cPrim').value;delete c.cuota}
+  const pctV=$('cPct').value.trim();
+  c.comision=Object.assign({},old.comision||{},{parcial:$('cParcial').checked,pct:pctV===''?null:+pctV.replace(',','.'),min:+$('cMin').value||0});
+  const changedCom=JSON.stringify(c.comision)!==JSON.stringify(old.comision||{});
+  if(changedCom)c.comision.nota=c.comision.pct==null?'Comisión desconocida.':`${c.comision.parcial?'Permite amortizar una parte.':'Solo se puede cancelar entero.'} Comisión: ${pctTxt(c.comision.pct)}${c.comision.min?` (mínimo ${eur0(c.comision.min)})`:''}.`;
+  try{const r=await call('PUT','/api/prestamos/'+editing,{config:c});setLoan(editing,r.config,LOANS[editing].advs);show('vApp');render()}
   catch(err){if(err.status===401)return start();$('sMsg').textContent=err.message}
 };
-$('sCancel').onclick=()=>{history.replaceState(null,'',location.pathname);show('vApp');render()};
-$('bEdit').onclick=()=>openSetup(CFG,true);
+$('sCancel').onclick=()=>{show('vApp');render()};
+$('bEdit').onclick=()=>{if(CUR&&CUR!=='__cmp')openSetup(CUR)};
 
 /* ---------- acceso ---------- */
 let creating=false;
@@ -500,6 +733,12 @@ $('fPass').onsubmit=async e=>{e.preventDefault();$('pMsg').textContent='';
   try{await call('POST','/api/cambiar-clave',{actual:$('pOld').value,nueva:$('pNew').value});$('pOld').value='';$('pNew').value='';$('pMsg').textContent='Contraseña cambiada.'}
   catch(err){$('pMsg').textContent=err.message}};
 
+function setLoan(id,cfg,advs){
+  const c=Object.assign({},cfg);if(!c.n&&c.anos)c.n=c.anos*12;c.__id=id;c.id=id;
+  if(!c.nombre)c.nombre=id==='socios'?'Préstamo socios':id;
+  if(!c.comision)c.comision={parcial:true,pct:0,min:0,nota:''};
+  LOANS[id]={L:mk(c),advs:advs||[]};
+}
 async function start(){
   let st;
   try{st=await call('GET','/api/estado')}catch(e){show('vLogin');$('lMsg').textContent='No se puede conectar con el servidor. Inténtalo en un momento.';return}
@@ -510,14 +749,21 @@ async function start(){
     $('lPass').setAttribute('autocomplete',creating?'new-password':'current-password');
     show('vLogin');$('lPass').focus();return;
   }
-  const d=await call('GET','/api/datos');advs=d.adelantos||[];
-  if(d.config){setCfg(d.config);BASE=schedule([])}
-  const hs=setupFromHash();
-  if(hs){openSetup(hs,!!d.config);return}
-  if(!d.config&&!hs){
-    // Primera vez: se guardan los datos del préstamo firmado (se pueden cambiar luego en «Cambiar datos del préstamo»).
-    try{const r=await call('PUT','/api/config',{config:DEFAULT_CFG});setCfg(r.config);BASE=schedule([])}catch(e){openSetup(DEFAULT_CFG,false);return}
+  const d=await call('GET','/api/datos');const P=d.prestamos||{};
+  // Primera vez de cada contrato: se guardan los datos iniciales en el servidor.
+  for(const def of (window.PRESTAMOS_INICIALES||[])){
+    const ex=P[def.id];
+    if(!ex){try{const r=await call('PUT','/api/prestamos/'+def.id,{config:def.config});P[def.id]={config:r.config,adelantos:[]}}catch(e){}}
+    else if(def.id==='socios'&&!ex.config.nombre){ // préstamo creado con la versión anterior: se completa con los datos nuevos
+      const c=Object.assign({},def.config,{total:ex.config.total,tasa:ex.config.tasa,n:ex.config.n||ex.config.anos*12,firma:ex.config.firma,primeraCuota:ex.config.primeraCuota});
+      try{const r=await call('PUT','/api/prestamos/socios',{config:c});ex.config=r.config}catch(e){}
+    }
   }
+  LOANS={};ORDER=[];
+  const pref=(window.PRESTAMOS_INICIALES||[]).map(x=>x.id);
+  Object.keys(P).sort((a,b)=>(pref.indexOf(a)+1||99)-(pref.indexOf(b)+1||99)).forEach(id=>{setLoan(id,P[id].config,P[id].adelantos);ORDER.push(id)});
+  let saved=null;try{saved=localStorage.getItem('pc_tab')}catch(e){}
+  CUR=saved&&(LOANS[saved]||saved==='__cmp')?saved:ORDER[0];
   show('vApp');render();
 }
 start();
