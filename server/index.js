@@ -16,6 +16,7 @@ const perm = require('./permissions');
 const fact = require('./facturacion');
 const { evFinished, evRealized } = require('./time');
 const volcado = require('./volcado');
+const holded = require('./holded');
 
 const PORT = +(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -241,6 +242,34 @@ async function api(req, res, url) {
       store.audit(user.id, 'mail-config-save');
       return ok(res, { ok: true, enabledNow: mail.enabled() });
     }
+  }
+
+  // --- configuración de Holded (admin · Configuración avanzada) ---
+  if (seg[0] === 'holded-config') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (method === 'GET') {
+      const c = holded.getConfig();
+      // Nunca se devuelve la clave; solo si hay una guardada.
+      return ok(res, { config: { enabled: !!c.enabled, hasApiKey: !!c.apiKey } });
+    }
+    if (method === 'POST') {
+      const b = await readBody(req);
+      const cur = holded.getConfig();
+      const next = {
+        enabled: !!b.enabled,
+        // Conserva la clave guardada si el formulario la deja en blanco (no se reescribe).
+        apiKey: (b.apiKey != null && b.apiKey !== '') ? String(b.apiKey).trim() : cur.apiKey,
+      };
+      store.setSetting('holdedConfig', next);
+      store.audit(user.id, 'holded-config-save');
+      return ok(res, { ok: true, hasApiKey: !!next.apiKey });
+    }
+  }
+  // --- probar la conexión con Holded (admin) ---
+  if (seg[0] === 'holded-test' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    try { const r = await holded.testConnection(); return ok(res, { ok: true, sample: r.sample }); }
+    catch (e) { return ok(res, { ok: false, error: e.message }); }
   }
 
   return fail(res, 404, 'Ruta no encontrada');

@@ -1117,7 +1117,16 @@ on(/^#\/cuenta$/, async () => {
          <p class="hint" style="margin-bottom:12px">Envía una muestra de <b>todos</b> los correos de la intranet (alta, contraseña, aviso de extra y los 3 recordatorios) a una dirección, con datos de ejemplo. <b>No crea usuarios ni toca eventos</b>: solo sirve para revisarlos (p. ej. en tu bandeja de correo de pruebas).</p>
          <form id="testMailForm" style="max-width:460px"><div class="field"><label>Enviar a</label><input class="control" type="email" id="testMailTo" value="${esc(S.user.email || '')}" placeholder="tu-email@ejemplo.com"></div>
            <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Enviar correos de prueba</button></div></form>
-         <div id="testMailMsg" style="margin-top:12px;display:none;font-size:13px"></div>`
+         <div id="testMailMsg" style="margin-top:12px;display:none;font-size:13px"></div>
+         <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
+         <h4 style="margin:0 0 6px">🧾 Conexión con Holded</h4>
+         <p class="hint" style="margin-bottom:12px">Pega aquí el <b>token de API de Holded</b> (solo lectura). Con él, los novios podrán ver sus facturas y el importe pagado se sincronizará desde Holded. La clave se guarda aquí, en la intranet.</p>
+         <form id="holdedCfgForm" style="max-width:520px">
+           <label class="chk" style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><input type="checkbox" id="hdEnabled"> <span>Conexión con Holded <b>activada</b></span></label>
+           <div class="field"><label>Token de API de Holded</label><input class="control" type="password" id="hdApiKey" autocomplete="off" placeholder="(pega aquí el token)"></div>
+           <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Guardar</button> <button type="button" class="btn" id="hdTest">Probar conexión</button></div>
+         </form>
+         <div id="holdedCfgMsg" style="margin-top:10px;display:none;font-size:13px"></div>`
       : `<form id="advForm" style="max-width:420px"><div class="field"><label>Contraseña</label><input class="control" type="password" id="advPass" autocomplete="off"></div>
           <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Desbloquear</button>
           <button type="button" class="btn btn--sm" id="advForgot">¿Olvidaste la contraseña?</button></div></form>
@@ -1178,6 +1187,32 @@ on(/^#\/cuenta$/, async () => {
         m.innerHTML = '✅ Guardado. El correo está ahora <b>' + (r.enabledNow ? 'activado' : 'desactivado') + '</b>.';
         toast('Configuración guardada', 'ok');
       } catch (err) { m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>'; toast('No se pudo guardar', 'err'); }
+    };
+  }
+  const hdForm = el('holdedCfgForm');
+  if (hdForm) {
+    api('holded-config').then(r => {
+      const c = (r && r.config) || {};
+      if (el('hdEnabled')) el('hdEnabled').checked = !!c.enabled;
+      if (el('hdApiKey')) el('hdApiKey').placeholder = c.hasApiKey ? '•••••••• (guardado — déjalo vacío para no cambiarlo)' : '(pega aquí el token)';
+    }).catch(() => {});
+    hdForm.onsubmit = async e => {
+      e.preventDefault();
+      const m = el('holdedCfgMsg'); m.style.display = 'block'; m.textContent = 'Guardando…';
+      try {
+        const r = await api('holded-config', { method: 'POST', body: { enabled: el('hdEnabled').checked, apiKey: el('hdApiKey').value } });
+        el('hdApiKey').value = ''; el('hdApiKey').placeholder = '•••••••• (guardado — déjalo vacío para no cambiarlo)';
+        m.innerHTML = '✅ Guardado' + (r.hasApiKey ? ' (token almacenado).' : '.') + ' Pulsa <b>Probar conexión</b> para comprobarlo.';
+        toast('Holded guardado', 'ok');
+      } catch (err) { m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>'; }
+    };
+    const hdTest = el('hdTest');
+    if (hdTest) hdTest.onclick = async () => {
+      const m = el('holdedCfgMsg'); m.style.display = 'block'; m.textContent = 'Probando conexión con Holded…';
+      try {
+        const r = await api('holded-test', { method: 'POST', body: {} });
+        m.innerHTML = r.ok ? '✅ Conexión correcta con Holded.' : '<span style="color:#d9534f;font-weight:700">No conecta: ' + esc(r.error || '') + '</span>';
+      } catch (err) { m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>'; }
     };
   }
   const tmForm = el('testMailForm');
