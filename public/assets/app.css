@@ -875,6 +875,11 @@ html.night-dim .bar-track{background:#2a2217}
 .pie-dot{width:12px;height:12px;border-radius:3px;flex:none}
 .pie-hole{fill:var(--white,#fff)}
 html.night-dim .pie-hole{fill:#1a140a}
+/* Gráfico de líneas (evolución por año) */
+.line-svg{font-family:var(--body)}
+.ln-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:12.5px}
+.ln-leg{display:inline-flex;align-items:center;gap:6px}
+.ln-dot{width:11px;height:11px;border-radius:3px;display:inline-block}
 @media(max-width:640px){.pie-wrap{justify-content:center}.pie-svg{width:180px;height:180px}}
 @media print{.sidebar,.topbar,.tabs,.tabs-row,.floatbar,.mtabs{display:none!important}.ruta-row{break-inside:avoid}}
 

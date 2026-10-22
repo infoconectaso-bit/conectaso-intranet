@@ -1000,6 +1000,22 @@ function pieChart(rows, { topN = 12, unit = '' } = {}) {
   const legend = rows.map((r, i) => `<div class="pie-leg-row"><span class="pie-dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></span><span class="pie-leg-name" title="${esc(r.label)}">${esc(r.label)}</span><b>${r.value}${unit}</b> <span class="muted">${Math.round(r.value / total * 100)}%</span></div>`).join('');
   return `<div class="pie-wrap"><svg viewBox="0 0 210 210" class="pie-svg">${segs}<circle class="pie-hole" cx="${cx}" cy="${cy}" r="48"/></svg><div class="pie-leg">${legend}</div></div>`;
 }
+// Gráfico de líneas multi-serie (evolución por año). xLabels: años; series: [{label, values[], color}].
+function lineChartMulti(xLabels, series) {
+  series = (series || []).filter(s => s.values.some(v => v > 0));
+  if (!series.length || !xLabels.length) return '<div class="empty">Sin datos.</div>';
+  const W = 840, H = 340, padL = 34, padR = 12, padT = 14, padB = 44;
+  const maxV = Math.max(1, ...series.flatMap(s => s.values));
+  const n = xLabels.length;
+  const X = i => padL + (n <= 1 ? (W - padL - padR) / 2 : i * (W - padL - padR) / (n - 1));
+  const Y = v => H - padB - (v / maxV) * (H - padT - padB);
+  const ticks = 4; let grid = '';
+  for (let t = 0; t <= ticks; t++) { const v = Math.round(maxV * t / ticks); const yy = Y(v); grid += `<line x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}" stroke="var(--line,#eee)" stroke-width="1"/><text x="${padL - 6}" y="${yy + 3}" font-size="10" text-anchor="end" fill="#8a8390">${v}</text>`; }
+  const xlab = xLabels.map((l, i) => `<text x="${X(i)}" y="${H - padB + 18}" font-size="11" text-anchor="middle" fill="#8a8390">${esc(l)}</text>`).join('');
+  const lines = series.map(s => `<polyline fill="none" stroke="${s.color}" stroke-width="2.5" points="${s.values.map((v, i) => X(i) + ',' + Y(v)).join(' ')}"/>` + s.values.map((v, i) => `<circle cx="${X(i)}" cy="${Y(v)}" r="3.2" fill="#fff" stroke="${s.color}" stroke-width="2"><title>${esc(s.label)} · ${esc(xLabels[i])}: ${v}</title></circle>`).join('')).join('');
+  const legend = series.map(s => `<span class="ln-leg"><span class="ln-dot" style="background:${s.color}"></span>${esc(s.label)}</span>`).join('');
+  return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" class="line-svg" style="width:100%;min-width:560px">${grid}${lines}${xlab}</svg></div><div class="ln-legend">${legend}</div>`;
+}
 // ANÁLISIS (admin, bajo contraseña): ventas, facturación de masías, económico y horas extra.
 on(/^#\/analisis$/, async () => {
   if (!requireAdmin()) return;
@@ -1026,7 +1042,9 @@ on(/^#\/analisis$/, async () => {
   const econRows = econ.slice(-18).reverse();
   const html = [
     sect('Bodas por masía y año', crossTable(a.ventasMasia, 'Masía', null, 2), 'Solo masías con 2 o más bodas'),
+    (() => { const vm = a.ventasMasia || {}; const top = Object.keys(vm).map(k => [k, sum(vm[k])]).sort((x, y) => y[1] - x[1]).slice(0, 8); const series = top.map((t, i) => ({ label: t[0], color: PIE_COLORS[i % PIE_COLORS.length], values: years.map(y => vm[t[0]][y] || 0) })); return sect('Evolución de bodas por masía (por año)', lineChartMulti(years, series), 'Top 8 masías por volumen'); })(),
     sect('Bodas por pack y año', crossTable(a.ventasPack, 'Pack')),
+    (() => { const vp = a.ventasPack || {}; const keys = Object.keys(vp); const series = keys.map((k, i) => ({ label: k, color: PIE_COLORS[i % PIE_COLORS.length], values: years.map(y => vp[k][y] || 0) })); return sect('Evolución de bodas por pack (por año)', lineChartMulti(years, series)); })(),
     a.holdedOk ? sect('Facturación de masías por año', crossTable(a.masiaAnual, 'Masía', eur), 'Importe facturado (sin IVA) desde Holded') : sect('Facturación de masías', '<div class="empty">Holded no está activado.</div>'),
     a.holdedOk ? sect('Media económica por boda y mes', `<div class="table-wrap"><table class="dt"><thead><tr><th>Mes</th><th style="text-align:right">Facturado masías</th><th style="text-align:right">Bodas</th><th style="text-align:right">Media / boda</th></tr></thead><tbody>${econRows.map(m => `<tr><td><b>${esc(m.mes)}</b></td><td style="text-align:right">${eur(m.facturado)}</td><td style="text-align:right">${m.bodas}</td><td style="text-align:right"><b>${eur(m.media)}</b></td></tr>`).join('')}</tbody></table></div>`, 'Facturación de masías ÷ nº de bodas realizadas cada mes') : '',
     sect('Horas extra por masía', bars((a.horasMasia || []).map(r => ({ label: r.masia, value: r.horas, sub: `${r.horas} h · media ${r.media} h/boda` })), v => ''), 'Total de horas extra realizadas en cada finca'),
