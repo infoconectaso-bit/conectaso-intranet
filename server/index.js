@@ -280,6 +280,43 @@ async function api(req, res, url) {
     catch (e) { return ok(res, { ok: false, error: e.message }); }
   }
 
+  // --- recolocación de momentos personalizados en su sección real (admin) ---
+  // El volcado perdió la sección de los momentos personalizados (todos quedaron como
+  // 'ceremony'). Estos dos endpoints permiten recuperarla leyendo la intranet original:
+  //   GET  optionals-dump       -> eventos que tienen momentos personalizados (id + sec/area/order)
+  //   POST optionals-resection  -> aplica {mappings:{eventId:{optId:{sec,order}}}}
+  if (seg[0] === 'optionals-dump' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const out = [];
+    store.all('events').forEach(e => {
+      const opts = e.optionals || [];
+      if (opts.length) out.push({ id: e.id, optionals: opts.map(o => ({ id: o.id, sec: o.sec || '', area: o.area || '', order: o.order || '' })) });
+    });
+    return ok(res, { events: out });
+  }
+  if (seg[0] === 'optionals-resection' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const body = await readBody(req);
+    const map = body.mappings || {};
+    const AREA = { C: 'ceremony', A: 'aperitif', B: 'banquet', D: 'disco' };
+    let evN = 0, optN = 0;
+    Object.keys(map).forEach(eid => {
+      const ev = store.get('events', +eid);
+      if (!ev || !Array.isArray(ev.optionals)) return;
+      let changed = false;
+      ev.optionals.forEach(o => {
+        const m = map[eid][String(o.id)];
+        if (!m) return;
+        if (m.sec && AREA[m.sec]) { o.sec = m.sec; o.area = AREA[m.sec]; }
+        if (m.order != null && m.order !== '') o.order = String(m.order);
+        changed = true; optN++;
+      });
+      if (changed) { store.put('events', ev); evN++; }
+    });
+    store.audit(user.id, 'optionals-resection');
+    return ok(res, { ok: true, events: evN, optionals: optN });
+  }
+
   return fail(res, 404, 'Ruta no encontrada');
 }
 
