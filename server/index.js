@@ -356,7 +356,7 @@ async function api(req, res, url) {
       const byYear = {}; let total = 0;
       horasYears.forEach(y => { const v = Math.round((by[y] || 0) * 10) / 10; byYear[y] = v; total += v; });
       return { masia, byYear, total: Math.round(total * 10) / 10 };
-    }).filter(r => r.total > 0).sort((a, b) => b.total - a.total);
+    }).filter(r => r.total >= 3).sort((a, b) => b.total - a.total);
     const heD = {};
     realized.forEach(e => { if (!e.djId) return; const h = otH(e.djOvertime); const x = heD[e.djId] = heD[e.djId] || { h: 0, n: 0 }; x.h += h; x.n++; });
     const horasDj = Object.entries(heD).map(([id, x]) => ({ dj: (users.get(+id) || {}).name || ('#' + id), horas: Math.round(x.h * 10) / 10, bodas: x.n, media: x.n ? Math.round(x.h / x.n * 100) / 100 : 0 })).filter(d => d.horas > 0);
@@ -364,7 +364,7 @@ async function api(req, res, url) {
     const djPorBoda = horasDj.slice().filter(d => d.bodas >= 3).sort((a, b) => b.media - a.media);
     // Wedding planners con los que más trabajamos. Excluimos los "de la casa"/finca: UAUU (Castell de
     // Tous + Mas Vivencs), Edelweiss, Can Ribas y Mas la Boaella.
-    const EXCL_WP = /uauu|edelwe|can\s*ribas|boaella/i;
+    const EXCL_WP = /uauu|edelwe|can\s*ribas|boaella|bodas\s*rv|can\s*cuch|dalmau/i;
     const wpCnt = {};
     allEv.forEach(e => { if (!e.wpId) return; const nm = (users.get(+e.wpId) || {}).name || ''; if (!nm || EXCL_WP.test(nm)) return; wpCnt[nm] = (wpCnt[nm] || 0) + 1; });
     const plannersTop = Object.entries(wpCnt).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
