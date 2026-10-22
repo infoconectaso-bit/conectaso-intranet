@@ -265,12 +265,15 @@ table.dt tbody tr:hover td{background:#fdf0f7}
 .chk--radio input{margin-top:0;width:16px;height:16px}
 .moment.dragging{opacity:.5;outline:2px dashed var(--pink);border-radius:8px}
 /* Momento musical DESACTIVADO: bloque gris oscuro, campos ocultos (no se borran, solo se ocultan). */
-.moment--off{background:#2b2733;border-top:0;border-radius:10px;padding:8px 12px;margin:5px 0}
-.moment--off h5{margin-bottom:0}
-.moment--off [data-mtitle]{color:#cfc8da}
-.moment--off [data-mtitle] .m-ic{opacity:.6}
+/* Momento DESACTIVADO ("no se incluye"): antes se ponía oscuro y ocultaba el texto. Ahora queda en
+   gris claro y el texto que escribieron los novios SIGUE VISIBLE y legible (atenuado), para poder leerlo. */
+.moment--off{background:#f1f0f4;border-top:0;border-radius:10px;padding:8px 12px;margin:5px 0}
+.moment--off h5{margin-bottom:6px}
+.moment--off [data-mtitle]{color:#857f8e}
+.moment--off [data-mtitle] .m-ic{opacity:.55}
 .moment--off .m-tools{opacity:.45}
-.moment--off .mgrid{display:none}
+.moment--off .mgrid{opacity:.75}
+.moment--off .control{background:#f7f6f9;color:#6f6a78}
 .m-tools{display:inline-flex;align-items:center;gap:6px;margin-right:4px}
 .m-grip{cursor:grab;font-size:18px;color:var(--muted);user-select:none;padding:2px 4px;line-height:1;touch-action:none;border-radius:6px}
 .m-grip:hover{background:var(--cream);color:var(--onyx)}
