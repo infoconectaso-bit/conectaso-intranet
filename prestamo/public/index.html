@@ -559,7 +559,7 @@ function renderLoan(){
   $('tAllS').textContent=`Ver las ${sch.rows.length+L.past.length} cuotas`;
   $('tNote').textContent=(lea?'«Factura» es la cuota con IVA; intereses y pendiente van sin IVA. «OC» es la opción de compra. ':'')+`Cada cuota se da por pagada el día ${L.DAY} de su mes, porque está domiciliada.`;
   // datos
-  const facts=[...(c.datos||[]),[lea?'Capital financiado':c.original?'Pendiente al empezar a contar':'Total prestado',eur(c.total)],['Interés',`${c.tabla&&lea&&c.id!=='kona'?'≈ ':''}${pctTxt(c.tasa)} nominal anual`],
+  const facts=[...(c.datos||[]),[lea?'Capital financiado':c.original?'Pendiente al empezar a contar':'Total prestado',eur(c.total)],['Interés',`${pctTxt(c.tasa)} nominal anual`],
     ['Cuotas',`${c.n}${L.VR?' + opción de compra':''}${pa?` (desde ${dmy(c.primeraCuota)})`:''}`],['Intereses totales',eur(L.base.intTot)]];
   $('facts').innerHTML=facts.map(([a,b])=>`<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join('');
   renderHist();setupRange();
@@ -789,10 +789,13 @@ async function start(){
   for(const def of (window.PRESTAMOS_INICIALES||[])){
     const ex=P[def.id];
     if(!ex){try{const r=await call('PUT','/api/prestamos/'+def.id,{config:def.config});P[def.id]={config:r.config,adelantos:[]}}catch(e){}}
-    else if((def.id==='bbva'&&ex.config.nombre==='Leasing BBVA')||(def.config.entrada!=null&&ex.config.entrada==null)){ // nombre de la nave y entradas
-      const c=Object.assign({},ex.config,def.id==='bbva'&&ex.config.nombre==='Leasing BBVA'?{nombre:def.config.nombre,datos:def.config.datos}:{},{entrada:def.config.entrada});
+    else if(def.id==='bbva'&&(!Array.isArray(ex.config.tabla)||ex.config.tabla.length!==def.config.tabla.length)){ // reparar: datos del leasing de la nave
+      try{const r=await call('PUT','/api/prestamos/bbva',{config:def.config});ex.config=r.config}catch(e){}
+    }
+    else if((def.id==='bbva'&&ex.config.tasa!==def.config.tasa)||(def.config.entrada!=null&&ex.config.entrada==null)){ // datos de la nave (tipo 3,75 %) y entradas
+      const c=Object.assign({},ex.config,def.id==='bbva'?{nombre:ex.config.nombre==='Leasing BBVA'?def.config.nombre:ex.config.nombre,datos:def.config.datos,tasa:def.config.tasa}:{},{entrada:def.config.entrada});
       if(c.comision&&c.comision.pct==null)c.comision=Object.assign({},c.comision,{nota:def.config.comision.nota});
-      try{const r=await call('PUT','/api/prestamos/bbva',{config:c});ex.config=r.config}catch(e){}
+      try{const r=await call('PUT','/api/prestamos/'+def.id,{config:c});ex.config=r.config}catch(e){}
     }
     else if(def.id==='socios'&&!ex.config.nombre){ // préstamo creado con la versión anterior: se completa con los datos nuevos
       const c=Object.assign({},def.config,{total:ex.config.total,tasa:ex.config.tasa,n:ex.config.n||ex.config.anos*12,firma:ex.config.firma,primeraCuota:ex.config.primeraCuota});
