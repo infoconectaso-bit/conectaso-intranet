@@ -1379,8 +1379,9 @@ async function filesApi(req, res, user, seg, method, url) {
       if (!m) return fail(res, 404, 'Parte no encontrado');
       if (user.role !== 'admin' && +m.userId !== +user.id) return fail(res, 403, 'Sin acceso');
     } else if (col === 'payslip') {
-      // Nóminas: rid = id del trabajador. Admin puede subir a cualquiera; un trabajador solo a lo suyo.
-      if (user.role !== 'admin' && +rid !== +user.id) return fail(res, 403, 'Sin acceso');
+      // Nóminas: rid = id del trabajador. SOLO administración puede subir nóminas; el DJ/técnico
+      // únicamente las ve y descarga. Wedding planner y cliente no tienen acceso.
+      if (user.role !== 'admin') return fail(res, 403, 'Solo administración puede subir nóminas.');
       if (!users.get(rid)) return fail(res, 404, 'Trabajador no encontrado');
     } else return fail(res, 400, 'Colección no admitida');
     const parts = await parseMultipart(req);
@@ -1416,7 +1417,8 @@ async function filesApi(req, res, user, seg, method, url) {
   if (method === 'GET' && seg[1] === 'payslip-list') {
     // Nóminas de un trabajador: admin cualquiera; un trabajador solo las suyas. description = periodo "YYYY-MM".
     const uid = +seg[2];
-    if (user.role !== 'admin' && uid !== +user.id) return fail(res, 403, 'Sin acceso');
+    // Solo admin (cualquiera) o un DJ/técnico (las suyas). Wedding planner y cliente: nunca.
+    if (user.role !== 'admin' && !(user.role === 'dj' && uid === +user.id)) return fail(res, 403, 'Sin acceso');
     const rows = db().prepare('SELECT id, name, description AS period, mime, size, created_at FROM files WHERE collection = ? AND record_id = ? ORDER BY description DESC, created_at DESC').all('payslip', uid);
     return ok(res, { files: rows });
   }
@@ -1426,7 +1428,7 @@ async function filesApi(req, res, user, seg, method, url) {
     if (!f) return fail(res, 404, 'Archivo no encontrado');
     let allowed;
     if (f.collection === 'maintenance') { const m = store.get('maintenance', f.record_id); allowed = !!m && (user.role === 'admin' || +m.userId === +user.id); }
-    else if (f.collection === 'payslip') { allowed = (user.role === 'admin' || +f.record_id === +user.id); }
+    else if (f.collection === 'payslip') { allowed = (user.role === 'admin' || (user.role === 'dj' && +f.record_id === +user.id)); }
     else { const ev = store.get(f.collection, f.record_id); allowed = !!ev && perm.canSeeEvent(user, ev); }
     if (!allowed) return fail(res, 403, 'Sin acceso');
     let full = fileFull(f);
@@ -1438,9 +1440,8 @@ async function filesApi(req, res, user, seg, method, url) {
   if (method === 'DELETE') {
     const fid = seg[1];
     const f = db().prepare('SELECT * FROM files WHERE id = ?').get(fid);
-    // Admin borra cualquier archivo; un trabajador puede borrar una nómina SUYA (p. ej. subida por error).
-    const ownPayslip = f && f.collection === 'payslip' && +f.record_id === +user.id;
-    if (user.role !== 'admin' && !ownPayslip) return fail(res, 403, 'Solo administración puede borrar archivos.');
+    // Solo administración puede borrar archivos (incluidas nóminas). Un DJ/técnico no borra sus nóminas.
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración puede borrar archivos.');
     if (f) { try { fs.unlinkSync(fileFull(f)); } catch (e) { try { fs.unlinkSync(path.join(UPLOADS, fid)); } catch (e2) {} } db().prepare('DELETE FROM files WHERE id = ?').run(fid); }
     return ok(res, { ok: true });
   }

@@ -788,6 +788,9 @@ on(/^#\/vacaciones$/, async () => {
 // (selector de trabajador) y puede subir; cada trabajador ve y sube las suyas. Se guardan en el servidor.
 const NOM_MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 on(/^#\/nominas$/, async () => {
+  // Acceso a nóminas: SOLO administración y DJ/técnicos (sus propias). Wedding planner y
+  // cliente NUNCA tienen acceso a nóminas.
+  if (!(S.user.role === 'admin' || S.user.role === 'dj')) { toast('No tienes acceso a nóminas', 'err'); location.hash = '#/'; return; }
   const admin = isAdmin(); loading(['Nóminas']);
   let targetId = S.user.id, workers = [];
   if (admin) {
@@ -809,17 +812,18 @@ async function renderNominas(uid, admin, workers) {
   const now = new Date(), curY = now.getFullYear(), curM = now.getMonth() + 1;
   const yearOpts = []; for (let y = curY + 1; y >= 2018; y--) yearOpts.push(y);
   const workerSel = admin ? `<div class="field" style="max-width:360px"><label>Trabajador</label><select class="control" id="nomWorker">${workers.map(w => `<option value="${w.id}" ${w.id == uid ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select></div>` : '';
-  const uploadForm = `<div class="panel"><div class="panel__head"><h3>Subir nómina</h3></div><div class="panel__body">
+  // El formulario de subida es SOLO para administración. Los DJ/técnicos solo ven y descargan.
+  const uploadForm = admin ? `<div class="panel"><div class="panel__head"><h3>Subir nómina</h3></div><div class="panel__body">
     <form id="nomUpload" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
       <div class="field"><label>Año</label><select class="control" name="year">${yearOpts.map(y => `<option ${y == curY ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
       <div class="field"><label>Mes</label><select class="control" name="month">${NOM_MESES.map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}" ${(i + 1) == curM ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
       <div class="field"><label>Archivo (PDF)</label><input type="file" class="control" id="nomFile" accept="application/pdf,image/*"></div>
       <button type="submit" class="btn btn--primary">Subir</button>
     </form><div id="nomMsg" style="margin-top:8px;display:none;font-size:13px"></div>
-  </div></div>`;
+  </div></div>` : '';
   const list = years.length ? years.map(y => `<div class="panel"><div class="panel__head"><h3>${esc(y)}</h3></div><div class="panel__body">
       <table class="dt"><thead><tr><th>Mes</th><th>Archivo</th><th></th></tr></thead><tbody>
-      ${byYear[y].sort((a, b) => (b.period || '').localeCompare(a.period || '')).map(f => { const mm = +(f.period || '').slice(5, 7); const mn = mm ? NOM_MESES[mm - 1] : (f.period || '—'); return `<tr><td>${esc(mn)}</td><td>${esc(f.name)}</td><td style="text-align:right"><a class="btn btn--sm" href="/api/files/${f.id}" target="_blank">Ver / descargar</a> <button class="btn btn--sm btn--red" data-delnom="${f.id}">Borrar</button></td></tr>`; }).join('')}
+      ${byYear[y].sort((a, b) => (b.period || '').localeCompare(a.period || '')).map(f => { const mm = +(f.period || '').slice(5, 7); const mn = mm ? NOM_MESES[mm - 1] : (f.period || '—'); return `<tr><td>${esc(mn)}</td><td>${esc(f.name)}</td><td style="text-align:right"><a class="btn btn--sm" href="/api/files/${f.id}" target="_blank">Ver / descargar</a>${admin ? ` <button class="btn btn--sm btn--red" data-delnom="${f.id}">Borrar</button>` : ''}</td></tr>`; }).join('')}
       </tbody></table></div></div>`).join('') : '<div class="empty"><span class="script">Sin nóminas</span>Aún no hay nóminas subidas.</div>';
   shell(`${pageHead('Nóminas', admin ? 'Sube y consulta las nóminas del equipo (PDF), por año y mes.' : 'Tus nóminas, por año y mes. Puedes verlas y descargarlas.')}
     ${workerSel}${uploadForm}${list}`, ['Nóminas']);
