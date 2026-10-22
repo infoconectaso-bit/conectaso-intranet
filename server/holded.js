@@ -12,22 +12,27 @@ const BASE = 'https://api.holded.com/api/invoicing/v1';
 function getConfig() { return store.setting('holdedConfig') || {}; }
 function enabled() { const c = getConfig(); return !!(c.enabled && c.apiKey); }
 
-/** Petición GET a la API de Holded. Devuelve el JSON, o lanza un error legible. */
+/** Petición GET a la API de Holded. Devuelve el JSON, o lanza un error legible.
+ * Acepta los DOS tipos de credencial: el token nuevo (v2 → 'Authorization: Bearer')
+ * y la clave antigua (v1 → cabecera 'key'). Prueba Bearer y, si da error de auth, la cabecera key. */
 async function apiGet(path) {
   const c = getConfig();
   if (!c.apiKey) throw new Error('Falta la clave de API de Holded.');
   const url = BASE + path;
-  let r;
-  try {
-    r = await fetch(url, { headers: { key: c.apiKey, 'Content-Type': 'application/json' } });
-  } catch (e) { throw new Error('No se pudo conectar con Holded: ' + e.message); }
-  const text = await r.text();
-  let data; try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
-  if (!r.ok) {
-    const msg = (data && (data.message || data.error || data.info)) || ('HTTP ' + r.status);
-    throw new Error('Holded respondió con error: ' + msg);
+  const attempts = [{ Authorization: 'Bearer ' + c.apiKey }, { key: c.apiKey }];
+  let lastErr = 'desconocido';
+  for (const h of attempts) {
+    let r;
+    try { r = await fetch(url, { headers: Object.assign({ 'Content-Type': 'application/json' }, h) }); }
+    catch (e) { throw new Error('No se pudo conectar con Holded: ' + e.message); }
+    const text = await r.text();
+    let data; try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+    if (r.ok) return data;
+    lastErr = (data && (data.message || data.error || data.info)) || ('HTTP ' + r.status);
+    // Solo probamos el otro método si parece un problema de autenticación.
+    if (!/invalid key|unauthor|forbidden/i.test(String(lastErr)) && r.status !== 401 && r.status !== 403) break;
   }
-  return data;
+  throw new Error('Holded respondió con error: ' + lastErr);
 }
 
 /** Comprueba que la clave funciona (pide 1 contacto). Devuelve {ok, info}. */
