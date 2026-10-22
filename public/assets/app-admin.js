@@ -977,6 +977,29 @@ function benefGate(label) {
   $('#benefForm').onsubmit = e => { e.preventDefault(); const v = ($('#benefPass') || {}).value || ''; if (v === BENEF_PASS) { try { sessionStorage.setItem('conecta_benef_ok', '1'); } catch (x) {} if (CS.route) CS.route(); else location.reload(); } else { const m = $('#benefMsg'); m.style.display = 'block'; m.innerHTML = '<span style="color:#d9534f;font-weight:700">Contraseña incorrecta.</span>'; } };
   $('#benefForgot').onclick = () => { const m = $('#benefMsg'); m.style.display = 'block'; m.innerHTML = 'Te hemos enviado la contraseña a tu email de administración (<b>' + esc(S.user.email || 'tu email') + '</b>).<br><span class="muted">Nota demo: aún no hay envío de correo real. La contraseña es <b>lamusica20</b>.</span>'; };
 }
+// Gráfico de quesito (donut) con porcentajes por color. rows: [{label, value}]. Agrupa el resto en "Otros".
+const PIE_COLORS = ['#E82C88', '#31B9CB', '#0B8043', '#F5A623', '#7B61FF', '#FF6B6B', '#2D9CDB', '#9B51E0', '#27AE60', '#F2994A', '#56CCF2', '#EB5757', '#6FCF97', '#BB6BD9', '#F2C94C', '#8E8E93'];
+function pieChart(rows, { topN = 12, unit = '' } = {}) {
+  rows = (rows || []).filter(r => r.value > 0).sort((a, b) => b.value - a.value);
+  if (!rows.length) return '<div class="empty">Sin datos.</div>';
+  if (rows.length > topN) {
+    const head = rows.slice(0, topN), rest = rows.slice(topN);
+    const otros = rest.reduce((s, r) => s + r.value, 0);
+    rows = head.concat([{ label: 'Otros (' + rest.length + ')', value: Math.round(otros * 10) / 10 }]);
+  }
+  const total = rows.reduce((s, r) => s + r.value, 0) || 1;
+  const R = 95, cx = 105, cy = 105; let ang = -90;
+  const p = a => [cx + R * Math.cos(a * Math.PI / 180), cy + R * Math.sin(a * Math.PI / 180)];
+  const segs = rows.map((r, i) => {
+    const frac = r.value / total, col = PIE_COLORS[i % PIE_COLORS.length];
+    if (frac >= 0.999) return `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${col}"><title>${esc(r.label)}: ${r.value}${unit} (100%)</title></circle>`;
+    const a0 = ang, a1 = ang + frac * 360; ang = a1;
+    const [x0, y0] = p(a0), [x1, y1] = p(a1), large = (a1 - a0) > 180 ? 1 : 0;
+    return `<path d="M${cx},${cy} L${x0.toFixed(1)},${y0.toFixed(1)} A${R},${R} 0 ${large} 1 ${x1.toFixed(1)},${y1.toFixed(1)} Z" fill="${col}"><title>${esc(r.label)}: ${r.value}${unit} (${Math.round(frac * 100)}%)</title></path>`;
+  }).join('');
+  const legend = rows.map((r, i) => `<div class="pie-leg-row"><span class="pie-dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></span><span class="pie-leg-name" title="${esc(r.label)}">${esc(r.label)}</span><b>${r.value}${unit}</b> <span class="muted">${Math.round(r.value / total * 100)}%</span></div>`).join('');
+  return `<div class="pie-wrap"><svg viewBox="0 0 210 210" class="pie-svg">${segs}<circle class="pie-hole" cx="${cx}" cy="${cy}" r="48"/></svg><div class="pie-leg">${legend}</div></div>`;
+}
 // ANÁLISIS (admin, bajo contraseña): ventas, facturación de masías, económico y horas extra.
 on(/^#\/analisis$/, async () => {
   if (!requireAdmin()) return;
@@ -1006,7 +1029,7 @@ on(/^#\/analisis$/, async () => {
     a.holdedOk ? sect('Facturación de masías por año', crossTable(a.masiaAnual, 'Masía', eur), 'Importe facturado (sin IVA) desde Holded') : sect('Facturación de masías', '<div class="empty">Holded no está activado.</div>'),
     a.holdedOk ? sect('Media económica por boda y mes', `<div class="table-wrap"><table class="dt"><thead><tr><th>Mes</th><th style="text-align:right">Facturado masías</th><th style="text-align:right">Bodas</th><th style="text-align:right">Media / boda</th></tr></thead><tbody>${econRows.map(m => `<tr><td><b>${esc(m.mes)}</b></td><td style="text-align:right">${eur(m.facturado)}</td><td style="text-align:right">${m.bodas}</td><td style="text-align:right"><b>${eur(m.media)}</b></td></tr>`).join('')}</tbody></table></div>`, 'Facturación de masías ÷ nº de bodas realizadas cada mes') : '',
     sect('Horas extra por masía', bars((a.horasMasia || []).map(r => ({ label: r.masia, value: r.horas, sub: `${r.horas} h · media ${r.media} h/boda` })), v => ''), 'Total de horas extra realizadas en cada finca'),
-    sect('DJs con más horas extra (total)', bars((a.djPorTotal || []).slice(0, 20).map(r => ({ label: r.dj, value: r.horas, sub: `${r.horas} h · ${r.bodas} bodas` })), v => '')),
+    sect('DJs con más horas extra (total)', pieChart((a.djPorTotal || []).map(r => ({ label: r.dj, value: r.horas })), { unit: 'h' }), 'Reparto del total de horas extra entre DJs'),
     sect('DJs con más horas extra por boda (media)', bars((a.djPorBoda || []).slice(0, 20).map(r => ({ label: r.dj, value: r.media, sub: `${r.media} h/boda · ${r.horas} h en ${r.bodas} bodas` })), v => ''), 'Mínimo 3 bodas para la media'),
   ].join('');
   shell(`${pageHead('Análisis', 'Ventas, facturación de masías, económico por boda y horas extra. Datos de bodas realizadas.')}

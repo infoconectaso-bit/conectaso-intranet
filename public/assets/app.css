@@ -866,6 +866,16 @@ html.night-dim .ruta-veh{background:#241d12;border-color:#3a3020}
 .bar-val{white-space:nowrap;font-variant-numeric:tabular-nums}
 html.night-dim .bar-track{background:#2a2217}
 @media(max-width:640px){.bar-row{grid-template-columns:110px 1fr auto;font-size:12px}.bar-lbl{font-size:12px}}
+/* Quesito (donut) */
+.pie-wrap{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.pie-svg{width:210px;height:210px;flex:none}
+.pie-leg{display:flex;flex-direction:column;gap:5px;font-size:13px;min-width:200px;flex:1}
+.pie-leg-row{display:flex;align-items:center;gap:8px}
+.pie-leg-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pie-dot{width:12px;height:12px;border-radius:3px;flex:none}
+.pie-hole{fill:var(--white,#fff)}
+html.night-dim .pie-hole{fill:#1a140a}
+@media(max-width:640px){.pie-wrap{justify-content:center}.pie-svg{width:180px;height:180px}}
 @media print{.sidebar,.topbar,.tabs,.tabs-row,.floatbar,.mtabs{display:none!important}.ruta-row{break-inside:avoid}}
 
 /* ======== Hoja de ruta · deck apaisado (portado de la demo) ======== */
