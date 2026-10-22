@@ -71,10 +71,35 @@ button:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline
 .btn:disabled{opacity:.45;cursor:default;box-shadow:none;transform:none}
 .btn.ghost{background:var(--paper);color:var(--ink)}
 .btn.small{width:auto;padding:8px 12px;font-size:13px}
-.sim{border-radius:10px;background:var(--onyx);color:var(--cream);padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.sim span{display:block;font-size:12px;color:rgba(249,245,225,.7)}
-.sim b{font-family:var(--display);font-weight:900;font-size:15px}
-.sim .save b{color:var(--yellow)}
+.amtbox{display:flex;flex-direction:column;gap:8px}
+.amtrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.amtbig{font-family:var(--display);font-weight:900;font-size:30px;line-height:1.1;min-width:0}
+.amtrow input{width:118px;flex:none;padding:8px 10px;font-size:15px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:34px;background:transparent;padding:0;border:0;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:12px;border-radius:99px;background:linear-gradient(to right,var(--pink) var(--p,0%),var(--line) var(--p,0%));border:2px solid var(--onyx)}
+input[type=range]::-moz-range-track{height:8px;border-radius:99px;background:var(--line);border:2px solid var(--onyx)}
+input[type=range]::-moz-range-progress{height:8px;border-radius:99px;background:var(--pink)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:var(--yellow);border:3px solid var(--onyx);margin-top:-11px;box-shadow:2px 2px 0 var(--onyx)}
+input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--yellow);border:3px solid var(--onyx)}
+.rangeticks{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:-4px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{font:inherit;font-size:13px;font-weight:700;border:2px solid var(--onyx);background:var(--paper);border-radius:99px;padding:5px 11px;cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--onyx);color:var(--yellow)}
+.viz{background:var(--onyx);color:var(--cream);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:14px}
+.saving b{display:block;font-family:var(--display);font-weight:900;font-size:32px;color:var(--yellow);line-height:1.1;margin-top:2px}
+.cmp{display:flex;flex-direction:column;gap:5px}
+.cmpl{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:rgba(249,245,225,.75)}
+.cmpl b{color:var(--cream);font-size:13px}
+.track{height:12px;border-radius:99px;background:var(--onyx-soft);overflow:hidden;margin-bottom:6px}
+.track i{display:block;height:100%;background:var(--cream);border-radius:99px;transition:width .25s ease}
+.track i.pk{background:var(--pink)}
+.simgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.simgrid span{display:block;font-size:12px;color:rgba(249,245,225,.7)}
+.simgrid b{font-family:var(--display);font-weight:900;font-size:15px}
+.chart svg{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;font-size:12px;color:rgba(249,245,225,.75);margin-top:4px}
+.legend i{display:inline-block;width:14px;height:4px;border-radius:2px;vertical-align:middle;margin-right:6px}
+details.more summary{font-size:13px}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
 .row:first-child{border-top:0}
 .row small{display:block;color:var(--muted);font-size:12px}
@@ -104,7 +129,7 @@ body.dark{background:var(--onyx)}
 .links{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
 .links button{font:inherit;font-size:13px;font-weight:700;color:var(--muted);background:none;border:0;cursor:pointer;text-decoration:underline;padding:6px}
 [hidden]{display:none!important}
-@media (max-width:370px){.form,.stats,.sim,.toprow{grid-template-columns:1fr}}
+@media (max-width:370px){.form,.stats,.simgrid,.toprow{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.bar>i{transition:none}}
 </style>
 </head>
@@ -173,26 +198,50 @@ body.dark{background:var(--onyx)}
     </section>
 
     <section class="card" aria-labelledby="t1">
-      <h2 id="t1">Adelantar dinero</h2>
-      <div class="form">
-        <label>Importe (€)<input id="aImp" type="number" inputmode="decimal" min="0" step="0.01" placeholder="5000"></label>
-        <label>Fecha<input id="aFecha" type="date"></label>
-        <div class="full" style="display:flex;flex-direction:column;gap:6px">
-          <span style="font-size:13px;font-weight:700;color:var(--muted)">¿Qué quieres que baje?</span>
-          <div class="seg" role="group" aria-label="Qué baja">
-            <button type="button" id="mPlazo" aria-pressed="true">Menos años</button>
-            <button type="button" id="mCuota" aria-pressed="false">Cuota más baja</button>
-          </div>
+      <h2 id="t1">Amortizar parte del préstamo</h2>
+      <p class="note">Mueve la barra para ver qué pasa si adelantas dinero.</p>
+      <div class="amtbox">
+        <span class="eyebrow">Cantidad a adelantar</span>
+        <div class="amtrow"><span class="amtbig num" id="aBig">0 €</span>
+          <input id="aImp" type="number" inputmode="decimal" min="0" step="1" aria-label="Cantidad exacta" placeholder="Exacta"></div>
+        <input type="range" id="aRange" min="0" max="120000" step="500" value="0" aria-label="Cantidad a adelantar">
+        <div class="rangeticks num"><span>0 €</span><span id="aMax">—</span></div>
+        <div class="chips" id="aChips"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:13px;font-weight:700;color:var(--muted)">¿Qué quieres que baje?</span>
+        <div class="seg" role="group" aria-label="Qué baja">
+          <button type="button" id="mPlazo" aria-pressed="true">Menos años</button>
+          <button type="button" id="mCuota" aria-pressed="false">Cuota más baja</button>
         </div>
-        <label class="full">Nota (opcional)<input id="aNota" type="text" maxlength="80" placeholder="Ej.: paga extra de verano"></label>
       </div>
-      <div class="sim" id="sim" hidden>
-        <div><span>Te quedaría por devolver</span><b class="num" id="simPend">—</b></div>
-        <div><span id="simLbl">Terminas antes</span><b class="num" id="simA">—</b></div>
-        <div><span>Terminarías de pagar</span><b class="num" id="simFin">—</b></div>
-        <div class="save"><span>Te ahorras en intereses</span><b class="num" id="simAh">—</b></div>
+
+      <div class="viz" id="viz">
+        <div class="saving"><span class="eyebrow" style="color:rgba(249,245,225,.7)">Te ahorras en intereses</span>
+          <b class="num" id="simAh">0,00 €</b></div>
+        <div class="cmp">
+          <div class="cmpl"><span>Intereses sin adelantar</span><b class="num" id="cNow">—</b></div>
+          <div class="track"><i id="bNow" style="width:100%"></i></div>
+          <div class="cmpl"><span>Intereses con este adelanto</span><b class="num" id="cNew">—</b></div>
+          <div class="track"><i id="bNew" class="pk" style="width:100%"></i></div>
+        </div>
+        <div class="simgrid">
+          <div><span id="simLbl">Terminas antes</span><b class="num" id="simA">—</b></div>
+          <div><span>Última cuota</span><b class="num" id="simFin">—</b></div>
+          <div><span>Cuota mensual</span><b class="num" id="simCuota">—</b></div>
+          <div><span>Te quedaría por devolver</span><b class="num" id="simPend">—</b></div>
+        </div>
+        <div class="chart"><svg id="chart" viewBox="0 0 320 150" role="img" aria-label="Capital pendiente con y sin adelanto"></svg>
+          <div class="legend"><span><i style="background:var(--cream)"></i>Sin adelantar</span><span><i style="background:var(--yellow)"></i>Con el adelanto</span></div></div>
       </div>
-      <button class="btn" id="aSave" disabled>Guardar adelanto</button>
+
+      <details class="more"><summary>Fecha y nota del adelanto</summary>
+        <div class="form" style="margin-top:10px">
+          <label>Fecha<input id="aFecha" type="date"></label>
+          <label>Nota (opcional)<input id="aNota" type="text" maxlength="80" placeholder="Ej.: paga extra"></label>
+        </div>
+      </details>
+      <button class="btn" id="aSave" disabled>Guardar este adelanto</button>
       <p class="msg" id="aMsg" role="status"></p>
     </section>
 
@@ -254,6 +303,7 @@ async function call(method,url,data){
 function show(v){['vLogin','vSetup','vApp'].forEach(x=>$(x).hidden=x!==v);document.body.classList.toggle('dark',v==='vLogin');window.scrollTo(0,0)}
 
 /* ---------- cálculo ---------- */
+const DEFAULT_CFG={total:120000,tasa:3.25,anos:25,firma:'2026-10-23',primeraCuota:'2026-11-20',datos:[['Primer pago','40.000,00 € · 07/07/2026'],['Segundo pago','80.000,00 € · 23/10/2026'],['Finalidad','Compra de la vivienda habitual']]};
 let CFG=null,I=0,N=0,C0=0,Y0=0,M0=0,DAY=20;
 function setCfg(c){CFG=c;I=c.tasa/100/12;N=c.anos*12;C0=annuity(c.total,N);const[a,b,d]=c.primeraCuota.split('-');Y0=+a;M0=+b;DAY=+d}
 function annuity(B,n){if(n<=0)return B;if(I===0)return r2(B/n);return r2(B*I/(1-Math.pow(1+I,-n)))}
@@ -312,7 +362,7 @@ function render(){
   const facts=[...CFG.datos,['Total prestado',eur(CFG.total)],['Interés',`${String(CFG.tasa).replace('.',',')} % nominal anual`],
     ['Plazo',`${CFG.anos} años · ${N} cuotas`],['Firma',dmy(CFG.firma)],['Cuota inicial',`${eur(C0)} el día ${DAY}`],['Intereses previstos',eur(BASE.intTot)]];
   $('facts').innerHTML=facts.map(([a,b])=>`<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join('');
-  renderHist();simulate();
+  renderHist();setupRange();
 }
 $('tAll').addEventListener('toggle',render);
 
@@ -337,29 +387,78 @@ function renderHist(){
   });
 }
 
-/* ---------- simulador de adelantos ---------- */
+/* ---------- simulador de adelantos (barra deslizante) ---------- */
 $('aFecha').value=today;
-function draft(){const v=parseFloat(String($('aImp').value).replace(',','.'));const f=$('aFecha').value;if(!(v>0)||!f)return null;return{id:'_',importe:r2(v),fecha:f,modo:mode,nota:$('aNota').value.trim()}}
-function simulate(){
-  const d=draft();$('aSave').disabled=!d;
-  if(!d||!CFG){$('sim').hidden=true;return}
-  if(d.fecha<CFG.firma){$('sim').hidden=true;$('aSave').disabled=true;$('aMsg').textContent='La fecha tiene que ser posterior a la firma.';return}
-  if($('aMsg').textContent.startsWith('La fecha'))$('aMsg').textContent='';
-  const cur=schedule(advs),sim=schedule([...advs,d]);
-  let bal=CFG.total;for(const e of sim.events)if(e.fecha<=d.fecha)bal=e.bal;
-  $('sim').hidden=false;$('simPend').textContent=eur(bal);
-  if(mode==='cuota'){const na=sim.rows.find(r=>r.fecha>d.fecha);$('simLbl').textContent='Nueva cuota';$('simA').textContent=na?eur(na.cuota):'—'}
-  else{const m=cur.rows.length-sim.rows.length;$('simLbl').textContent='Terminas antes';$('simA').textContent=m>0?`${m} ${m===1?'mes':'meses'}`:'—'}
-  $('simFin').textContent=sim.rows.length?mesAno(sim.rows[sim.rows.length-1].fecha):'Ya';
-  $('simAh').textContent=eur(Math.max(0,r2(cur.intTot-sim.intTot)));
+let amt=0,pendNow=0;
+function eur0(x){return new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0,useGrouping:'always'}).format(x)}
+function setAmt(v,from){
+  v=Math.max(0,Math.min(r2(+v||0),pendNow));amt=v;
+  if(from!=='range')$('aRange').value=Math.round(v/500)*500;
+  if(from!=='input')$('aImp').value=v?String(v):'';
+  $('aRange').style.setProperty('--p',(pendNow?Math.min(100,v/pendNow*100):0)+'%');
+  $('aBig').textContent=eur0(v);
+  [...$('aChips').children].forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.v===v)));
+  simulate();
 }
-['aImp','aFecha','aNota'].forEach(id=>$(id).addEventListener('input',simulate));
+$('aRange').addEventListener('input',e=>setAmt(+e.target.value,'range'));
+$('aImp').addEventListener('input',e=>setAmt(parseFloat(String(e.target.value).replace(',','.')),'input'));
+function setupRange(){
+  const sch=schedule(advs);let bal=CFG.total;for(const e of sch.events)if(e.fecha<=today)bal=e.bal;
+  if(!$('aFecha').value||$('aFecha').value<CFG.firma)$('aFecha').value=today<CFG.firma?CFG.firma:today;
+  pendNow=bal;$('aRange').max=String(Math.max(500,Math.floor(bal/500)*500));
+  $('aMax').textContent=eur0(bal);
+  const opts=[1000,5000,10000,20000].filter(v=>v<bal);
+  $('aChips').innerHTML=opts.map(v=>`<button type="button" data-v="${v}">${eur0(v)}</button>`).join('')+`<button type="button" data-v="${r2(bal)}">Todo</button>`;
+  [...$('aChips').children].forEach(b=>b.onclick=()=>setAmt(+b.dataset.v));
+  setAmt(Math.min(amt,bal));
+}
+function draft(){const f=$('aFecha').value;if(!(amt>0)||!f)return null;return{id:'_',importe:amt,fecha:f,modo:mode,nota:$('aNota').value.trim()}}
+function drawChart(cur,sim){
+  const svg=$('chart'),W=320,H=150,P={l:40,r:8,t:10,b:20};
+  const pts=s=>{const a=[[CFG.firma,CFG.total]];s.events.forEach(e=>a.push([e.fecha,e.bal]));return a};
+  const A=pts(cur),B=pts(sim);
+  const t=d=>new Date(d+'T12:00:00').getTime();
+  const x0=t(CFG.firma),x1=t(A[A.length-1][0]);
+  const X=d=>P.l+(t(d)-x0)/(x1-x0||1)*(W-P.l-P.r),Y=v=>P.t+(1-v/CFG.total)*(H-P.t-P.b);
+  const path=a=>a.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1)).join('');
+  const y0=new Date(x0).getFullYear(),y1=new Date(x1).getFullYear();let ticks='';
+  const step=Math.max(1,Math.ceil((y1-y0)/5));
+  for(let y=Math.ceil((y0+1)/step)*step;y<=y1;y+=step){const xx=X(iso(y,1,1));if(xx>P.l+10&&xx<W-P.r)ticks+=`<text x="${xx.toFixed(1)}" y="${H-5}" text-anchor="middle">${y}</text>`}
+  const g=[0,.5,1].map(f=>`<line x1="${P.l}" x2="${W-P.r}" y1="${Y(CFG.total*f).toFixed(1)}" y2="${Y(CFG.total*f).toFixed(1)}" stroke="rgba(249,245,225,.12)"/><text x="${P.l-5}" y="${(Y(CFG.total*f)+3).toFixed(1)}" text-anchor="end">${Math.round(CFG.total*f/1000)}k</text>`).join('');
+  const endB=B[B.length-1];
+  svg.innerHTML=`<g fill="rgba(249,245,225,.6)" font-size="9" font-family="Evolve Sans,system-ui,sans-serif">${g}${ticks}</g>
+    <path d="${path(A)}" fill="none" stroke="#F9F5E1" stroke-width="2" opacity=".55"/>
+    <path d="${path(B)}" fill="none" stroke="#F0E85A" stroke-width="2.5"/>
+    <circle cx="${X(endB[0]).toFixed(1)}" cy="${Y(0).toFixed(1)}" r="4" fill="#F0E85A" stroke="#130F17" stroke-width="2"/>`;
+}
+function simulate(){
+  if(!CFG)return;
+  const d=draft();$('aSave').disabled=!d;
+  const okDate=!d||d.fecha>=CFG.firma;
+  if(!okDate){$('aSave').disabled=true;$('aMsg').textContent='La fecha tiene que ser posterior a la firma.'}
+  else if($('aMsg').textContent.startsWith('La fecha'))$('aMsg').textContent='';
+  const cur=schedule(advs),sim=d&&okDate?schedule([...advs,d]):cur;
+  const ah=Math.max(0,r2(cur.intTot-sim.intTot));
+  $('simAh').textContent=eur(ah);
+  $('cNow').textContent=eur(cur.intTot);$('cNew').textContent=eur(sim.intTot);
+  $('bNow').style.width='100%';$('bNew').style.width=(cur.intTot?Math.max(0,sim.intTot/cur.intTot*100):0).toFixed(1)+'%';
+  let bal=CFG.total;const ref=d?d.fecha:today;for(const e of sim.events)if(e.fecha<=ref)bal=e.bal;
+  $('simPend').textContent=eur(bal);
+  const na=sim.rows.find(r=>r.fecha>ref);$('simCuota').textContent=na?eur(na.cuota):'—';
+  const m=cur.rows.length-sim.rows.length;
+  $('simLbl').textContent=mode==='cuota'?'Cuota baja':'Terminas antes';
+  if(mode==='cuota'){const ca=cur.rows.find(r=>r.fecha>ref);$('simA').textContent=ca&&na?(ca.cuota-na.cuota>0.004?'−'+eur(ca.cuota-na.cuota)+'/mes':'—'):'—'}
+  else $('simA').textContent=m>0?(m>=12?`${Math.floor(m/12)} años${m%12?' y '+(m%12)+' m':''}`:`${m} ${m===1?'mes':'meses'}`):'—';
+  $('simFin').textContent=sim.rows.length?mesAno(sim.rows[sim.rows.length-1].fecha):'Ya';
+  drawChart(cur,sim);
+}
+$('aFecha').addEventListener('input',simulate);
 function setMode(m){mode=m;$('mPlazo').setAttribute('aria-pressed',m==='plazo');$('mCuota').setAttribute('aria-pressed',m==='cuota');simulate()}
 $('mPlazo').onclick=()=>setMode('plazo');$('mCuota').onclick=()=>setMode('cuota');
 $('aSave').onclick=async()=>{
   const d=draft();if(!d)return;$('aSave').disabled=true;$('aMsg').textContent='Guardando…';
   try{const r=await call('POST','/api/adelantos',{importe:d.importe,fecha:d.fecha,modo:d.modo,nota:d.nota});advs.push(r.adelanto);
-    $('aImp').value='';$('aNota').value='';$('aMsg').textContent=`Adelanto de ${eur(d.importe)} guardado. Todo está recalculado.`;render()}
+    amt=0;$('aNota').value='';$('aMsg').textContent=`Adelanto de ${eur(d.importe)} guardado. Todo está recalculado.`;render()}
   catch(e){if(e.status===401)return start();$('aMsg').textContent=e.message;simulate()}
 };
 
@@ -415,7 +514,10 @@ async function start(){
   if(d.config){setCfg(d.config);BASE=schedule([])}
   const hs=setupFromHash();
   if(hs){openSetup(hs,!!d.config);return}
-  if(!d.config){openSetup(null,false);return}
+  if(!d.config&&!hs){
+    // Primera vez: se guardan los datos del préstamo firmado (se pueden cambiar luego en «Cambiar datos del préstamo»).
+    try{const r=await call('PUT','/api/config',{config:DEFAULT_CFG});setCfg(r.config);BASE=schedule([])}catch(e){openSetup(DEFAULT_CFG,false);return}
+  }
   show('vApp');render();
 }
 start();
