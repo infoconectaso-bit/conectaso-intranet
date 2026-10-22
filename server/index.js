@@ -1196,7 +1196,8 @@ const userName = id => (users.get(id) || {}).name || '';
 /* ---------- archivos ---------- */
 // Nombre seguro para disco y ruta organizada por boda: uploads/boda-<id>/<fileid>-<nombre>
 const safeName = n => String(n || 'archivo').normalize('NFKD').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120) || 'archivo';
-const fileFull = f => path.join(UPLOADS, (f.collection === 'maintenance' ? 'mant-' : 'boda-') + f.record_id, f.id + '-' + safeName(f.name));
+const colPrefix = c => (c === 'maintenance' ? 'mant-' : c === 'payslip' ? 'nomina-' : 'boda-');
+const fileFull = f => path.join(UPLOADS, colPrefix(f.collection) + f.record_id, f.id + '-' + safeName(f.name));
 /* ---------- planos de montaje ----------
  * Imagen (vista aérea) guardada en disco; símbolos ("marks") en un setting.
  * Clave = keyBase: plantilla de finca "<locId>_<pack>" o copia de evento "ev_<id>".
@@ -1259,6 +1260,10 @@ async function filesApi(req, res, user, seg, method, url) {
       const m = store.get('maintenance', rid);
       if (!m) return fail(res, 404, 'Parte no encontrado');
       if (user.role !== 'admin' && +m.userId !== +user.id) return fail(res, 403, 'Sin acceso');
+    } else if (col === 'payslip') {
+      // Nóminas: rid = id del trabajador. Admin puede subir a cualquiera; un trabajador solo a lo suyo.
+      if (user.role !== 'admin' && +rid !== +user.id) return fail(res, 403, 'Sin acceso');
+      if (!store.get('users', rid)) return fail(res, 404, 'Trabajador no encontrado');
     } else return fail(res, 400, 'Colección no admitida');
     const parts = await parseMultipart(req);
     const momPart = parts.find(p => p.name === 'momento' && !p.filename);
@@ -1267,7 +1272,7 @@ async function filesApi(req, res, user, seg, method, url) {
     for (const p of parts.filter(p => p.filename && p.content.length)) {
       if (p.content.length > MAX_UPLOAD) return fail(res, 413, 'Archivo demasiado grande');
       const id = crypto.randomBytes(12).toString('hex');
-      const dir = path.join(UPLOADS, (col === 'maintenance' ? 'mant-' : 'boda-') + rid);
+      const dir = path.join(UPLOADS, colPrefix(col) + rid);
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, id + '-' + safeName(p.filename)), p.content);
       db().prepare('INSERT INTO files (id, collection, record_id, name, description, mime, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
@@ -1290,12 +1295,20 @@ async function filesApi(req, res, user, seg, method, url) {
     const rows = db().prepare('SELECT id, name, mime, size, created_at FROM files WHERE collection = ? AND record_id = ? ORDER BY created_at').all('maintenance', +seg[2]);
     return ok(res, { files: rows });
   }
+  if (method === 'GET' && seg[1] === 'payslip-list') {
+    // Nóminas de un trabajador: admin cualquiera; un trabajador solo las suyas. description = periodo "YYYY-MM".
+    const uid = +seg[2];
+    if (user.role !== 'admin' && uid !== +user.id) return fail(res, 403, 'Sin acceso');
+    const rows = db().prepare('SELECT id, name, description AS period, mime, size, created_at FROM files WHERE collection = ? AND record_id = ? ORDER BY description DESC, created_at DESC').all('payslip', uid);
+    return ok(res, { files: rows });
+  }
   if (method === 'GET') {
     const fid = seg[1];
     const f = db().prepare('SELECT * FROM files WHERE id = ?').get(fid);
     if (!f) return fail(res, 404, 'Archivo no encontrado');
     let allowed;
     if (f.collection === 'maintenance') { const m = store.get('maintenance', f.record_id); allowed = !!m && (user.role === 'admin' || +m.userId === +user.id); }
+    else if (f.collection === 'payslip') { allowed = (user.role === 'admin' || +f.record_id === +user.id); }
     else { const ev = store.get(f.collection, f.record_id); allowed = !!ev && perm.canSeeEvent(user, ev); }
     if (!allowed) return fail(res, 403, 'Sin acceso');
     let full = fileFull(f);
@@ -1305,9 +1318,11 @@ async function filesApi(req, res, user, seg, method, url) {
     return fs.createReadStream(full).pipe(res);
   }
   if (method === 'DELETE') {
-    if (user.role !== 'admin') return fail(res, 403, 'Solo administración puede borrar archivos.');
     const fid = seg[1];
     const f = db().prepare('SELECT * FROM files WHERE id = ?').get(fid);
+    // Admin borra cualquier archivo; un trabajador puede borrar una nómina SUYA (p. ej. subida por error).
+    const ownPayslip = f && f.collection === 'payslip' && +f.record_id === +user.id;
+    if (user.role !== 'admin' && !ownPayslip) return fail(res, 403, 'Solo administración puede borrar archivos.');
     if (f) { try { fs.unlinkSync(fileFull(f)); } catch (e) { try { fs.unlinkSync(path.join(UPLOADS, fid)); } catch (e2) {} } db().prepare('DELETE FROM files WHERE id = ?').run(fid); }
     return ok(res, { ok: true });
   }
