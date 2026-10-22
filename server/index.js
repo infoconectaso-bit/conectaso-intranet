@@ -1010,6 +1010,11 @@ async function events(req, res, user, seg, method, url) {
     try {
       const force = url.searchParams.get('refresh') === '1' && user.role === 'admin';
       const r = await holded.invoicesForClient({ emails, nifs, names }, force);
+      // Seguridad: a un novio solo le mostramos facturas conciliadas por email o NIF (identificadores
+      // únicos). Las coincidencias solo por NOMBRE (posible homónimo) quedan únicamente para admin.
+      if (r.matchedBy === 'name' && user.role !== 'admin') {
+        return ok(res, { enabled: true, matchedBy: null, invoices: [], totals: { total: 0, paid: 0, pending: 0 } });
+      }
       const totals = r.invoices.reduce((a, i) => ({ total: a.total + i.total, paid: a.paid + i.paid, pending: a.pending + i.pending }), { total: 0, paid: 0, pending: 0 });
       return ok(res, { enabled: true, matchedBy: r.matchedBy, contact: r.contact, invoices: r.invoices, totals, indexInfo: user.role === 'admin' ? r.indexInfo : undefined });
     } catch (e) { return ok(res, { enabled: true, error: e.message, invoices: [] }); }
