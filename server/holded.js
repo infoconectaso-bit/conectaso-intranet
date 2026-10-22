@@ -102,17 +102,25 @@ async function getPayslipPdf(id) {
   throw new Error('Holded respondió con error al descargar el PDF: ' + lastErr);
 }
 
-/** Comprueba que el token tiene permiso de Contabilidad/Nóminas. Devuelve {ok, count, sample}. */
+/** Comprueba/depura el acceso a nóminas. Prueba varias rutas y filtros y devuelve lo que ve. */
 async function testPayslips() {
-  const items = await listPayslips({ maxPages: 1, limit: 5 });
-  return {
-    ok: true,
-    count: items.length,
-    sample: items.map(i => ({
-      employee: i.employee_name, kind: i.payslip_kind,
-      period: (i.period_start || i.date || '').slice(0, 7), status: i.payment_status,
-    })),
+  const probes = {};
+  const tryGet = async (label, path) => {
+    try {
+      const d = await apiGet(path);
+      let shape;
+      if (Array.isArray(d)) shape = { type: 'array', n: d.length, keys0: d[0] ? Object.keys(d[0]).slice(0, 12) : [] };
+      else if (d && typeof d === 'object') shape = { type: 'object', keys: Object.keys(d).slice(0, 12), itemsN: Array.isArray(d.items) ? d.items.length : (Array.isArray(d.data) ? d.data.length : null) };
+      else shape = { type: typeof d, value: String(d).slice(0, 80) };
+      probes[label] = shape;
+    } catch (e) { probes[label] = { error: String(e.message).slice(0, 120) }; }
   };
+  await tryGet('payslips', '/payslips?limit=5');
+  await tryGet('payslips_draftFalse', '/payslips?limit=5&is_draft=false');
+  await tryGet('payslips_dates', '/payslips?limit=5&start_date=2024-01-01&end_date=2026-12-31');
+  await tryGet('payrolls', '/payrolls?limit=5');
+  await tryGet('employees', '/employees?limit=5');
+  return { ok: true, probes };
 }
 
 module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listPayslips, getPayslipPdf, testPayslips };
