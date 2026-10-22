@@ -1100,7 +1100,9 @@ async function usersApi(req, res, user, seg, method) {
       if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
       const u = users.get(id);
       if (!u) return fail(res, 404, 'Usuario no encontrado');
-      const token = auth.createToken(id, 'magic');
+      // La tabla tokens solo permite kind IN ('invite','reset','albaran'); 'albaran' sirve de
+      // autologin (albaranLogin lo acepta) y dura 7 días, ideal para "entrar como".
+      const token = auth.createToken(id, 'albaran');
       const ownEv = store.all('events').find(e => +e.userId === id);
       const evId = (u.eventId || (ownEv && ownEv.id)) || '';
       const base = (APP_URL() || '') || ('http://' + (req.headers.host || '200.234.226.246'));
