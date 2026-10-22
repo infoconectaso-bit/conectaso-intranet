@@ -1006,7 +1006,8 @@ function lineChartMulti(xLabels, series, opts) {
   series = (series || []).filter(s => s.values.some(v => v > 0));
   if (!series.length || !xLabels.length) return '<div class="empty">Sin datos.</div>';
   const showValues = !!opts.showValues;
-  const W = 840, H = 340, padL = 34, padR = 16, padT = showValues ? 26 : 14, padB = 44;
+  const bottomVals = (opts.bottomValues && opts.bottomValues.length === xLabels.length) ? opts.bottomValues : null;
+  const W = 840, H = 340, padL = 34, padR = 16, padT = showValues ? 26 : 14, padB = bottomVals ? 60 : 44;
   const maxV = Math.max(1, ...series.flatMap(s => s.values));
   const n = xLabels.length;
   const X = i => padL + (n <= 1 ? (W - padL - padR) / 2 : i * (W - padL - padR) / (n - 1));
@@ -1016,7 +1017,11 @@ function lineChartMulti(xLabels, series, opts) {
   // Líneas verticales en cada año, para que cada punto quede "cuadrado" con su año.
   let vgrid = '';
   xLabels.forEach((l, i) => { vgrid += `<line x1="${X(i)}" y1="${padT}" x2="${X(i)}" y2="${H - padB}" stroke="var(--line,#eee)" stroke-width="1" stroke-dasharray="2 3"/>`; });
-  const xlab = xLabels.map((l, i) => `<text x="${X(i)}" y="${H - padB + 18}" font-size="11" text-anchor="middle" fill="#8a8390">${esc(l)}</text>`).join('');
+  const xlab = xLabels.map((l, i) => {
+    let t = `<text x="${X(i)}" y="${H - padB + 18}" font-size="11" text-anchor="middle" fill="#8a8390">${esc(l)}</text>`;
+    if (bottomVals) t += `<text x="${X(i)}" y="${H - padB + 37}" font-size="14" font-weight="700" text-anchor="middle" fill="var(--ink,#2b2430)">${esc(String(bottomVals[i]))}</text>`;
+    return t;
+  }).join('');
   const lines = series.map(s => `<polyline fill="none" stroke="${s.color}" stroke-width="2.5" points="${s.values.map((v, i) => X(i) + ',' + Y(v)).join(' ')}"/>` + s.values.map((v, i) => `<circle cx="${X(i)}" cy="${Y(v)}" r="3.6" fill="#fff" stroke="${s.color}" stroke-width="2"><title>${esc(s.label)} · ${esc(xLabels[i])}: ${v}</title></circle>`).join('') + (showValues ? s.values.map((v, i) => `<text x="${X(i)}" y="${Y(v) - 9}" font-size="12" font-weight="700" text-anchor="middle" fill="${s.color}">${v}</text>`).join('') : '')).join('');
   const legend = series.map(s => `<span class="ln-leg"><span class="ln-dot" style="background:${s.color}"></span>${esc(s.label)}</span>`).join('');
   return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" class="line-svg" style="width:100%;min-width:560px">${vgrid}${grid}${lines}${xlab}</svg></div><div class="ln-legend">${legend}</div>`;
@@ -1055,7 +1060,7 @@ on(/^#\/analisis$/, async () => {
       const totYear = {}; years.forEach(y => { totYear[y] = Object.keys(vp).filter(isWed).reduce((s, p) => s + ((vp[p] || {})[y] || 0), 0); });
       const gran = Object.values(totYear).reduce((s, v) => s + v, 0);
       const tbl = `<div class="table-wrap"><table class="dt"><thead><tr><th>Concepto</th>${years.map(y => `<th style="text-align:right">${y}</th>`).join('')}<th style="text-align:right">Total</th></tr></thead><tbody><tr><td><b>Total bodas</b></td>${years.map(y => `<td style="text-align:right"><b>${totYear[y]}</b></td>`).join('')}<td style="text-align:right"><b>${gran}</b></td></tr></tbody></table></div>`;
-      const chart = lineChartMulti(years, [{ label: 'Total bodas', color: '#E82C88', values: years.map(y => totYear[y]) }], { showValues: true });
+      const chart = lineChartMulti(years, [{ label: 'Total bodas', color: '#E82C88', values: years.map(y => totYear[y]) }], { bottomValues: years.map(y => totYear[y]) });
       return sect('Total de bodas por año', tbl + chart, 'Recomendado + Fiesta + Bodorrio + Tinglado (sin extras ni corporativos)');
     })(),
     (() => { const vp = a.ventasPack || {}; const keys = Object.keys(vp); const series = keys.map((k, i) => ({ label: k, color: PIE_COLORS[i % PIE_COLORS.length], values: years.map(y => vp[k][y] || 0) })); return sect('Evolución de bodas por pack (por año)', lineChartMulti(years, series)); })(),
