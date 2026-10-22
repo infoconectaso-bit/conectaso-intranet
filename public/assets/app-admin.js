@@ -774,6 +774,57 @@ on(/^#\/vacaciones$/, async () => {
 /* =========================================================================
    FACTURACIÓN DE EQUIPO (admin) + MIS PAGOS (dj)
    ========================================================================= */
+// Nóminas: subida/consulta de nóminas (PDF) por trabajador, agrupadas por año y mes. Admin ve a todos
+// (selector de trabajador) y puede subir; cada trabajador ve y sube las suyas. Se guardan en el servidor.
+const NOM_MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+on(/^#\/nominas$/, async () => {
+  const admin = isAdmin(); loading(['Nóminas']);
+  let targetId = S.user.id, workers = [];
+  if (admin) {
+    const us = await api('users').catch(() => ({ users: [] }));
+    workers = (us.users || []).filter(u => u.time_tracking || u.role === 'dj').sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es'));
+    targetId = workers.length ? workers[0].id : S.user.id;
+  }
+  return renderNominas(targetId, admin, workers);
+});
+async function renderNominas(uid, admin, workers) {
+  loading(['Nóminas']);
+  const r = await api('files/payslip-list/' + uid).catch(() => ({ files: [] }));
+  const files = r.files || [];
+  const byYear = {};
+  files.forEach(f => { const y = (f.period || '').slice(0, 4) || '—'; (byYear[y] = byYear[y] || []).push(f); });
+  const years = Object.keys(byYear).sort((a, b) => b.localeCompare(a));
+  const now = new Date(), curY = now.getFullYear(), curM = now.getMonth() + 1;
+  const yearOpts = []; for (let y = curY + 1; y >= 2018; y--) yearOpts.push(y);
+  const workerSel = admin ? `<div class="field" style="max-width:360px"><label>Trabajador</label><select class="control" id="nomWorker">${workers.map(w => `<option value="${w.id}" ${w.id == uid ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select></div>` : '';
+  const uploadForm = `<div class="panel"><div class="panel__head"><h3>Subir nómina</h3></div><div class="panel__body">
+    <form id="nomUpload" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div class="field"><label>Año</label><select class="control" name="year">${yearOpts.map(y => `<option ${y == curY ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
+      <div class="field"><label>Mes</label><select class="control" name="month">${NOM_MESES.map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}" ${(i + 1) == curM ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
+      <div class="field"><label>Archivo (PDF)</label><input type="file" class="control" id="nomFile" accept="application/pdf,image/*"></div>
+      <button type="submit" class="btn btn--primary">Subir</button>
+    </form><div id="nomMsg" style="margin-top:8px;display:none;font-size:13px"></div>
+  </div></div>`;
+  const list = years.length ? years.map(y => `<div class="panel"><div class="panel__head"><h3>${esc(y)}</h3></div><div class="panel__body">
+      <table class="dt"><thead><tr><th>Mes</th><th>Archivo</th><th></th></tr></thead><tbody>
+      ${byYear[y].sort((a, b) => (b.period || '').localeCompare(a.period || '')).map(f => { const mm = +(f.period || '').slice(5, 7); const mn = mm ? NOM_MESES[mm - 1] : (f.period || '—'); return `<tr><td>${esc(mn)}</td><td>${esc(f.name)}</td><td style="text-align:right"><a class="btn btn--sm" href="/api/files/${f.id}" target="_blank">Ver / descargar</a> <button class="btn btn--sm btn--red" data-delnom="${f.id}">Borrar</button></td></tr>`; }).join('')}
+      </tbody></table></div></div>`).join('') : '<div class="empty"><span class="script">Sin nóminas</span>Aún no hay nóminas subidas.</div>';
+  shell(`${pageHead('Nóminas', admin ? 'Sube y consulta las nóminas del equipo (PDF), por año y mes.' : 'Tus nóminas, por año y mes. Puedes verlas y descargarlas.')}
+    ${workerSel}${uploadForm}${list}`, ['Nóminas']);
+  const ws = el('nomWorker'); if (ws) ws.onchange = () => renderNominas(+ws.value, admin, workers);
+  const uf = el('nomUpload');
+  if (uf) uf.onsubmit = async e => {
+    e.preventDefault();
+    const fi = el('nomFile'); const f = fi && fi.files && fi.files[0]; const m = el('nomMsg'); m.style.display = 'block';
+    if (!f) { m.textContent = 'Elige un archivo.'; return; }
+    const d = collectForm(uf); const period = d.year + '-' + d.month;
+    const fd = new FormData(); fd.append('file', f, f.name); fd.append('momento', period);
+    m.textContent = 'Subiendo…';
+    try { await api('files/payslip/' + uid, { method: 'POST', form: fd }); toast('Nómina subida', 'ok'); renderNominas(uid, admin, workers); }
+    catch (err) { m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message || 'Error al subir') + '</span>'; }
+  };
+  $$('[data-delnom]').forEach(b => b.onclick = () => modal('Borrar nómina', '¿Seguro que quieres borrar esta nómina?', { okText: 'Borrar', danger: true, onOk: async () => { await api('files/' + b.dataset.delnom, { method: 'DELETE' }); toast('Nómina borrada', 'ok'); renderNominas(uid, admin, workers); } }));
+}
 // Cobros pendientes de las bodas de la SEMANA EN VIGOR (lunes a domingo): de un vistazo, a quién
 // hay que cobrar esta semana. Incluye tanto las bodas próximas como las ya realizadas de la semana.
 on(/^#\/cobros$/, async () => {

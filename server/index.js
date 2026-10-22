@@ -84,7 +84,9 @@ function serveIndexHtml(res) {
   fs.readFile(path.join(PUBLIC, 'index.html'), 'utf8', (e, html) => {
     if (e) return fail(res, 404, 'No encontrado');
     const out = html.replace(/(\/?assets\/[^"'?\s]+)\?v=[^"'\s]*/g, (m, p) => p + '?v=' + assetVersion(p.replace(/^\/+/, '')));
-    send(res, 200, out, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+    // index.html NUNCA se cachea (no-store): así cada carga pide la última versión y los móviles no
+    // se quedan con una copia vieja. Los assets (con ?v=<hash>) sí se cachean, pero su URL cambia al cambiar.
+    send(res, 200, out, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' });
   });
 }
 

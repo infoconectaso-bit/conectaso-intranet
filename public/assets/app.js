@@ -474,7 +474,7 @@ function navFor(role) {
     { s: 'Eventos' }, { t: 'Bodas pendientes', i: 'events', h: '#/eventos' }, { t: 'Bodas realizadas', i: 'events', h: '#/eventos/realizados' },
     { t: 'Servicios extras', i: 'extras', h: '#/extras' },
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
-    { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' },
+    { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' }, { t: 'Nóminas', i: 'doc', h: '#/nominas' },
     { s: 'Negocio' }, { t: 'Cobros de la semana', i: 'euro', h: '#/cobros' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
     { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
     // Papelera y Beneficios se han movido a "Mi cuenta → Configuración avanzada" (protegidos con contraseña).
@@ -485,7 +485,7 @@ function navFor(role) {
     return [
       { s: 'Mi trabajo' }, { t: 'Inicio', i: 'home', h: '#/' }, { t: 'Mis eventos', i: 'events', h: '#/eventos' },
       { t: 'Realizados', i: 'events', h: '#/eventos/realizados' },
-      ...(tt ? [{ s: 'Tiempo' }, { t: 'Mi control horario', i: 'clock', h: '#/horario' }, { t: 'Mis vacaciones', i: 'plane', h: '#/vacaciones' }] : []),
+      ...(tt ? [{ s: 'Tiempo' }, { t: 'Mi control horario', i: 'clock', h: '#/horario' }, { t: 'Mis vacaciones', i: 'plane', h: '#/vacaciones' }, { t: 'Mis nóminas', i: 'doc', h: '#/nominas' }] : []),
       { s: 'Otros' }, { t: 'Mis pagos', i: 'euro', h: '#/mis-pagos' },
       ...(veh ? [{ t: 'Vehículos', i: 'car', h: '#/vehiculos' }] : []),
       { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' },
