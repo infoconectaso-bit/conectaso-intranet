@@ -320,7 +320,18 @@ async function api(req, res, url) {
     // Agrupa las fincas que son la misma masía con varios espacios (Can Oliver 200/400/Carpa/Rústico,
     // Can Ribas Cirerers/Exclusivo/Oliveres, etc.) en un único nombre de masía.
     const venueGroup = n => { const s = String(n || '').trim(); if (/can\s*oliver/i.test(s)) return 'Can Oliver'; if (/can\s*ribas/i.test(s)) return 'Can Ribas'; if (/mas\s*bad[oó]/i.test(s)) return 'Mas Badó'; return s || 'Otros'; };
-    const masiaOf = e => venueGroup(locName(e.lugar) || e.lugarOtro);
+    const vnorm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    // Catálogo de fincas oficiales (normalizadas) → nombre de masía agrupado, para casar los
+    // nombres escritos a mano en "Otros" que son prácticamente la misma finca.
+    const CANON = {}; store.all('locations').forEach(l => { if (l.name) CANON[vnorm(l.name)] = venueGroup(l.name); });
+    const masiaOf = e => {
+      const raw = locName(e.lugar) || e.lugarOtro || '';
+      if (e.lugar) return venueGroup(raw); // finca oficial
+      const nq = vnorm(raw); if (!nq) return 'Otros';
+      if (CANON[nq]) return CANON[nq]; // coincide exactamente con una finca conocida
+      for (const k in CANON) { if (k.length >= 6 && (nq === k || nq.includes(k) || k.includes(nq))) return CANON[k]; }
+      return venueGroup(raw);
+    };
     const allEv = store.all('events');
     const realized = allEv.filter(e => evFinished(e));
     // Ventas por masía/pack: TODAS las bodas (pasadas y futuras ya previstas), no solo las realizadas.
