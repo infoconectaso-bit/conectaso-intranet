@@ -40,6 +40,8 @@ body{background:var(--cream);color:var(--ink);font-family:var(--body);font-size:
 .brand .k{font-family:var(--display);font-weight:900;font-size:15px;letter-spacing:.08em}
 .tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -4px 16px;padding:2px 4px}
 .tabs::-webkit-scrollbar{display:none}
+.tabs .tgl{flex:none;align-self:center;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:rgba(249,245,225,.5);padding:0 2px 0 6px}
+.tabs .tgl:first-child{padding-left:0}
 .tabs button{flex:none;font:inherit;font-size:13px;font-weight:700;border:2px solid var(--onyx-soft);background:transparent;color:rgba(249,245,225,.8);border-radius:99px;padding:7px 13px;cursor:pointer;white-space:nowrap}
 .tabs button[aria-selected="true"]{background:var(--yellow);color:var(--onyx);border-color:var(--yellow)}
 .eyebrow{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)}
@@ -225,9 +227,10 @@ ul.tips{margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:fle
       <div class="eyebrow">Deuda total pendiente hoy</div>
       <div class="big num" id="gPend">—</div>
       <div class="sumgrid">
-        <div><b class="num" id="gMes">—</b><span>pagos al mes (con IVA)</span></div>
-        <div><b class="num" id="gInt">—</b><span>intereses que faltan</span></div>
+        <div><b class="num" id="gPer">—</b><span>personal · <span id="gPerM"></span>/mes</span></div>
+        <div><b class="num" id="gEmp">—</b><span>empresa · <span id="gEmpM"></span>/mes con IVA</span></div>
       </div>
+      <p class="note" id="gNote" style="color:rgba(249,245,225,.7);margin-top:8px"></p>
     </div>
   </div></header>
 
@@ -251,6 +254,7 @@ ul.tips{margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:fle
         <p class="note" id="pNote" hidden></p>
       </div>
       <p class="good" id="sAl"></p>
+      <p class="warn" id="sAviso" hidden></p>
       <p class="good" id="sAh" hidden></p>
     </section>
 
@@ -412,6 +416,7 @@ function mk(cfg){
   L.I=cfg.tasa/100/12;
   L.C0=cfg.cuota||annuity(L.I,cfg.total,L.N,L.VR);
   L.tabla=Array.isArray(cfg.tabla)&&cfg.tabla.length?cfg.tabla:null;
+  L.ADJ=cfg.ajusteDias||0;L.G=cfg.grupo||(cfg.tipo==='leasing'?'empresa':'personal');
   L.base=schedule(L,[]);
   // Cuotas pagadas antes de empezar a contar (p. ej. la hipoteca): se reconstruyen desde el importe inicial.
   L.past=[];L.PA=cfg.pagadasAntes||0;
@@ -459,7 +464,8 @@ function schedule(L,advs){
     if(B<=0.004){k--;break}
     if(any&&B>L.VR){if(mode==='cuota')C=annuity(i,B,end-(k-1),L.VR);else end=(k-1)+remaining(i,B,C,L.VR)}
     if(B<=L.VR+0.004){k--;break}
-    const it=r2(B*i);let c=C,am=r2(c-it);
+    let it=r2(B*i),c=C,am=r2(c-it);
+    if(k===1&&L.ADJ&&!L.tabla){it=r2(B*L.cfg.tasa/100*L.ADJ/365);c=r2(am+it)} // primer periodo de ajuste (pocos días)
     if(am>=B-L.VR||k>=end){am=r2(B-L.VR);c=r2(am+it)}
     B=r2(B-am);intTot=r2(intTot+it);
     rows.push({k,fecha:d,cuota:c,int:it,bal:B,vr:false});events.push({type:'q',fecha:d,bal:B,k});
@@ -473,8 +479,9 @@ function schedule(L,advs){
   return {rows,events,intTot};
 }
 function balAt(L,sch,date){let b=L.cfg.total;for(const e of sch.events)if(e.fecha<=date)b=e.bal;return b}
-function commission(L,amt,total,fecha){
+function commission(L,amt,total,fecha,libreCap){
   const c=L.cfg.comision||{};if(c.pct==null)return 0;if(!(amt>0))return 0;
+  if(!total&&libreCap!=null&&amt<=libreCap+0.004)return 0;
   const pct=c.pct2!=null&&c.desde2&&fecha&&fecha>=c.desde2?c.pct2:c.pct;
   return r2(Math.max(amt*pct/100,c.min||0));
 }
@@ -486,8 +493,11 @@ function simulateL(L,advs,amt,fecha,modo){
   amt=Math.min(amt,pend);
   const sim=amt>0?schedule(L,[...advs,{id:'_',importe:amt,fecha,modo}]):cur;
   const ah=Math.max(0,r2(cur.intTot-sim.intTot));
-  const com=amt>0?commission(L,amt,total,fecha):0;
-  return {cur,sim,amt,pend,ah,com,net:r2(ah-com),total};
+  let libreCap=null;const cl=(L.cfg.comision||{}).libre;
+  if(cl){const y=+fecha.slice(0,4);const ref=`${y-1}-12-31`;const base=ref<L.cfg.firma?L.cfg.total:balAt(L,cur,ref);
+    const usado=advs.filter(a=>a.fecha.slice(0,4)===String(y)).reduce((x,a)=>x+a.importe,0);libreCap=Math.max(0,r2(base*cl/100-usado))}
+  const com=amt>0?commission(L,amt,total,fecha,libreCap):0;
+  return {cur,sim,amt,pend,ah,com,net:r2(ah-com),total,libreCap};
 }
 
 /* ---------- estado ---------- */
@@ -496,9 +506,12 @@ const isLeasing=L=>L.cfg.tipo==='leasing';
 const bruta=(L,c)=>r2(c*(1+L.IVA));
 
 function tabs(){
-  $('tabs').innerHTML=ORDER.map(id=>`<button type="button" role="tab" data-id="${id}" aria-selected="${CUR===id}">${esc(LOANS[id].L.cfg.nombre)}</button>`).join('')
-    +`<button type="button" role="tab" data-id="__cmp" aria-selected="${CUR==='__cmp'}">Comparar</button>`;
-  [...$('tabs').children].forEach(b=>b.onclick=()=>{CUR=b.dataset.id;amt=0;cancelAll=false;try{localStorage.setItem('pc_tab',CUR)}catch(e){}render();window.scrollTo(0,0)});
+  const btn=id=>`<button type="button" role="tab" data-id="${id}" aria-selected="${CUR===id}">${esc(LOANS[id].L.cfg.nombre)}</button>`;
+  const per=ORDER.filter(id=>LOANS[id].L.G==='personal'),emp=ORDER.filter(id=>LOANS[id].L.G!=='personal');
+  $('tabs').innerHTML=(per.length?'<span class="tgl">Personal</span>'+per.map(btn).join(''):'')+(emp.length?'<span class="tgl">Empresa</span>'+emp.map(btn).join(''):'')
+    +`<span class="tgl">·</span><button type="button" role="tab" data-id="__cmp" aria-selected="${CUR==='__cmp'}">Comparar</button>`;
+  [...$('tabs').querySelectorAll('button')].forEach(b=>b.onclick=()=>{CUR=b.dataset.id;amt=0;cancelAll=false;try{localStorage.setItem('pc_tab',CUR)}catch(e){}render();window.scrollTo(0,0)});
+  const sel=$('tabs').querySelector('[aria-selected="true"]');if(sel)sel.scrollIntoView({block:'nearest',inline:'center'});
 }
 function render(){
   tabs();
@@ -523,7 +536,9 @@ function renderLoan(){
   const next=sch.rows.find(r=>r.fecha>today),last=sch.rows[sch.rows.length-1];
   const orig=c.original||c.total,pa=c.pagadasAntes||0;
   const dev=r2(orig-bal),pct=dev/orig*100;
-  $('hLbl').textContent=lea?'Capital pendiente hoy (sin IVA)':'Te queda por devolver hoy';
+  const fut=today<c.firma;
+  $('hLbl').textContent=fut?`Importe a firmar el ${dmy(c.firma)}`:lea?'Capital pendiente hoy (sin IVA)':'Te queda por devolver hoy';
+  $('sAviso').hidden=!c.aviso;$('sAviso').textContent=c.aviso||'';
   $('hTag').textContent=lea?'Leasing · '+(c.quien||'Empresa'):c.tipo==='hipoteca'?'Hipoteca · '+(c.quien||''):(c.quien||'');$('hTag').hidden=!$('hTag').textContent;
   $('hPend').textContent=eur(bal);$('hDev').textContent=eur(dev);
   $('hPct').textContent=pct.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1})+' %';
@@ -536,7 +551,7 @@ function renderLoan(){
   }else{$('nCuota').textContent='¡Pagado!';$('nFecha').textContent='No queda nada por pagar.';$('nPill').textContent='Terminado'}
   $('sPag').textContent=`${paid+pa} de ${sch.rows.length+pa}`;$('sFin').textContent=last?mesAno(last.fecha):'—';
   $('sIntP').textContent=eur(intP);$('sIntR').textContent=eur(r2(sch.intTot-(intP-L.pastInt)));
-  $('sAl').textContent=paid?`Al día: ${paid+pa} cuotas pagadas, la última el ${dmy(sch.rows[paid-1].fecha)}.`:pa?`Al día: ${pa} cuotas pagadas hasta hoy.`:'Todavía no ha vencido ninguna cuota.';
+  $('sAl').textContent=fut?`Todavía no está firmada: la primera cuota será el ${dmy(sch.rows[0].fecha)}.`:paid?`Al día: ${paid+pa} cuotas pagadas, la última el ${dmy(sch.rows[paid-1].fecha)}.`:pa?`Al día: ${pa} cuotas pagadas hasta hoy.`:'Todavía no ha vencido ninguna cuota.';
   const ah=r2(L.base.intTot-sch.intTot),meses=L.base.rows.length-sch.rows.length;
   $('sAh').hidden=!(advs.length&&ah>0);
   $('sAh').textContent=`Con tus adelantos te ahorras ${eur(ah)} en intereses`+(meses>0?` y terminas ${dur(meses)} antes.`:'.');
@@ -641,7 +656,7 @@ function simulate(){
   $('simNet').style.color=s.net<0?'#ff8fc4':'';
   $('simNetTxt').textContent=!s.amt?'Mueve la barra para ver cuánto te ahorras.':
     s.net<0?'La comisión es mayor que los intereses que te ahorras: no compensa.':
-    `Por cada 1.000 € adelantados ahorras ${eur(s.net/s.amt*1000)}.`;
+    `Por cada 1.000 € adelantados ahorras ${eur(s.net/s.amt*1000)}.`+(s.libreCap!=null&&!s.total?(s.amt<=s.libreCap?` Sin comisión: este año puedes adelantar hasta ${eur0(s.libreCap)} gratis.`:` Por encima de ${eur0(s.libreCap)} este año se paga comisión.`):'');
   $('cNow').textContent=eur(s.cur.intTot);$('cNew').textContent=eur(r2(s.sim.intTot+s.com));
   const mx=Math.max(s.cur.intTot,s.sim.intTot+s.com)||1;
   $('bNow').style.width=(s.cur.intTot/mx*100).toFixed(1)+'%';$('bNew').style.width=((s.sim.intTot+s.com)/mx*100).toFixed(1)+'%';
@@ -686,27 +701,31 @@ $('kImp').addEventListener('input',e=>setK(parseFloat(String(e.target.value).rep
 function setKMode(m){kMode=m;$('kPlazo').setAttribute('aria-pressed',m==='plazo');$('kCuota').setAttribute('aria-pressed',m==='cuota');renderRank()}
 $('kPlazo').onclick=()=>setKMode('plazo');$('kCuota').onclick=()=>setKMode('cuota');
 function renderCmp(){
-  let pend=0,mes=0,intR=0,maxP=0;
-  for(const id of ORDER){const {L,advs}=LOANS[id];const sch=schedule(L,advs);const b=balAt(L,sch,today);pend+=b;maxP=Math.max(maxP,b);
-    const nx=sch.rows.find(r=>r.fecha>today&&!r.vr);if(nx)mes+=isLeasing(L)?bruta(L,nx.cuota):nx.cuota;
-    for(const r of sch.rows)if(r.fecha>today)intR+=r.int}
-  $('gPend').textContent=eur(pend);$('gMes').textContent=eur(mes);$('gInt').textContent=eur(r2(intR));
+  const g={personal:{p:0,m:0},empresa:{p:0,m:0}};let maxP=0,fut=[];
+  for(const id of ORDER){const {L,advs}=LOANS[id];if(today<L.cfg.firma){fut.push(L.cfg.nombre);maxP=Math.max(maxP,L.cfg.total);continue}
+    const sch=schedule(L,advs);const b=balAt(L,sch,today);const G=g[L.G==='personal'?'personal':'empresa'];G.p+=b;maxP=Math.max(maxP,b);
+    const nx=sch.rows.find(r=>r.fecha>today&&!r.vr);if(nx)G.m+=isLeasing(L)?bruta(L,nx.cuota):nx.cuota}
+  $('gPend').textContent=eur(g.personal.p+g.empresa.p);
+  $('gPer').textContent=eur(g.personal.p);$('gPerM').textContent=eur0(g.personal.m);
+  $('gEmp').textContent=eur(g.empresa.p);$('gEmpM').textContent=eur0(g.empresa.m);
+  $('gNote').textContent=fut.length?`No incluye lo que aún no está firmado: ${fut.join(', ')}.`:'';
   const mx=Math.max(1000,Math.ceil(maxP/1000)*1000);$('kRange').max=String(mx);$('kMax').textContent=eur0(mx);
   setK(Math.min(kAmt,mx));
   const tips=[
-    'El ahorro es en intereses y ya tiene restada la comisión de cada contrato. No incluye impuestos.',
+    'El ahorro es en intereses y ya tiene restada la comisión de cada contrato. No incluye impuestos. Compara cada grupo por separado: lo personal lo pagáis vosotros y lo de la empresa, Conecta.',
     'El «Préstamo socios» lo pagáis vosotros y los intereses los cobra vuestra propia empresa: ese dinero no se pierde, se queda en casa (aunque la empresa tributa por él).',
     'Los leasing los paga la empresa. Sus intereses son gasto deducible y el IVA de las facturas también se recupera, así que el ahorro real después de impuestos es algo menor que el que ves aquí.',
     'Al adelantar capital en un leasing, el banco suele facturar ese capital con IVA (la empresa lo recupera después).'];
   const bb=LOANS.bbva&&LOANS.bbva.L.cfg.comision;if(bb&&bb.pct==null)tips.push('Del leasing de la nave no tengo la comisión de cancelación: hasta que la pongas en «Cambiar datos», se calcula como si no tuviera.');
   if(LOANS.hipoteca)tips.push('La hipoteca es la que tiene el interés más bajo (1,45 %) y fijo, y además tiene comisión, así que amortizarla es lo que menos ahorra.');
+  if(LOANS.casa)tips.push('Hipoteca casa nueva: cada año puedes adelantar hasta el 25 % de lo que debas a 31 de diciembre sin pagar comisión. Su interés (2,95 % con bonificaciones) es más alto que el de la hipoteca del piso, así que, entre las dos, sale más a cuenta amortizar esta.');
   if(LOANS.kona)tips.push('El leasing del Kona (Cetelem) no admite amortizaciones parciales: solo se puede cancelar entero, con un 5 % de comisión (mínimo 250 €).');
   $('tips').innerHTML=tips.map(t=>`<li>${esc(t)}</li>`).join('');
 }
 function renderRank(){
-  const f=today;const res=[];
+  const res=[];
   for(const id of ORDER){
-    const {L,advs}=LOANS[id];const cm=L.cfg.comision||{};
+    const {L,advs}=LOANS[id];const cm=L.cfg.comision||{};const f=today<L.cfg.firma?L.cfg.firma:today;
     const sch=schedule(L,advs);const pend=balAt(L,sch,f);
     if(pend<=0.004){res.push({id,L,txt:'Ya está pagado.',net:-1e9});continue}
     if(cm.parcial===false&&kAmt<pend+commission(L,pend,true,f)){
@@ -718,13 +737,15 @@ function renderRank(){
     res.push({id,L,s,net:s.net,use,txt:`${s.total?'Lo cancelas entero':'Adelantas '+eur0(use)}${s.com?` · comisión ${eur(s.com)}`:''}${m>0&&!s.total?` · terminas ${dur(m)} antes`:''}`});
   }
   res.sort((a,b)=>b.net-a.net);
-  const best=res.find(r=>r.s&&r.net>0);
-  const maxNet=Math.max(1,...res.filter(r=>r.s).map(r=>r.net));
-  $('rank').innerHTML=res.map(r=>{
+  const card=(r,best,maxNet)=>{
     const per=r.s&&r.use?` · ${eur(r.net/r.use*1000)} por cada 1.000 €`:'';
-    return `<div class="rk${r===best?' best':''}"><div class="h"><b>${r===best?'⭐ ':''}${esc(r.L.cfg.nombre)}</b><span class="sub">${esc(r.L.cfg.quien||'')}${isLeasing(r.L)?' · leasing':''}</span></div>
+    return `<div class="rk${r===best?' best':''}"><div class="h"><b>${r===best?'⭐ ':''}${esc(r.L.cfg.nombre)}</b><span class="sub">${esc(r.L.cfg.quien||'')}${isLeasing(r.L)?' · leasing':''}${today<r.L.cfg.firma?' · sin firmar':''}</span></div>
       ${r.s?`<div class="v num" style="${r.net<0?'color:var(--pink-d)':''}">${r.net<0?'':'+'}${eur(r.net)}</div><div class="tr"><i style="width:${Math.max(0,r.net/maxNet*100).toFixed(1)}%"></i></div>`:''}
-      <div class="sub">${esc(r.txt)}${per}${r.s&&r.L.cfg.comision&&r.L.cfg.comision.pct==null?' · comisión desconocida':''}</div></div>`}).join('')
+      <div class="sub">${esc(r.txt)}${per}${r.s&&r.L.cfg.comision&&r.L.cfg.comision.pct==null?' · comisión desconocida':''}</div></div>`};
+  const grp=(G,title,sub)=>{const rs=res.filter(r=>(r.L.G==='personal')===(G==='personal'));if(!rs.length)return '';
+    const best=rs.find(r=>r.s&&r.net>0);const maxNet=Math.max(1,...rs.filter(r=>r.s).map(r=>r.net));
+    return `<h2 style="margin-top:6px">${title}</h2><p class="note" style="margin-top:-6px">${sub}</p>`+rs.map(r=>card(r,best,maxNet)).join('')};
+  $('rank').innerHTML=grp('personal','Tu dinero (personal)','Préstamos que pagáis Alba y tú.')+grp('empresa','Dinero de la empresa','Leasing que paga Conecta.')
     +(kAmt>0?'':'<p class="note">Mueve la barra para comparar.</p>');
 }
 
