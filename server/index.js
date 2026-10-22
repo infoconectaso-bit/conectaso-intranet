@@ -194,7 +194,7 @@ async function api(req, res, url) {
   if (seg[0] === 'tyc') return tycApi(req, res, user, seg, method);
 
   // --- avisos del panel de inicio (admin) ---
-  if (['price-alerts', 'vacation-conflicts', 'itv-alerts', 'staff-conflicts', 'price-fix', 'dup-ack'].includes(seg[0])) return dashboardAlerts(req, res, user, seg, method);
+  if (['price-alerts', 'vacation-conflicts', 'itv-alerts', 'staff-conflicts', 'price-fix', 'dup-ack', 'salary-matrix'].includes(seg[0])) return dashboardAlerts(req, res, user, seg, method);
 
   // --- solicitudes de servicios extras (admin) ---
   if (seg[0] === 'extra-requests') return extraRequestsApi(req, res, user);
