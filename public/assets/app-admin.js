@@ -211,12 +211,13 @@ async function usuariosPage(openId) {
       { t: 'Email', get: u => u.email, html: u => esc((u.emailDuplicado ? u.emailOriginal : u.email) || '') },
       { t: 'Acceso', get: u => u.hasPassword ? 'Activo' : 'Sin activar', html: u => u.hasPassword ? '<span class="tag tag--green">Activo</span>' : '<span class="tag tag--grey">Sin activar</span>' },
       { t: 'TYC', get: u => u.role !== 'user' ? '—' : (u.tycSigned ? 'Firmado' : (u.tycExempt ? 'Firma no necesaria' : 'No firmado')), html: u => u.role !== 'user' ? '<span class="muted">—</span>' : (u.tycSigned ? `<a class="tyc-status tyc-status--ok" href="#/tyc-firma/${u.id}" title="Ver / descargar PDF firmado">✓ Firmado</a>` : (u.tycExempt ? '<span class="tyc-status tyc-status--na" title="Es el segundo acceso de la boda; ya firmó su pareja">Firma no necesaria</span>' : '<span class="tyc-status tyc-status--no">✕ No firmado</span>')) },
-      { t: '', nosort: true, nofilter: true, html: u => `<div class="row-actions">${u.role === 'user' ? `<button class="btn btn--icon" data-cal="${u.id}" title="${u.eventId ? 'Ver su boda' : 'Crear boda para este cliente'}">📅</button>` : ''}<button class="btn btn--icon" data-edit="${u.id}" title="Editar">${svg('edit')}</button><button class="btn btn--icon" data-invite="${u.id}" title="Reenviar mensaje de bienvenida">✉</button><button class="btn btn--icon" data-del="${u.id}" title="Dar de baja">🗑</button></div>` },
+      { t: '', nosort: true, nofilter: true, html: u => `<div class="row-actions">${u.role === 'user' ? `<button class="btn btn--icon" data-cal="${u.id}" title="${u.eventId ? 'Ver su boda' : 'Crear boda para este cliente'}">📅</button>` : ''}<button class="btn btn--icon" data-edit="${u.id}" title="Editar">${svg('edit')}</button><button class="btn btn--icon" data-magic="${u.id}" title="Entrar como este usuario (enlace de acceso directo, sin contraseña)">🔑</button><button class="btn btn--icon" data-invite="${u.id}" title="Reenviar mensaje de bienvenida">✉</button><button class="btn btn--icon" data-del="${u.id}" title="Dar de baja">🗑</button></div>` },
     ] })}</div></div>`, ['Usuarios']);
   el('newUser').onclick = () => userForm({}, users);
   bindTable('dtUsers', () => {
     $$('[data-edit]').forEach(b => b.onclick = () => userForm(users.find(u => u.id == b.dataset.edit), users));
     $$('[data-invite]').forEach(b => b.onclick = async () => { const r = await api('users/' + b.dataset.invite + '/invite', { method: 'POST' }); showInvite(r.invite); });
+    $$('[data-magic]').forEach(b => b.onclick = async () => { try { const r = await api('users/' + b.dataset.magic + '/magic-link'); showMagicLink(r); } catch (e) { toast(e.message || 'No se pudo generar el enlace', 'err'); } });
     $$('[data-cal]').forEach(b => b.onclick = () => calForUser(users.find(u => u.id == b.dataset.cal)));
     $$('[data-del]').forEach(b => b.onclick = () => {
       const u = users.find(x => x.id == b.dataset.del) || {};
@@ -248,6 +249,15 @@ function showInvite(invite) {
       ? `<p class="hint">⚠ No se pudo enviar el correo. Comparte el enlace de abajo a mano.</p>`
     : '';
   modal('Enlace de acceso', `${note}<p>Comparte este enlace con la persona para que cree su contraseña (caduca en 14 días):</p><input class="control" readonly value="${esc(invite.link)}" onclick="this.select()">`);
+}
+// "Entrar como": enlace de autologin (sin contraseña) para revisar la intranet como ese usuario.
+function showMagicLink(r) {
+  const who = r.user ? `<b>${esc(r.user.name || '')}</b>${r.user.role ? ` <span class="muted">(${esc(CS.roleLabel(r.user.role))})</span>` : ''}` : 'este usuario';
+  modal('Entrar como ' + (r.user ? esc(r.user.name || '') : 'usuario'),
+    `<p>Enlace de acceso directo (sin contraseña) para entrar como ${who} y ver la intranet tal como la ve${r.eventId ? ' — abre directamente su boda #' + r.eventId : ''}. Caduca en 7 días.</p>
+     <p class="hint">⚠ Ábrelo preferiblemente en una ventana de incógnito para no cerrar tu sesión de administración en esta pestaña.</p>
+     <input class="control" readonly value="${esc(r.link)}" onclick="this.select()">
+     <div class="btn-row" style="margin-top:12px"><a class="btn btn--primary" href="${esc(r.link)}" target="_blank" rel="noopener">Abrir en pestaña nueva</a></div>`);
 }
 function userForm(u, all) {
   const creating = !u.id;
