@@ -450,6 +450,26 @@ function paneRuta(ev) {
   const listo = target, inicioMontaje = target - mt.min, llegada = inicioMontaje, salida = llegada - travel;
   const hhmm = m => m < 0 ? _min2hm(m) + ' (día anterior)' : _min2hm(m);
   const row = (ic, t, time, sub) => `<div class="ruta-row"><div class="ruta-ic">${ic}</div><div class="ruta-main"><div class="ruta-t">${t}</div>${sub ? `<div class="ruta-sub muted">${sub}</div>` : ''}</div><div class="ruta-time">${time}</div></div>`;
+  // Escaleta musical: mismos momentos y orden que el resumen musical (fijos activos + personalizados por sección).
+  const musicHtml = (() => {
+    const opts = (ev.optionals || []).slice().sort((a, b) => (+a.order || 99) - (+b.order || 99));
+    const secs = musicAreasFor(ev).filter(a => !(a.key === 'ceremony' && ev.ceremoniaFuera))
+      .map(a => ({ key: a.key, title: a.title, moments: a.moments.map(mm => [a.key + '_' + mm[0], mm[1]]) }));
+    secs.push({ key: 'disco', title: 'Fiesta', moments: DISCO_MOMENTS.map(mm => ['disco_' + mm[0], mm[1]]) });
+    const mrow = (icon, title, song, link) => `<div class="ruta-mrow"><span class="m-ic">${icon}</span> <b>${esc(title)}</b>: ${song ? esc(song) : '<span class="muted">—</span>'} ${linkChip(link)}</div>`;
+    let blocks = '';
+    secs.forEach(s => {
+      const letter = s.key === 'disco' ? 'D' : (SEC_OF[s.key] || '');
+      const fixed = s.moments.map(([k, def], i) => { const mu = (ev.music || {})[k] || {}; if (mu.on || (!mu.song && !mu.link)) return null; return { order: +mu.order || (i + 1), html: mrow(momentIcon(k), momentTitle(ev, k, def), mu.song, mu.link) }; }).filter(Boolean);
+      const extra = opts.filter(o => (o.sec || 'C') === letter).map(o => ({ order: +o.order || 60, html: mrow('•', o.title || 'Momento', o.value, o.link) }));
+      const rows = fixed.concat(extra).sort((a, b) => a.order - b.order).map(x => x.html).join('');
+      if (rows) blocks += `<h5 class="ruta-msec">${esc(s.title)}</h5>${rows}`;
+    });
+    const ent = opts.filter(o => (o.sec || 'C') === 'E').map(o => mrow('•', 'Entrega: ' + (o.title || ''), o.value, o.link)).join('');
+    if (ent) blocks += `<h5 class="ruta-msec">Entregas</h5>${ent}`;
+    const pl = (ev.disco || {}).playlist; if (pl) blocks += `<div class="ruta-mrow"><span class="m-ic">🎶</span> <b>Playlist general</b>: ${esc(pl)} ${linkChip(pl)}</div>`;
+    return blocks ? `<h4 class="form-sub" style="margin-top:18px">🎵 Música</h4><div class="ruta-music">${blocks}</div>` : '';
+  })();
   return `${head}
     <p class="hint">Tiempos calculados automáticamente: desplazamiento desde Martorelles a <b>${esc(destName)}</b> (${travel} min${travelKm ? ' · ' + travelKm + ' km' : ''}) y montaje según el tipo de boda: <b>${esc(mt.regla)}</b> (${mt.min} min).</p>
     ${mt.note ? `<div class="alert alert--warn" style="margin-bottom:12px">⚠ ${esc(mt.note)}</div>` : ''}
@@ -465,6 +485,7 @@ function paneRuta(ev) {
       <div class="table-wrap"><table class="dt"><thead><tr><th>Servicio</th><th>Responsable(s)</th></tr></thead><tbody>
       ${(ev.services || []).filter(s => s.servicio).map(s => `<tr><td><b>${esc(extraName(s.servicio))}</b></td><td>${esc([s.resp, s.resp2].filter(Boolean).map(r => userName(r)).join(' · ') || 'Sin asignar')}</td></tr>`).join('')}
       </tbody></table></div>` : ''}
+    ${musicHtml}
     <div class="btn-row" style="margin-top:14px">
       <a class="btn btn--sm btn--primary" href="#/eventos/${ev.id}/ruta-doc">📄 Ver / imprimir hoja de ruta</a>
     </div>

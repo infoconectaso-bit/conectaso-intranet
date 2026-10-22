@@ -844,6 +844,9 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .ruta-t{font-weight:700}
 .ruta-sub{font-size:12px}
 .ruta-time{font-weight:800;font-size:17px;white-space:nowrap}
+.ruta-music .ruta-mrow{padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
+.ruta-music .ruta-mrow:last-child{border-bottom:0}
+.ruta-msec{margin:14px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#8a8390)}
 @media print{.sidebar,.topbar,.tabs,.tabs-row,.floatbar,.mtabs{display:none!important}.ruta-row{break-inside:avoid}}
 
 /* ======== Hoja de ruta · deck apaisado (portado de la demo) ======== */
