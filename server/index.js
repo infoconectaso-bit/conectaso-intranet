@@ -836,12 +836,35 @@ function priceAlerts() {
   return { groups: list, totalCombos: list.reduce((t, g) => t + g.services.length, 0), totalWorkers: list.length };
 }
 function extraNameOf(id) { const e = store.get('extras', id); return (e && e.name) || ('Servicio ' + id); }
+// Matriz de sueldos (solo lectura, admin): tarifas por trabajador × finca/pack/servicio + uso real
+// (cuántas veces ha trabajado cada uno en cada finca/servicio) para ver qué datos faltan.
+function salaryMatrix() {
+  const rates = store.setting('djRates') || {};
+  const workers = users.all().filter(u => u.role === 'dj' || u.worker_type || rates[String(u.id)])
+    .map(u => ({ id: u.id, name: u.name, role: u.role, worker_type: u.worker_type || '' }))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const fincas = store.all('locations').map(l => ({ id: l.id, name: l.name })).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const services = store.all('extras').map(e => ({ id: e.id, name: e.name })).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const packs = ['fiesta', 'bodorrio', 'tinglado'];
+  const usageFinca = {}, usageSvc = {}, usagePack = {};
+  store.all('events').forEach(e => {
+    if (e.djId) {
+      const w = String(e.djId);
+      if (e.lugar) (usageFinca[w] = usageFinca[w] || {})[e.lugar] = ((usageFinca[w] || {})[e.lugar] || 0) + 1;
+      const pk = ({ Fiesta: 'fiesta', Bodorrio: 'bodorrio', Tinglado: 'tinglado' })[e.tipo];
+      if (pk && !e.lugar) (usagePack[w] = usagePack[w] || {})[pk] = ((usagePack[w] || {})[pk] || 0) + 1;
+    }
+    (e.services || []).forEach(s => { [s.resp, s.resp2].forEach(r => { if (!r) return; const w = String(r); (usageSvc[w] = usageSvc[w] || {})[s.servicio] = (((usageSvc[w] || {})[s.servicio]) || 0) + 1; }); });
+  });
+  return { workers, fincas, services, packs, rates, usageFinca, usageSvc, usagePack };
+}
 async function dashboardAlerts(req, res, user, seg, method) {
   if (!user || user.role !== 'admin') return fail(res, 403, 'Sin acceso');
   if (seg[0] === 'staff-conflicts') return ok(res, staffConflicts());
   if (seg[0] === 'vacation-conflicts') return ok(res, vacationConflicts());
   if (seg[0] === 'itv-alerts') return ok(res, itvAlerts());
   if (seg[0] === 'price-alerts') return ok(res, priceAlerts());
+  if (seg[0] === 'salary-matrix') return ok(res, salaryMatrix());
   if (seg[0] === 'price-fix' && method === 'POST') {
     const body = await readBody(req);
     const wid = +body.workerId, sid = +body.serviceId, amt = Math.round(+body.amount || 0);
