@@ -782,7 +782,9 @@ on(/^#\/nominas$/, async () => {
   let targetId = S.user.id, workers = [];
   if (admin) {
     const us = await api('users').catch(() => ({ users: [] }));
-    workers = (us.users || []).filter(u => u.time_tracking || u.role === 'dj').sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es'));
+    // Solo trabajadores con control horario (fichaje) + estos dos por id: Iván Candela DJ (723) y Josué Lights (292).
+    const NOM_EXTRA_IDS = [723, 292];
+    workers = (us.users || []).filter(u => u.time_tracking || NOM_EXTRA_IDS.includes(u.id)).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es'));
     targetId = workers.length ? workers[0].id : S.user.id;
   }
   return renderNominas(targetId, admin, workers);
