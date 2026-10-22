@@ -1009,8 +1009,9 @@ on(/^#\/analisis$/, async () => {
   const years = a.years || [];
   const eur = n => (Math.round(+n || 0)).toLocaleString('es-ES') + ' €';
   const sum = o => Object.values(o || {}).reduce((s, v) => s + v, 0);
-  const crossTable = (obj, firstHdr, fmt) => {
-    const keys = Object.keys(obj || {}).sort((x, y) => sum(obj[y]) - sum(obj[x]));
+  const crossTable = (obj, firstHdr, fmt, minTotal) => {
+    let keys = Object.keys(obj || {}).sort((x, y) => sum(obj[y]) - sum(obj[x]));
+    if (minTotal) keys = keys.filter(k => sum(obj[k]) >= minTotal);
     if (!keys.length) return '<div class="empty">Sin datos.</div>';
     const f = fmt || (v => v || 0);
     return `<div class="table-wrap"><table class="dt"><thead><tr><th>${esc(firstHdr)}</th>${years.map(y => `<th style="text-align:right">${y}</th>`).join('')}<th style="text-align:right">Total</th></tr></thead><tbody>${keys.map(k => `<tr><td><b>${esc(k)}</b></td>${years.map(y => `<td style="text-align:right">${f(obj[k][y] || 0)}</td>`).join('')}<td style="text-align:right"><b>${f(sum(obj[k]))}</b></td></tr>`).join('')}</tbody></table></div>`;
@@ -1024,7 +1025,7 @@ on(/^#\/analisis$/, async () => {
   const econ = a.economico || [];
   const econRows = econ.slice(-18).reverse();
   const html = [
-    sect('Bodas por masía y año', crossTable(a.ventasMasia, 'Masía')),
+    sect('Bodas por masía y año', crossTable(a.ventasMasia, 'Masía', null, 2), 'Solo masías con 2 o más bodas'),
     sect('Bodas por pack y año', crossTable(a.ventasPack, 'Pack')),
     a.holdedOk ? sect('Facturación de masías por año', crossTable(a.masiaAnual, 'Masía', eur), 'Importe facturado (sin IVA) desde Holded') : sect('Facturación de masías', '<div class="empty">Holded no está activado.</div>'),
     a.holdedOk ? sect('Media económica por boda y mes', `<div class="table-wrap"><table class="dt"><thead><tr><th>Mes</th><th style="text-align:right">Facturado masías</th><th style="text-align:right">Bodas</th><th style="text-align:right">Media / boda</th></tr></thead><tbody>${econRows.map(m => `<tr><td><b>${esc(m.mes)}</b></td><td style="text-align:right">${eur(m.facturado)}</td><td style="text-align:right">${m.bodas}</td><td style="text-align:right"><b>${eur(m.media)}</b></td></tr>`).join('')}</tbody></table></div>`, 'Facturación de masías ÷ nº de bodas realizadas cada mes') : '',
