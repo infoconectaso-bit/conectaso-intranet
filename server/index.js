@@ -282,17 +282,20 @@ async function api(req, res, url) {
   // --- diagnóstico: muestra de FACTURAS de Holded para entender su forma (admin) ---
   if (seg[0] === 'holded-invoices-test' && (method === 'POST' || method === 'GET')) {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
-    try {
-      const all = await holded.listInvoices({ maxPages: 2 });
-      const first = all[0] || null;
-      const sample = all.slice(0, 5).map(x => ({
-        id: x.id, docNumber: x.docNumber, contact: x.contact, contactName: x.contactName,
-        date: x.date, dueDate: x.dueDate, total: x.total, subtotal: x.subtotal, tax: x.tax,
-        paymentsTotal: x.paymentsTotal, paymentsPending: x.paymentsPending, status: x.status,
-        customFields: x.customFields, contactEmail: x.contactEmail,
-      }));
-      return ok(res, { ok: true, count: all.length, keys: first ? Object.keys(first) : [], sample });
-    } catch (e) { return ok(res, { ok: false, error: e.message }); }
+    const probes = {};
+    const paths = ['/invoices', '/documents/invoice', '/documents?type=invoice', '/sales/invoices',
+      '/invoicing/invoices', '/documents', '/contacts', '/numberingseries'];
+    for (const p of paths) {
+      try {
+        const d = await holded.apiGet(p);
+        let shape;
+        if (Array.isArray(d)) shape = { type: 'array', n: d.length, keys0: d[0] ? Object.keys(d[0]).slice(0, 18) : [], first: d[0] || null };
+        else if (d && typeof d === 'object') shape = { type: 'object', keys: Object.keys(d).slice(0, 15), itemsN: Array.isArray(d.items) ? d.items.length : (Array.isArray(d.data) ? d.data.length : null) };
+        else shape = { type: typeof d, value: String(d).slice(0, 80) };
+        probes[p] = shape;
+      } catch (e) { probes[p] = { error: String(e.message).slice(0, 140) }; }
+    }
+    return ok(res, { ok: true, probes });
   }
 
   // --- recolocación de momentos personalizados en su sección real (admin) ---
