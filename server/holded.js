@@ -193,6 +193,26 @@ async function invoicesForClient({ emails = [], nifs = [], names = [] } = {}, fo
   return { contact: primary ? { id: primary.id, name: primary.name } : null, contacts, invoices, matchedBy, indexInfo: { contactsN: idx.contactsN, invoicesN: idx.invoicesN } };
 }
 
+/** Todas las facturas con importe pendiente (impagos), enriquecidas con el contacto.
+ * El pendiente se da CON IVA (lo que realmente se debe). Ordenadas por vencimiento. */
+async function allUnpaid(force) {
+  const idx = await buildIndex(force);
+  const out = [];
+  Object.values(idx.byId).forEach(c => {
+    (c.invoices || []).forEach(inv => {
+      const m = mapInvoice(inv);
+      const pending = Math.max(0, Math.round((m.totalConIva - m.paidConIva) * 100) / 100);
+      if (pending > 0.009) out.push({
+        id: m.id, number: m.number, date: m.date, dueDate: m.dueDate, desc: m.desc,
+        base: m.total, iva: m.tax, total: m.totalConIva, paid: m.paidConIva, pending, status: m.status,
+        contactId: c.id, contactName: c.name, contactEmails: c.emails, contactCode: c.code,
+      });
+    });
+  });
+  out.sort((a, b) => String(a.dueDate || a.date || '').localeCompare(String(b.dueDate || b.date || '')));
+  return out;
+}
+
 /** Diagnóstico: busca en contactos y facturas por subcadena (nombre/NIF/email). Admin. */
 async function findByText(q, force) {
   const idx = await buildIndex(force);
@@ -281,4 +301,4 @@ async function testPayslips() {
   return { ok: true, probes };
 }
 
-module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };
+module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };

@@ -285,6 +285,42 @@ async function api(req, res, url) {
     try { return ok(res, await holded.findByText(url.searchParams.get('q') || '')); }
     catch (e) { return ok(res, { ok: false, error: e.message }); }
   }
+  // --- IMPAGOS: facturas con importe pendiente, con cliente, concepto y enlace a su boda (admin) ---
+  if (seg[0] === 'holded-unpaid' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (!holded.enabled()) return ok(res, { enabled: false, invoices: [] });
+    try {
+      const list = await holded.allUnpaid(url.searchParams.get('refresh') === '1');
+      const normE = s => String(s || '').trim().toLowerCase();
+      const normN = s => String(s || '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+      const normNm = s => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const evByKey = {};
+      store.all('events').forEach(e => {
+        const ev = { id: e.id, conyuges: e.conyuges || '', fecha: e.fecha || '' };
+        (e.spouses || []).forEach(s => { if (s) { if (s.email) evByKey['e:' + normE(s.email)] = ev; if (s.dni) evByKey['n:' + normN(s.dni)] = ev; if (s.name) evByKey['m:' + normNm(s.name)] = ev; } });
+        const u = users.get(e.userId); if (u && u.email) evByKey['e:' + normE(u.email)] = ev;
+      });
+      const today = bizToday();
+      const out = list.map(inv => {
+        let evp = null;
+        (inv.contactEmails || []).forEach(em => { if (!evp) evp = evByKey['e:' + normE(em)]; });
+        if (!evp && inv.contactCode) evp = evByKey['n:' + normN(inv.contactCode)];
+        if (!evp && inv.contactName) evp = evByKey['m:' + normNm(inv.contactName)];
+        return Object.assign({}, inv, { event: evp || null, overdue: !!(inv.dueDate && inv.dueDate < today) });
+      });
+      return ok(res, { enabled: true, count: out.length, invoices: out });
+    } catch (e) { return ok(res, { enabled: true, error: e.message, invoices: [] }); }
+  }
+  // --- PDF de cualquier factura de Holded (admin, para el apartado de impagos) ---
+  if (seg[0] === 'holded-pdf' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const invId = url.searchParams.get('inv'); if (!invId) return fail(res, 400, 'Falta la factura.');
+    try {
+      const buf = await holded.getInvoicePdf(invId);
+      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="factura-${invId}.pdf"`, 'Content-Length': buf.length });
+      return res.end(buf);
+    } catch (e) { return fail(res, 502, 'No se pudo obtener el PDF: ' + e.message); }
+  }
   // --- diagnóstico: muestra de FACTURAS de Holded para entender su forma (admin) ---
   if (seg[0] === 'holded-invoices-test' && (method === 'POST' || method === 'GET')) {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
