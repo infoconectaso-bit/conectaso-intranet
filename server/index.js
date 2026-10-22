@@ -283,16 +283,11 @@ async function api(req, res, url) {
   if (seg[0] === 'holded-invoices-test' && (method === 'POST' || method === 'GET')) {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     try {
-      const page = await holded.apiGet('/invoices?limit=3');
-      const items = (page && page.items) || [];
-      const first = items[0] || null;
-      const contactKeys = first && first.contact && typeof first.contact === 'object' ? Object.keys(first.contact) : null;
-      const sample = items.map(x => ({
-        id: x.id, docNumber: x.docNumber || x.number, date: x.date, status: x.status, paymentStatus: x.payment_status || x.paymentStatus,
-        total: x.total, paid: x.paid || x.paid_amount, pending: x.pending || x.pending_amount,
-        contact: x.contact, contactName: x.contact_name || x.contactName, contactEmail: x.contact_email || x.contactEmail,
-      }));
-      return ok(res, { ok: true, total: items.length, itemKeys: first ? Object.keys(first) : [], contactShape: contactKeys, sample });
+      const cpage = await holded.apiGet('/contacts?limit=3');
+      const citems = (cpage && cpage.items) || [];
+      const cFirst = citems[0] || null;
+      const cSample = citems.map(c => ({ id: c.id, name: c.name, email: c.email, emails: c.emails, phone: c.phone, code: c.code, nif: c.nif || c.vat_number || c.tax_id }));
+      return ok(res, { ok: true, contactKeys: cFirst ? Object.keys(cFirst) : [], contactsSample: cSample });
     } catch (e) { return ok(res, { ok: false, error: e.message }); }
   }
 
