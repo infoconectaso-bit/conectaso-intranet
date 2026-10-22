@@ -849,7 +849,46 @@ function paneFacturacion(ev) {
     ${eventFinished(ev) ? `<h4 class="form-sub" style="margin-top:18px">Albarán de trabajo del DJ</h4>
       <div class="form-grid">${fg('Horas extra realizadas', sel('dj_assigned_overtime', [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas', '4 hora y media', '5 Horas'], ev.djOvertime))}${fg('Pedir opinión', sel('ask_for_opinion', [['', '—'], 'Si', 'No'], ev.opinion))}</div>
       ${fg('Observaciones del DJ', ta('dj_observations', ev.obsDj))}
-      ${ev.djId ? `<div class="btn-row" style="margin-top:12px"><button type="button" class="btn btn--sm btn--blue" data-albaran-link title="Genera el enlace de autologin para que el DJ rellene su parte">🔗 Enlace parte de trabajo del DJ</button></div>` : ''}` : ''}</div></div>`;
+      ${ev.djId ? `<div class="btn-row" style="margin-top:12px"><button type="button" class="btn btn--sm btn--blue" data-albaran-link title="Genera el enlace de autologin para que el DJ rellene su parte">🔗 Enlace parte de trabajo del DJ</button></div>` : ''}` : ''}</div></div>
+  <div id="holdedFacturas" style="margin-top:16px"><div class="panel"><div class="panel__body"><span class="muted">Cargando facturas…</span></div></div></div>`;
+}
+// Facturas de Holded del cliente de la boda. Se cargan al abrir la pestaña Facturación.
+async function loadHoldedFacturas(ev) {
+  const box = el('holdedFacturas'); if (!box) return;
+  let r;
+  try { r = await api('events/' + ev.id + '/holded-invoices'); }
+  catch (e) { box.innerHTML = ''; return; }
+  if (!r || r.enabled === false) { box.innerHTML = ''; return; }  // integración apagada → no mostrar nada
+  const eur = n => (Math.round((+n || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  const invs = r.invoices || [];
+  const admin = isAdmin();
+  const matchLbl = { email: 'por email', nif: 'por NIF/DNI', name: 'por nombre' }[r.matchedBy] || '';
+  const head = `<div class="panel__head"><h3>Facturas de Holded</h3>${admin && r.contact ? `<span class="muted" style="font-size:12px">${esc(r.contact.name || '')}${matchLbl ? ' · ' + matchLbl : ''}</span>` : ''}</div>`;
+  if (r.error) { box.innerHTML = `<div class="panel">${head}<div class="panel__body"><div class="alert alert--warn">No se pudieron cargar las facturas: ${esc(r.error)}</div></div></div>`; return; }
+  if (!invs.length) {
+    box.innerHTML = `<div class="panel">${head}<div class="panel__body"><p class="hint">No hay facturas de Holded vinculadas a este cliente${admin ? ' (no se ha encontrado su contacto por email, NIF ni nombre).' : '.'}</p></div></div>`;
+    return;
+  }
+  const statusChip = i => i.paidFull ? '<span class="tag tag--green">Pagada</span>' : (i.paid > 0 ? '<span class="tag tag--yellow">Parcial</span>' : '<span class="tag tag--grey">Pendiente</span>');
+  const rows = invs.map(i => `<tr>
+      <td><b>${esc(i.number || '—')}</b></td>
+      <td>${esc(slash(i.date) || '')}</td>
+      <td>${esc(i.desc || '')}</td>
+      <td style="text-align:right">${eur(i.total)}</td>
+      <td style="text-align:right">${eur(i.paid)}</td>
+      <td style="text-align:right">${i.pending > 0 ? eur(i.pending) : '—'}</td>
+      <td>${statusChip(i)}</td>
+      <td><a class="btn btn--icon" href="/api/events/${ev.id}/holded-invoice-pdf?inv=${encodeURIComponent(i.id)}" target="_blank" rel="noopener" title="Ver / descargar PDF">📄</a></td>
+    </tr>`).join('');
+  const t = r.totals || { total: 0, paid: 0, pending: 0 };
+  box.innerHTML = `<div class="panel">${head}<div class="panel__body">
+    <div class="table-wrap"><table class="dt"><thead><tr><th>Nº</th><th>Fecha</th><th>Concepto</th><th style="text-align:right">Total</th><th style="text-align:right">Pagado</th><th style="text-align:right">Pendiente</th><th>Estado</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr class="fact-sub"><td colspan="3"><b>Totales</b></td><td style="text-align:right"><b>${eur(t.total)}</b></td><td style="text-align:right"><b>${eur(t.paid)}</b></td><td style="text-align:right"><b>${t.pending > 0 ? eur(t.pending) : '—'}</b></td><td colspan="2"></td></tr></tfoot>
+    </table></div>
+    ${admin ? `<div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn--sm" id="holdedRefresh" title="Vuelve a leer contactos y facturas de Holded">↻ Actualizar desde Holded</button></div>` : ''}
+  </div></div>`;
+  const rf = el('holdedRefresh'); if (rf) rf.onclick = async () => { rf.disabled = true; rf.textContent = 'Actualizando…'; try { await api('events/' + ev.id + '/holded-invoices?refresh=1'); } catch (e) {} loadHoldedFacturas(ev); };
 }
 
 /* --- interacción del formulario de evento --- */
@@ -973,7 +1012,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   enhanceSearchSelects(form);
   // pestañas
   const tabs = el('evTabs');
-  if (tabs) tabs.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; $$('[data-tab]', tabs).forEach(x => x.classList.toggle('on', x === b)); $$('[data-pane]', form).forEach(p => p.style.display = p.dataset.pane === b.dataset.tab ? '' : 'none'); if (b.dataset.tab === 'archivos') loadFiles(ev); if (b.dataset.tab === 'ruta' && typeof loadRutaPlano === 'function') loadRutaPlano(ev); });
+  if (tabs) tabs.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; $$('[data-tab]', tabs).forEach(x => x.classList.toggle('on', x === b)); $$('[data-pane]', form).forEach(p => p.style.display = p.dataset.pane === b.dataset.tab ? '' : 'none'); if (b.dataset.tab === 'archivos') loadFiles(ev); if (b.dataset.tab === 'ruta' && typeof loadRutaPlano === 'function') loadRutaPlano(ev); if (b.dataset.tab === 'facturacion' && typeof loadHoldedFacturas === 'function') loadHoldedFacturas(ev); });
   // añadir plus (admin, solo boda finalizada)
   function wirePlus() {
     const pb = form.querySelector('#addPlusBtn'); if (!pb) return;
