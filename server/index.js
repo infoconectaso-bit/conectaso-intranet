@@ -273,6 +273,12 @@ async function api(req, res, url) {
     try { const r = await holded.testConnection(); return ok(res, { ok: true, sample: r.sample }); }
     catch (e) { return ok(res, { ok: false, error: e.message }); }
   }
+  // --- probar el acceso a NÓMINAS de Holded (admin · scope Contabilidad) ---
+  if (seg[0] === 'holded-payslips-test' && (method === 'POST' || method === 'GET')) {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    try { const r = await holded.testPayslips(); return ok(res, r); }
+    catch (e) { return ok(res, { ok: false, error: e.message }); }
+  }
 
   return fail(res, 404, 'Ruta no encontrada');
 }

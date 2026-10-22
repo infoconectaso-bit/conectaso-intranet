@@ -3,7 +3,7 @@
  * Integración con Holded (API de facturación).
  * - La clave de API se guarda en el setting 'holdedConfig' (nunca se devuelve al navegador).
  * - Solo LECTURA: leemos facturas y contactos; jamás escribimos en Holded.
- * Autenticación: cabecera 'key: <apiKey>'. Base: https://api.holded.com/api/invoicing/v1
+ * Autenticación: token v2 → 'Authorization: Bearer <apiKey>'. Base: https://api.holded.com/api/v2
  */
 const { store } = require('./db');
 
@@ -58,4 +58,61 @@ async function listInvoices({ maxPages = 10 } = {}) {
 /** Devuelve una factura concreta (para inspeccionar campos: base imponible, estado de pago…). */
 function getInvoice(id) { return apiGet('/invoices/' + encodeURIComponent(id)); }
 
-module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice };
+/* =========================================================================
+   NÓMINAS (Holded · Contabilidad → Nóminas · scope accounting:payrolls.read)
+   GET /api/v2/payslips  → { items:[...], cursor, has_more }
+   GET /api/v2/payslips/{id}/pdf → PDF binario
+   ========================================================================= */
+
+/** Lista TODAS las nóminas (pagina con cursor). Devuelve el array de items.
+ * Cada item: { id, employee_id, employee_name, payslip_kind, date, period_start,
+ *   period_end, payment_status, net_salary, ... }. */
+async function listPayslips({ maxPages = 50, limit = 200, filters = {} } = {}) {
+  const out = [];
+  let cursor = null;
+  for (let p = 0; p < maxPages; p++) {
+    const qs = new URLSearchParams({ limit: String(limit) });
+    if (cursor) qs.set('cursor', cursor);
+    for (const [k, v] of Object.entries(filters)) if (v != null && v !== '') qs.set(k, String(v));
+    const page = await apiGet('/payslips?' + qs.toString());
+    const arr = (page && Array.isArray(page.items)) ? page.items : (Array.isArray(page) ? page : []);
+    out.push(...arr);
+    cursor = page && page.cursor;
+    if (!cursor || (page && page.has_more === false) || !arr.length) break;
+  }
+  return out;
+}
+
+/** Descarga el PDF de una nómina. Devuelve un Buffer (application/pdf) o lanza error. */
+async function getPayslipPdf(id) {
+  const c = getConfig();
+  if (!c.apiKey) throw new Error('Falta la clave de API de Holded.');
+  const url = BASE + '/payslips/' + encodeURIComponent(id) + '/pdf';
+  const attempts = [{ Authorization: 'Bearer ' + c.apiKey }, { key: c.apiKey }];
+  let lastErr = 'desconocido';
+  for (const h of attempts) {
+    let r;
+    try { r = await fetch(url, { headers: Object.assign({ Accept: 'application/pdf' }, h) }); }
+    catch (e) { throw new Error('No se pudo conectar con Holded: ' + e.message); }
+    if (r.ok) { const ab = await r.arrayBuffer(); return Buffer.from(ab); }
+    let t = ''; try { t = await r.text(); } catch (e) {}
+    lastErr = t || ('HTTP ' + r.status);
+    if (r.status !== 401 && r.status !== 403) break;
+  }
+  throw new Error('Holded respondió con error al descargar el PDF: ' + lastErr);
+}
+
+/** Comprueba que el token tiene permiso de Contabilidad/Nóminas. Devuelve {ok, count, sample}. */
+async function testPayslips() {
+  const items = await listPayslips({ maxPages: 1, limit: 5 });
+  return {
+    ok: true,
+    count: items.length,
+    sample: items.map(i => ({
+      employee: i.employee_name, kind: i.payslip_kind,
+      period: (i.period_start || i.date || '').slice(0, 7), status: i.payment_status,
+    })),
+  };
+}
+
+module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listPayslips, getPayslipPdf, testPayslips };
