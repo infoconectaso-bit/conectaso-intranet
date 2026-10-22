@@ -129,14 +129,17 @@ function parseAmount(v) {
 async function buildIndex(force) {
   if (!force && _idx && (Date.now() - _idxAt) < IDX_TTL) return _idx;
   const [contacts, invoices] = await Promise.all([listContacts(), listInvoices()]);
+  // Un mismo NIF/email/nombre puede estar en VARIOS contactos (Holded permite duplicados), así que
+  // cada clave apunta a una LISTA de contactos y luego se unen sus facturas.
   const byId = {}, byEmail = {}, byNif = {}, byName = {};
+  const push = (map, k, cid) => { if (!k) return; (map[k] = map[k] || []); if (!map[k].includes(cid)) map[k].push(cid); };
   contacts.forEach(c => {
     const emails = [c.email].concat(Array.isArray(c.extra_emails) ? c.extra_emails : []).filter(Boolean);
     const entry = { id: c.id, name: c.name || '', emails, code: c.code || c.vat_number || '', invoices: [] };
     byId[c.id] = entry;
-    emails.forEach(e => { byEmail[normEmail(e)] = c.id; });
-    [c.code, c.vat_number].filter(Boolean).forEach(n => { byNif[normNif(n)] = c.id; });
-    if (c.name) byName[normName(c.name)] = c.id;
+    emails.forEach(e => push(byEmail, normEmail(e), c.id));
+    [c.code, c.vat_number].filter(Boolean).forEach(n => push(byNif, normNif(n), c.id));
+    if (c.name) push(byName, normName(c.name), c.id);
   });
   invoices.forEach(inv => { const e = byId[inv.contact_id]; if (e) e.invoices.push(inv); });
   _idx = { byId, byEmail, byNif, byName, contactsN: contacts.length, invoicesN: invoices.length, builtAt: Date.now() };
@@ -173,7 +176,7 @@ async function invoicesForClient({ emails = [], nifs = [], names = [] } = {}, fo
   const includeName = opts.includeName !== false;
   const idx = await buildIndex(force);
   const hits = []; const seen = new Set();
-  const add = (cid, by) => { if (cid && !seen.has(cid)) { seen.add(cid); hits.push({ cid, by }); } };
+  const add = (ids, by) => { (ids || []).forEach(cid => { if (cid && !seen.has(cid)) { seen.add(cid); hits.push({ cid, by }); } }); };
   emails.forEach(e => add(idx.byEmail[normEmail(e)], 'email'));
   nifs.forEach(n => add(idx.byNif[normNif(n)], 'nif'));
   if (includeName) names.forEach(nm => add(idx.byName[normName(nm)], 'name'));
