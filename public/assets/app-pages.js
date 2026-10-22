@@ -216,8 +216,11 @@ async function eventsList(done) {
     yearBar = `<div class="yrbar">${chip('12m', 'Últimos 12 meses')}${years.map(y => chip(y, y)).join('')}${chip('all', 'Todos los años')}</div>`;
   }
   const tblId = done ? 'dtDone_' + DONE_VIEW.sel : 'dtTodo';
+  // La columna "Fecha" cambia de índice según el rol (el admin tiene una columna "Tipo" extra).
+  // Ordenamos SIEMPRE por fecha: ascendente en pendientes (próxima primero), descendente en realizadas.
+  const fechaIdx = cols.findIndex(c => c.t === 'Fecha');
   const legend = (admin || S.user.role === 'dj') ? `<details class="estado-leg-wrap"><summary>Mostrar leyenda de estados</summary><div class="estado-leg" title="El color del número de evento indica su estado">${(S.meta.estados || []).map(s => `<span><i style="background:${s.c}"></i>${esc(s.n)}</span>`).join('')}</div></details>` : '';
-  shell(`${pageHead(title, lead)}<div class="panel"><div class="panel__body">${yearBar}${table(tblId, { rows: evs, order: [3, done ? 'desc' : 'asc'], filters: admin, cols, dense: true, len: 25, empty: 'No hay bodas en esta lista.' })}${legend}</div></div>`, ['Eventos', title]);
+  shell(`${pageHead(title, lead)}<div class="panel"><div class="panel__body">${yearBar}${table(tblId, { rows: evs, order: [fechaIdx, done ? 'desc' : 'asc'], filters: admin, cols, dense: true, len: 25, empty: 'No hay bodas en esta lista.' })}${legend}</div></div>`, ['Eventos', title]);
   if (admin) $$('[data-del-event]').forEach(b => b.onclick = () => confirmDeleteEvent(+b.dataset.delEvent, done));
   $$('[data-yr]').forEach(b => b.onclick = () => { DONE_VIEW.sel = b.dataset.yr; eventsList(true); });
 }
