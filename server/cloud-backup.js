@@ -11,10 +11,16 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { store, users } = require('./db');
+const { execFile } = require('child_process');
+const { store, users, DATA_DIR } = require('./db');
 const mail = require('./mail');
 
-const PREFIX = 'conectaso/';                 // carpeta dentro del bucket
+const PREFIX = 'conectaso/';                 // carpeta dentro del bucket (base de datos)
+const FILES_PREFIX = 'conectaso-archivos/';  // carpeta dentro del bucket (archivos subidos: nóminas, planos…)
+const UPLOADS = path.join(DATA_DIR, 'uploads');
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
+let lastFilesOk = null;                       // { date, skipped? }
+let lastFilesError = null;
 let lastOk = null;                            // { key, date }
 let lastError = null;                         // { message, date }
 let lastAlert = 0;
@@ -79,17 +85,18 @@ async function uploadFile(localPath, objectKey) {
   return true;
 }
 
-// Lista objetos bajo PREFIX. Devuelve [{ key, time }] (time deducido del nombre conectaso-YYYYMMDD-HHMMSS.db).
+// Lista objetos bajo un prefijo. Devuelve [{ key, time }] (time deducido del nombre -YYYYMMDD-HHMMSS.ext).
 const RE = /conectaso-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.db$/;
-async function listRemote() {
+const FILE_RE = /conectaso-archivos-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.tar$/;
+async function listRemote(prefix = PREFIX, re = RE) {
   const out = [];
   let token = null;
   do {
-    const query = { 'list-type': '2', 'prefix': PREFIX, 'max-keys': '1000' };
+    const query = { 'list-type': '2', 'prefix': prefix, 'max-keys': '1000' };
     if (token) query['continuation-token'] = token;
     const xml = await s3('GET', '', { query });
     const keys = [...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map(m => m[1]);
-    keys.forEach(k => { const m = RE.exec(k); if (m) out.push({ key: k, time: new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() }); });
+    keys.forEach(k => { const m = re.exec(k); if (m) out.push({ key: k, time: new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() }); });
     const t = /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(xml);
     const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
     token = truncated && t ? t[1] : null;
@@ -97,15 +104,60 @@ async function listRemote() {
   return out.sort((a, b) => b.time - a.time);
 }
 
-// Limpieza remota con el MISMO criterio que en local: todas las de 48 h; 1/día hasta 30 días; el resto se borra.
-async function pruneRemote() {
-  const files = await listRemote();
+// Limpieza remota: todas las de <allDays> días; 1/día hasta <dailyDays> días; el resto se borra.
+async function pruneRemote(prefix = PREFIX, re = RE, allDays = 1, dailyDays = 30) {
+  const files = await listRemote(prefix, re);
   const now = Date.now(), DAY = 86400000, keep = new Set(), daily = {};
   files.forEach(f => {
-    if (now - f.time <= 1 * DAY) { keep.add(f.key); return; }
-    if (now - f.time <= 30 * DAY) { const d = new Date(f.time).toISOString().slice(0, 10); if (!daily[d]) { daily[d] = 1; keep.add(f.key); } return; }
+    if (now - f.time <= allDays * DAY) { keep.add(f.key); return; }
+    if (now - f.time <= dailyDays * DAY) { const d = new Date(f.time).toISOString().slice(0, 10); if (!daily[d]) { daily[d] = 1; keep.add(f.key); } return; }
   });
   for (const f of files) { if (!keep.has(f.key)) { try { await s3('DELETE', f.key); } catch (e) {} } }
+}
+
+// --- Copia de los ARCHIVOS subidos (/data/uploads): nóminas, planos, adjuntos de eventos, logos de fotomatón… ---
+const pad2 = n => String(n).padStart(2, '0');
+function stamp(d) { d = d || new Date(); return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + '-' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()); }
+// Firma barata de la carpeta: nº de archivos + bytes + mtime más reciente. Si no cambia, no se vuelve a subir.
+function filesSignature() {
+  let count = 0, bytes = 0, maxM = 0;
+  const walk = d => {
+    let ents = []; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; }
+    for (const e of ents) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else { try { const s = fs.statSync(p); count++; bytes += s.size; if (s.mtimeMs > maxM) maxM = s.mtimeMs; } catch (_) {} } }
+  };
+  walk(UPLOADS);
+  return count + ':' + bytes + ':' + Math.round(maxM);
+}
+function makeTar(dest) {
+  // tar sin comprimir (los PDF/imágenes ya están comprimidos); busybox tar lo soporta siempre.
+  return new Promise((resolve, reject) => { execFile('tar', ['-cf', dest, '-C', UPLOADS, '.'], { maxBuffer: 4 * 1024 * 1024 }, err => err ? reject(err) : resolve()); });
+}
+let filesPruneCheck = 0;
+// Sube la carpeta de archivos SOLO si ha cambiado desde la última copia. No lanza; registra y avisa.
+async function syncFiles() {
+  if (!enabled()) return;
+  try {
+    if (!fs.existsSync(UPLOADS)) return;
+    const sig = filesSignature();
+    if (sig === '0:0:0') return;                         // no hay nada subido todavía
+    if (store.setting('filesBackupSig') === sig) { lastFilesOk = { date: new Date().toISOString(), skipped: true }; return; } // sin cambios
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const name = 'conectaso-archivos-' + stamp() + '.tar';
+    const tmp = path.join(BACKUP_DIR, name);
+    await makeTar(tmp);
+    try {
+      await uploadFile(tmp, FILES_PREFIX + name);
+      store.setSetting('filesBackupSig', sig);
+      lastFilesOk = { date: new Date().toISOString(), name };
+    } finally {
+      try { fs.unlinkSync(tmp); } catch (e) {}           // el tar local es redundante (los archivos ya están en disco)
+    }
+    if (Date.now() - filesPruneCheck > 6 * 60 * 60 * 1000) { filesPruneCheck = Date.now(); try { await pruneRemote(FILES_PREFIX, FILE_RE, 14, 90); } catch (e) {} }
+  } catch (e) {
+    lastFilesError = { message: e.message, date: new Date().toISOString() };
+    console.error('[cloud-backup] fallo al subir archivos:', e.message);
+    alertFail(e);
+  }
 }
 
 // Se llama tras cada snapshot local correcto. No lanza: registra y avisa. No bloquea el backup local.
@@ -152,11 +204,13 @@ async function test() {
 }
 
 async function statusAsync() {
-  const base = { configured: enabled(), lastOk, lastError };
+  const base = { configured: enabled(), lastOk, lastError, filesOk: lastFilesOk, filesError: lastFilesError };
   if (!enabled()) return base;
   try { const r = await listRemote(); base.remoteCount = r.length; base.remoteLast = r[0] ? new Date(r[0].time).toISOString() : null; }
   catch (e) { base.reachError = e.message; }
+  try { const fr = await listRemote(FILES_PREFIX, FILE_RE); base.filesCount = fr.length; base.filesLast = fr[0] ? new Date(fr[0].time).toISOString() : null; }
+  catch (e) { if (!base.reachError) base.reachError = e.message; }
   return base;
 }
 
-module.exports = { enabled, uploadFile, syncSnapshot, test, listRemote, pruneRemote, statusAsync, PREFIX };
+module.exports = { enabled, uploadFile, syncSnapshot, syncFiles, test, listRemote, pruneRemote, statusAsync, PREFIX, FILES_PREFIX };

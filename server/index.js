@@ -441,6 +441,13 @@ async function api(req, res, url) {
       return ok(res, { ok: true, name: r.name });
     } catch (e) { return fail(res, 400, 'No se pudo subir a la nube: ' + e.message); }
   }
+  // --- subir ahora mismo los ARCHIVOS subidos (nóminas, planos, adjuntos…) a la nube (admin) ---
+  if (seg[0] === 'cloud-backup-sync-files' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (!cloudBackup.enabled()) return fail(res, 400, 'La copia en la nube no está configurada o activada.');
+    try { store.setSetting('filesBackupSig', ''); await cloudBackup.syncFiles(); store.audit(user.id, 'cloud-backup-sync-files'); return ok(res, { ok: true }); }
+    catch (e) { return fail(res, 400, 'No se pudieron subir los archivos: ' + e.message); }
+  }
   if (seg[0] === 'backups' && seg[1] === 'create' && method === 'POST') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     try { const r = backup.snapshot('manual'); store.audit(user.id, 'backup-create'); return ok(res, { ok: true, backup: r }); }

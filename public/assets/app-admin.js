@@ -1148,7 +1148,7 @@ on(/^#\/backups$/, async () => {
     if (!cfg.enabled) cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#EEF2F7;color:#334;border:1px solid #D6DEE8">La copia en la nube está <b>desactivada</b>. Rellena los datos y marca «Activar».</div>`;
     else if (cloud.reachError) cloudBanner = `<div class="banner banner--err" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FDECEA;color:#B71C1C;border:1px solid #F5C6CB"><b>⚠ No se pudo contactar con la nube.</b> ${esc(cloud.reachError)}. Revisa el endpoint, la región y las claves.</div>`;
     else if (cloud.lastError && (!cloud.lastOk || new Date(cloud.lastError.date) > new Date(cloud.lastOk.date))) cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FFF8E1;color:#8a6d00;border:1px solid #FFE49A"><b>⚠ La última subida a la nube falló</b> (${fmtDate(cloud.lastError.date)}). ${esc(cloud.lastError.message || '')}</div>`;
-    else cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Copia en la nube activa. ${cloud.remoteCount != null ? cloud.remoteCount + ' copias en Backblaze' : ''}${cloud.remoteLast ? ' · última: ' + fmtDate(cloud.remoteLast) : ''}.</div>`;
+    else cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Copia en la nube activa. ${cloud.remoteCount != null ? cloud.remoteCount + ' copias de la base de datos' : ''}${cloud.remoteLast ? ' (última: ' + fmtDate(cloud.remoteLast) + ')' : ''}${cloud.filesCount != null ? ' · ' + cloud.filesCount + ' copias de archivos' : ''}${cloud.filesLast ? ' (última: ' + fmtDate(cloud.filesLast) + ')' : ''}.</div>`;
     const rows = list.map(b => `<tr><td><b>${esc(b.name)}</b></td><td>${fmtDate(b.date)}</td><td style="text-align:right">${fmtSize(b.size)}</td><td style="text-align:right"><a class="btn btn--sm" href="/api/backups/download?name=${encodeURIComponent(b.name)}" download>⬇ Descargar</a></td></tr>`).join('');
     shell(`${pageHead('Copias de seguridad', 'Copias automáticas de la base de datos (bodas, usuarios, tarifas…).')}
       ${banner}
@@ -1176,8 +1176,10 @@ on(/^#\/backups$/, async () => {
         <div class="btn-row" style="margin-top:14px;flex-wrap:wrap;gap:8px">
           <button class="btn btn--primary" id="cbSave">Guardar</button>
           <button class="btn" id="cbTest">🔌 Probar conexión</button>
-          <button class="btn" id="cbSync">⬆ Subir copia ahora</button>
+          <button class="btn" id="cbSync">⬆ Subir base de datos ahora</button>
+          <button class="btn" id="cbSyncFiles">🗂 Subir archivos ahora</button>
         </div>
+        <p class="hint" style="margin-top:10px">La copia incluye <b>la base de datos</b> (bodas, pagos, facturas, tarifas, observaciones…) <b>y todos los archivos subidos</b> (nóminas, planos, adjuntos y fotos de eventos, logos de fotomatón). Los archivos solo se vuelven a subir cuando cambian.</p>
       </div>`, ['Copias de seguridad']);
     const bn = el('bkNow');
     if (bn) bn.onclick = async () => { bn.disabled = true; bn.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST' }); toast('Copia creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
@@ -1192,7 +1194,9 @@ on(/^#\/backups$/, async () => {
     const cbTest = el('cbTest');
     if (cbTest) cbTest.onclick = async () => { cbTest.disabled = true; cbTest.textContent = 'Probando…'; try { await api('cloud-backup-test', { method: 'POST' }); toast('✅ Conexión correcta con la nube', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } cbTest.disabled = false; cbTest.textContent = '🔌 Probar conexión'; };
     const cbSync = el('cbSync');
-    if (cbSync) cbSync.onclick = async () => { cbSync.disabled = true; cbSync.textContent = 'Subiendo…'; try { await api('cloud-backup-sync', { method: 'POST' }); toast('✅ Copia subida a la nube', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
+    if (cbSync) cbSync.onclick = async () => { cbSync.disabled = true; cbSync.textContent = 'Subiendo…'; try { await api('cloud-backup-sync', { method: 'POST' }); toast('✅ Base de datos subida a la nube', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
+    const cbSyncFiles = el('cbSyncFiles');
+    if (cbSyncFiles) cbSyncFiles.onclick = async () => { cbSyncFiles.disabled = true; cbSyncFiles.textContent = 'Subiendo…'; try { await api('cloud-backup-sync-files', { method: 'POST' }); toast('✅ Archivos subidos a la nube', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
   }
   render();
 });

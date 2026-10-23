@@ -54,9 +54,10 @@ function snapshot(reason) {
   prune();
   lastOk = { name, date: new Date().toISOString() };
   // Copia 2 (fuera del servidor): subida a la nube en segundo plano. No bloquea ni rompe la copia local.
+  // Sube la base de datos y, si han cambiado, también los archivos subidos (nóminas, planos, adjuntos…).
   try {
     const cloud = require('./cloud-backup');
-    if (cloud.enabled()) cloud.syncSnapshot(dest, name).catch(() => {});
+    if (cloud.enabled()) { cloud.syncSnapshot(dest, name).catch(() => {}); cloud.syncFiles().catch(() => {}); }
   } catch (e) {}
   return { name, size, reason: reason || 'auto', date: lastOk.date };
 }
