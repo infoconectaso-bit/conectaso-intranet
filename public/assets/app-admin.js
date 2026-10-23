@@ -1076,9 +1076,8 @@ on(/^#\/analisis$/, async () => {
   const sect = (title, body, sub) => `<div class="panel"><div class="panel__head"><h3>${esc(title)}</h3>${sub ? `<span class="muted" style="font-size:12px">${esc(sub)}</span>` : ''}</div><div class="panel__body">${body}</div></div>`;
   const econ = a.economico || [];
   const econRows = econ.slice(-18).reverse();
-  const html = [
-    sect('Bodas por masía y año', crossTable(a.ventasMasia, 'Masía', null, 2), 'Solo masías con 2 o más bodas'),
-    (() => { const vm = a.ventasMasia || {}; const top = Object.keys(vm).map(k => [k, sum(vm[k])]).sort((x, y) => y[1] - x[1]).slice(0, 8); const series = top.map((t, i) => ({ label: t[0], color: PIE_COLORS[i % PIE_COLORS.length], values: years.map(y => vm[t[0]][y] || 0) })); return sect('Evolución de bodas por masía (por año)', lineChartMulti(years, series), 'Top 8 masías por volumen'); })(),
+  // --- Contenido agrupado por pestañas ---
+  const tabBodas = [
     sect('Bodas por pack y año', crossTable(a.ventasPack, 'Pack')),
     (() => {
       // Total de bodas por año = solo packs de boda (Recomendado, Fiesta, Bodorrio, Tinglado); sin Extras ni Corporativos.
@@ -1090,8 +1089,14 @@ on(/^#\/analisis$/, async () => {
       return sect('Total de bodas por año', tbl + chart, 'Recomendado + Fiesta + Bodorrio + Tinglado (sin extras ni corporativos)');
     })(),
     (() => { const vp = a.ventasPack || {}; const keys = Object.keys(vp); const series = keys.map((k, i) => ({ label: k, color: PIE_COLORS[i % PIE_COLORS.length], values: years.map(y => vp[k][y] || 0) })); return sect('Evolución de bodas por pack (por año)', lineChartMulti(years, series)); })(),
+  ].join('');
+  const tabMasias = [
+    sect('Bodas por masía y año', crossTable(a.ventasMasia, 'Masía', null, 2), 'Solo masías con 2 o más bodas'),
+    (() => { const vm = a.ventasMasia || {}; const top = Object.keys(vm).map(k => [k, sum(vm[k])]).sort((x, y) => y[1] - x[1]).slice(0, 8); const series = top.map((t, i) => ({ label: t[0], color: PIE_COLORS[i % PIE_COLORS.length], values: years.map(y => vm[t[0]][y] || 0) })); return sect('Evolución de bodas por masía (por año)', lineChartMulti(years, series), 'Top 8 masías por volumen'); })(),
     a.holdedOk ? sect('Facturación de masías por año', crossTable(a.masiaAnual, 'Masía', eur), 'Importe facturado (sin IVA) desde Holded') : sect('Facturación de masías', '<div class="empty">Holded no está activado.</div>'),
     a.holdedOk ? sect('Media económica por boda y mes', `<div class="table-wrap"><table class="dt"><thead><tr><th>Mes</th><th style="text-align:right">Facturado masías</th><th style="text-align:right">Bodas</th><th style="text-align:right">Media / boda</th></tr></thead><tbody>${econRows.map(m => `<tr><td><b>${esc(m.mes)}</b></td><td style="text-align:right">${eur(m.facturado)}</td><td style="text-align:right">${m.bodas}</td><td style="text-align:right"><b>${eur(m.media)}</b></td></tr>`).join('')}</tbody></table></div>`, 'Facturación de masías ÷ nº de bodas realizadas cada mes') : '',
+  ].join('');
+  const tabHoras = [
     sect('Horas extra por masía', bars((a.horasMasia || []).map(r => ({ label: r.masia, value: r.horas, sub: `${r.horas} h · media ${r.media} h/boda` })), v => ''), 'Total de horas extra realizadas en cada finca'),
     (() => {
       const hy = a.horasYears || []; const rows = a.horasMasiaYear || [];
@@ -1101,12 +1106,27 @@ on(/^#\/analisis$/, async () => {
     })(),
     sect('DJs con más horas extra (total)', pieChart((a.djPorTotal || []).map(r => ({ label: r.dj, value: r.horas })), { unit: 'h' }), 'Reparto del total de horas extra entre DJs'),
     sect('DJs con más horas extra por boda (media)', bars((a.djPorBoda || []).slice(0, 20).map(r => ({ label: r.dj, value: r.media, sub: `${r.media} h/boda · ${r.horas} h en ${r.bodas} bodas` })), v => ''), 'Mínimo 3 bodas para la media'),
-    sect('Wedding planners con los que más trabajamos', pieChart((a.plannersTop || []).map(r => ({ label: r.name, value: r.n })), { unit: ' bodas', topN: 14 }), 'Excluye planners ligados a finca: UAUU (Castell de Tous / Mas Vivencs), Edelweiss, Can Ribas y Mas la Boella'),
   ].join('');
+  const tabPlanners = sect('Wedding planners con los que más trabajamos', pieChart((a.plannersTop || []).map(r => ({ label: r.name, value: r.n })), { unit: ' bodas', topN: 14 }), 'Excluye planners ligados a finca: UAUU (Castell de Tous / Mas Vivencs), Edelweiss, Can Ribas y Mas la Boella');
+  const tabs = [
+    { id: 'bodas', label: '💍 Bodas', html: tabBodas },
+    { id: 'masias', label: '🏡 Masías', html: tabMasias },
+    { id: 'horas', label: '⏱ Horas extra', html: tabHoras },
+    { id: 'planners', label: '📋 Wedding planners', html: tabPlanners },
+  ];
+  let active = 'bodas'; try { const s = localStorage.getItem('anaTab'); if (s && tabs.some(t => t.id === s)) active = s; } catch (e) {}
+  const tabBar = `<div class="btn-row ana-tabs" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">${tabs.map(t => `<button class="btn ${t.id === active ? 'btn--primary' : ''}" data-tab="${t.id}">${t.label}</button>`).join('')}</div>`;
+  const panes = tabs.map(t => `<div class="ana-pane" data-pane="${t.id}" style="display:${t.id === active ? 'block' : 'none'}">${t.html}</div>`).join('');
   shell(`${pageHead('Análisis', 'Ventas, facturación de masías, económico por boda y horas extra. Datos de bodas realizadas.')}
     <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--sm" id="anaRefresh" title="Recargar datos de Holded">↻ Actualizar desde Holded</button></div>
-    ${html}`, ['Análisis']);
+    ${tabBar}${panes}`, ['Análisis']);
   const rf = el('anaRefresh'); if (rf) rf.onclick = async () => { rf.disabled = true; rf.textContent = 'Actualizando…'; try { await api('analisis?refresh=1'); } catch (e) {} location.reload(); };
+  $$('.ana-tabs [data-tab]').forEach(b => b.onclick = () => {
+    const id = b.dataset.tab;
+    try { localStorage.setItem('anaTab', id); } catch (e) {}
+    $$('.ana-tabs [data-tab]').forEach(x => x.classList.toggle('btn--primary', x.dataset.tab === id));
+    $$('.ana-pane').forEach(p => p.style.display = (p.dataset.pane === id ? 'block' : 'none'));
+  });
 });
 on(/^#\/beneficios$/, async () => {
   if (!requireAdmin()) return;
