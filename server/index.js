@@ -187,6 +187,21 @@ async function api(req, res, url) {
   // --- eventos ---
   if (seg[0] === 'events') return events(req, res, user, seg, method, url);
 
+  // --- Ajustes MANUALES de tarifas de DJ (overrides) que sobreviven al volcado ---
+  // Se guardan en el setting 'djRatesManual' y se re-aplican sobre djRates tras cada import/build.
+  if (seg[0] === 'dj-rates-manual') {
+    if (!user || user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    if (method === 'GET') return ok(res, { overrides: store.setting('djRatesManual') || {} });
+    if (method === 'POST') {
+      const body = await readBody(req);
+      if (!body.overrides || typeof body.overrides !== 'object') return fail(res, 400, 'Falta overrides');
+      store.setSetting('djRatesManual', body.overrides);
+      const n = applyManualRates();
+      store.audit(user.id, 'dj-rates-manual');
+      return ok(res, { ok: true, djsAfectados: n });
+    }
+  }
+
   // --- URL base de la app (para enlaces de email / magic links) ---
   if (seg[0] === 'app-url') {
     if (!user || user.role !== 'admin') return fail(res, 403, 'Sin acceso');
@@ -929,6 +944,30 @@ function priceAlerts() {
   return { groups: list, totalCombos: list.reduce((t, g) => t + g.services.length, 0), totalWorkers: list.length };
 }
 function extraNameOf(id) { const e = store.get('extras', id); return (e && e.name) || ('Servicio ' + id); }
+// Aplica los ajustes manuales de tarifas (setting 'djRatesManual') SOBRE el djRates calculado.
+// Se llama tras cualquier build/volcado para que las correcciones a mano no se pierdan.
+function applyManualRates() {
+  const man = store.setting('djRatesManual') || {};
+  const rates = store.setting('djRates') || {};
+  let n = 0;
+  Object.keys(man).forEach(uid => {
+    if (uid[0] === '_') return;                       // claves de comentario
+    const o = man[uid]; if (!o || typeof o !== 'object') return;
+    const r = rates[uid] || (rates[uid] = { packs: {}, fincas: {}, services: {} });
+    r.fincas = r.fincas || {}; r.packs = r.packs || {}; r.services = r.services || {};
+    if (o.zeroAll) {
+      Object.keys(r.fincas).forEach(k => { const f = r.fincas[k] || {}; ['boda', 'he', 'evento', 'ceremonia', 'disco'].forEach(x => { if (f[x] != null) f[x] = 0; }); });
+      Object.keys(r.packs).forEach(k => { r.packs[k] = 0; });
+      Object.keys(r.services).forEach(k => { r.services[k] = 0; });
+    }
+    if (o.fincas) Object.keys(o.fincas).forEach(fid => { r.fincas[fid] = Object.assign({}, r.fincas[fid] || {}, o.fincas[fid]); });
+    if (o.packs) Object.assign(r.packs, o.packs);
+    if (o.services) Object.assign(r.services, o.services);
+    n++;
+  });
+  store.setSetting('djRates', rates);
+  return n;
+}
 // Matriz de sueldos (solo lectura, admin): tarifas por trabajador × finca/pack/servicio + uso real
 // (cuántas veces ha trabajado cada uno en cada finca/servicio) para ver qué datos faltan.
 function salaryMatrix() {
