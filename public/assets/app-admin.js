@@ -1249,9 +1249,20 @@ on(/^#\/tyc$/, async () => {
         <div class="pdf-grid" style="margin-bottom:12px"><div>Versión del contrato: <b>${esc(t.version || '—')}</b></div></div>
         <p class="hint"><b>El año de la boda se añade solo</b> al título de cada contrato (p. ej. "…de servicio 2026" para una boda de 2026). La "versión" de arriba es solo un identificador interno para saber qué texto firmó cada pareja. Al aceptar, en el PDF de cada boda se rellenan automáticamente los contratantes, DNI, lugar y fecha del evento.</p>
         <div class="readbox tyc-body" style="max-height:none">${t.text || ''}</div>
+      </div></div>
+    <div class="panel"><div class="panel__head"><h3>Política de privacidad</h3><button class="btn btn--sm btn--primary" id="editPriv">Editar política</button></div>
+      <div class="panel__body">
+        <p class="hint">Las <b>parejas</b> la aceptan <b>a la vez que firman el contrato</b> (un solo check, sin volver a pedir nombre ni DNI). No aplica a wedding planners ni a DJs. Texto base RGPD — revísalo con tu gestoría si quieres.</p>
+        <div class="readbox tyc-body" style="max-height:none">${(r.privacy && r.privacy.text) || ''}</div>
       </div></div>`, ['TYC']);
   el('editTac').onclick = () => tacForm(t);
+  el('editPriv').onclick = () => privForm(r.privacy || {});
 });
+function privForm(p) {
+  modal('Editar política de privacidad', `<form id="privForm">
+    <div class="field"><label>Contenido (HTML)</label><textarea class="control" name="text" style="min-height:300px;font-family:monospace;font-size:12px">${esc(p.text || '')}</textarea></div></form>`,
+    { okText: 'Guardar', onOk: async () => { const d = collectForm($('#privForm')); await api('tyc/privacy', { method: 'PUT', body: { text: d.text } }); toast('Política de privacidad guardada', 'ok'); location.hash = '#/tyc'; CS.route ? CS.route() : location.reload(); } });
+}
 function tacForm(t) {
   modal('Editar términos y condiciones', `<form id="tacForm">
     <div class="field"><label>Título</label>${inp('title', t.title)}</div>
