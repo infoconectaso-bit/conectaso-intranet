@@ -1142,7 +1142,7 @@ on(/^#\/backups$/, async () => {
     const st = r.status || {};
     let banner = '';
     if (st.lastError && !st.healthy) banner = `<div class="banner banner--err" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FDECEA;color:#B71C1C;border:1px solid #F5C6CB"><b>⚠ La última copia automática falló</b> (${fmtDate(st.lastError.date)}). ${esc(st.lastError.message || '')}. Se ha avisado por email a administración. Revisa el servidor (espacio en disco).</div>`;
-    else if (st.stale) banner = `<div class="banner" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FFF8E1;color:#8a6d00;border:1px solid #FFE49A"><b>⚠ Hace más de 90 minutos que no se hace una copia correcta.</b> Comprueba que el servidor está funcionando.</div>`;
+    else if (st.stale) banner = `<div class="banner" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FFF8E1;color:#8a6d00;border:1px solid #FFE49A"><b>⚠ Hace más de 30 minutos que no se hace una copia correcta.</b> Comprueba que el servidor está funcionando.</div>`;
     else banner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Copias funcionando correctamente.</div>`;
     let cloudBanner = '';
     if (!cfg.enabled) cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#EEF2F7;color:#334;border:1px solid #D6DEE8">La copia en la nube está <b>desactivada</b>. Rellena los datos y marca «Activar».</div>`;
@@ -1158,11 +1158,11 @@ on(/^#\/backups$/, async () => {
         <div class="stat stat--yellow"><div class="k">Espacio ocupado</div><div class="v" style="font-size:18px">${fmtSize(r.totalSize || 0)}</div></div>
       </div>
       <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--primary" id="bkNow">💾 Crear copia ahora</button></div>
-      <p class="hint" style="margin-bottom:12px">Se hace una copia automática al arrancar y <b>cada 15 minutos</b>. Se conservan todas las de las últimas 48 h y una diaria durante 30 días; las más antiguas se borran solas (no se llena el disco). Para protección total conviene, además, la copia en la nube de abajo y respaldar los archivos de nóminas.</p>
+      <p class="hint" style="margin-bottom:12px">Se hace una copia automática al arrancar y <b>cada 5 minutos</b>. Se conservan todas las de las últimas 24 h y una diaria durante 30 días; las más antiguas se borran solas (no se llena el disco). Para protección total conviene, además, la copia en la nube de abajo y respaldar los archivos de nóminas.</p>
       <div class="table-wrap"><table class="dt"><thead><tr><th>Archivo</th><th>Fecha</th><th style="text-align:right">Tamaño</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">Aún no hay copias (se creará una en breve).</td></tr>'}</tbody></table></div>
 
       <h2 style="margin:26px 0 6px">☁️ Copia en la nube (fuera del servidor)</h2>
-      <p class="hint" style="margin-bottom:12px">Segunda copia automática en <b>Backblaze B2</b> (región Europa). Si el servidor se estropeara, los datos seguirían a salvo aquí. Cada copia local (cada 15 min) se sube también a la nube, y las antiguas se borran solas. La clave secreta se guarda <b>solo en tu servidor</b>; no se muestra una vez guardada.</p>
+      <p class="hint" style="margin-bottom:12px">Segunda copia automática en <b>Backblaze B2</b> (región Europa). Si el servidor se estropeara, los datos seguirían a salvo aquí. Cada copia local (cada 5 min) se sube también a la nube, y las antiguas se borran solas. La clave secreta se guarda <b>solo en tu servidor</b>; no se muestra una vez guardada.</p>
       ${cloudBanner}
       <div class="card" style="padding:16px;border:1px solid var(--line,#e5e7eb);border-radius:12px;max-width:560px">
         <div style="display:grid;gap:10px">

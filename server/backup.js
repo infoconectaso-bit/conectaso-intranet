@@ -40,7 +40,7 @@ function prune() {
   const now = Date.now(), DAY = 86400000;
   const files = listFiles(); const keep = new Set(); const dailyKept = {};
   files.forEach(f => {
-    if (now - f.time <= 2 * DAY) { keep.add(f.name); return; }                 // últimas 48 h: todas
+    if (now - f.time <= 1 * DAY) { keep.add(f.name); return; }                 // últimas 24 h: todas
     if (now - f.time <= 30 * DAY) { if (!dailyKept[f.day]) { dailyKept[f.day] = 1; keep.add(f.name); } return; } // 1/día, 30 días
   });
   files.forEach(f => { if (!keep.has(f.name)) { try { fs.unlinkSync(path.join(BACKUP_DIR, f.name)); } catch (e) {} } });
@@ -97,7 +97,7 @@ function status() {
   const okT = lastOk ? new Date(lastOk.date).getTime() : (files[0] ? files[0].time : 0);
   const errT = lastError ? new Date(lastError.date).getTime() : 0;
   const healthy = okT >= errT;                               // el último intento fue correcto
-  const stale = !okT || (Date.now() - okT > 90 * 60 * 1000); // sin copia correcta en > 90 min
+  const stale = !okT || (Date.now() - okT > 30 * 60 * 1000); // sin copia correcta en > 30 min
   return { healthy, stale, lastOk: lastOk || (files[0] ? { name: files[0].name, date: new Date(files[0].time).toISOString() } : null), lastError };
 }
 
@@ -105,7 +105,7 @@ function list() { return listFiles().map(f => ({ name: f.name, size: f.size, dat
 function fileFor(name) { if (!RE.test(String(name || ''))) return null; const p = path.join(BACKUP_DIR, name); return fs.existsSync(p) ? p : null; }
 
 let timer = null;
-const INTERVAL_MIN = 15;   // cada cuántos minutos se hace copia (local + subida a la nube)
+const INTERVAL_MIN = 5;   // cada cuántos minutos se hace copia (local + subida a la nube)
 function start() {
   if (timer) return;
   setTimeout(() => { safeSnapshot('startup'); }, 30000);

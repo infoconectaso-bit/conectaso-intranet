@@ -102,7 +102,7 @@ async function pruneRemote() {
   const files = await listRemote();
   const now = Date.now(), DAY = 86400000, keep = new Set(), daily = {};
   files.forEach(f => {
-    if (now - f.time <= 2 * DAY) { keep.add(f.key); return; }
+    if (now - f.time <= 1 * DAY) { keep.add(f.key); return; }
     if (now - f.time <= 30 * DAY) { const d = new Date(f.time).toISOString().slice(0, 10); if (!daily[d]) { daily[d] = 1; keep.add(f.key); } return; }
   });
   for (const f of files) { if (!keep.has(f.key)) { try { await s3('DELETE', f.key); } catch (e) {} } }
