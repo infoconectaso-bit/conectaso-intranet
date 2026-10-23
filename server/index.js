@@ -559,8 +559,11 @@ async function api(req, res, url) {
     // Wedding planners con los que más trabajamos. Excluimos los "de la casa"/finca: UAUU (Castell de
     // Tous + Mas Vivencs), Edelweiss, Can Ribas y Mas la Boaella.
     const EXCL_WP = /uauu|edelwe|can\s*ribas|boaella|bodas\s*rv|can\s*cuch|dalmau/i;
+    // Varios planners pueden ser la MISMA empresa: se agrupan en un único trozo del quesito.
+    // Entretornos (Patricia, Ana, Claudia…) cuentan juntas.
+    const wpGroup = nm => /entretornos/i.test(nm) ? 'Entretornos' : nm;
     const wpCnt = {};
-    allEv.forEach(e => { if (!e.wpId) return; const nm = (users.get(+e.wpId) || {}).name || ''; if (!nm || EXCL_WP.test(nm)) return; wpCnt[nm] = (wpCnt[nm] || 0) + 1; });
+    allEv.forEach(e => { if (!e.wpId) return; const nm = (users.get(+e.wpId) || {}).name || ''; if (!nm || EXCL_WP.test(nm)) return; const g = wpGroup(nm); wpCnt[g] = (wpCnt[g] || 0) + 1; });
     const plannersTop = Object.entries(wpCnt).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
     const out = { years: [...years].sort(), ventasMasia, ventasPack, horasMasia, horasMasiaYear, horasYears, djPorTotal, djPorBoda, plannersTop };
     if (holded.enabled()) {
