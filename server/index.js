@@ -498,11 +498,16 @@ async function api(req, res, url) {
       const rows = db().prepare("SELECT record_id, description FROM files WHERE collection='payslip'").all();
       rows.forEach(r => { const m = String(r.description || '').match(/(\d{4})-(\d{2})/); if (!m) return; const k = 'u' + r.record_id; (byUser[k] = byUser[k] || new Set()).add(m[1] + '-' + m[2]); nameOf[k] = (users.get(+r.record_id) || {}).name || ('#' + r.record_id); });
     }
+    // Iván es temporal (se le da de baja a fin de año y se le recontrata sobre marzo/abril),
+    // así que sus huecos (ene-feb…) son normales y NO cuentan como nóminas que faltan.
+    const SEASONAL = /iv[aá]n/i;
     const workers = [];
     Object.entries(byUser).forEach(([eid, set]) => {
+      const nm = nameOf[eid] || String(eid);
+      if (SEASONAL.test(nm)) return;
       const have = [...set].sort(); if (have.length < 2) return;
       const missing = monthsBetween(have[0], have[have.length - 1]).filter(m => !set.has(m));
-      if (missing.length) workers.push({ name: nameOf[eid] || String(eid), from: have[0], to: have[have.length - 1], have: have.length, missing });
+      if (missing.length) workers.push({ name: nm, from: have[0], to: have[have.length - 1], have: have.length, missing });
     });
     workers.sort((a, b) => b.missing.length - a.missing.length || String(a.name).localeCompare(b.name));
     const totalMissing = workers.reduce((s, w) => s + w.missing.length, 0);
@@ -514,7 +519,7 @@ async function api(req, res, url) {
     const rowsHtml = workers.map(w => `<tr><td><b>${esc(w.name)}</b></td><td>${fmtM(w.from)} – ${fmtM(w.to)}</td><td style="text-align:center">${w.have}</td><td style="text-align:center;color:#b00020"><b>${w.missing.length}</b></td><td>${w.missing.map(fmtM).join(', ')}</td></tr>`).join('');
     const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nóminas que faltan</title>
 <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:16px;background:#f6f7f9;color:#1b2430}h1{font-size:20px;margin:0 0 4px}p.sub{color:#5a6472;margin:0 0 16px;font-size:14px}.k{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px}.card .n{font-size:22px;font-weight:700}.card .t{font-size:12px;color:#5a6472}table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #eef0f3;font-size:14px;vertical-align:top}th{background:#f0f3f7;font-size:12px;text-transform:uppercase;letter-spacing:.3px;color:#5a6472}tr:last-child td{border-bottom:none}.empty{padding:24px;text-align:center;color:#5a6472}</style></head>
-<body><h1>Nóminas que faltan</h1><p class="sub">Meses sin nómina entre la primera y la última de cada trabajador (${srcTxt}). Para reclamar al gestor o al administrativo.</p>
+<body><h1>Nóminas que faltan</h1><p class="sub">Meses sin nómina entre la primera y la última de cada trabajador (${srcTxt}). Para reclamar al gestor o al administrativo. Iván queda excluido (es temporal, sus huecos son normales).</p>
 <div class="k"><div class="card"><div class="n">${workers.length}</div><div class="t">Trabajadores con huecos</div></div><div class="card"><div class="n">${totalMissing}</div><div class="t">Nóminas que faltan</div></div></div>
 ${workers.length ? `<table><thead><tr><th>Trabajador</th><th>Periodo</th><th style="text-align:center">Tiene</th><th style="text-align:center">Faltan</th><th>Meses que faltan</th></tr></thead><tbody>${rowsHtml}</tbody></table>` : '<div class="card empty">No se detectan huecos. 🎉</div>'}
 <p class="sub" style="margin-top:16px">Fuente: ${srcTxt}. Página temporal (no guardada en el menú).</p></body></html>`;
@@ -531,8 +536,14 @@ ${workers.length ? `<table><thead><tr><th>Trabajador</th><th>Periodo</th><th sty
     const monthOf = v => { if (v == null || v === '') return null; if (typeof v === 'number') { const d = new Date(v < 1e12 ? v * 1000 : v); return isNaN(d) ? null : d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); } const m = String(v).match(/(\d{4})-(\d{2})/); if (m) return m[1] + '-' + m[2]; const d = new Date(v); return isNaN(d) ? null : d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); };
     const workers = users.all().filter(u => u.name && ['dj', 'admin', 'planner'].includes(u.role));
     const byNorm = {}; workers.forEach(u => { byNorm[norm(u.name)] = u; });
+    // Equivalencias manuales Holded (nombre legal) → trabajador de la intranet (nombre artístico).
+    // Se prueban sobre el nombre normalizado (sin acentos/mayúsculas). Se van ampliando según vayan saliendo.
+    const NAME_MAP = [
+      { holded: /adrian\s+fernandez\s+martinez/, intranet: /adri.*(deejay|dj)/ },
+    ];
     const matchUser = name => {
       const n = norm(name); if (!n) return null;
+      for (const map of NAME_MAP) { if (map.holded.test(n)) { const w = workers.find(u => map.intranet.test(norm(u.name))); if (w) return w; } }
       if (byNorm[n]) return byNorm[n];
       const nt = n.split(' ').filter(Boolean); if (nt.length < 2) return null;
       let best = null; workers.forEach(u => { const ut = norm(u.name).split(' ').filter(Boolean); if (ut.length < 2) return; const aInB = nt.every(t => ut.includes(t)); const bInA = ut.every(t => nt.includes(t)); if ((aInB || bInA) && !best) best = u; }); return best;
@@ -578,6 +589,8 @@ ${mRows ? `<table><thead><tr><th>Trabajador (intranet)</th><th style="text-align
 ${Object.keys(unmatched).length ? `<h2>⚠️ Sin reconocer (nombre de Holded que no cuadra con ningún trabajador)</h2><p class="sub">Estos no se tocan. Si alguno es un trabajador tuyo con otro nombre, dímelo y lo enlazo a mano.</p><table><thead><tr><th>Nombre en Holded</th><th>Nóminas</th></tr></thead><tbody>${uRows}</tbody></table>` : ''}
 ${errors.length ? `<h2>Errores</h2><table><tbody>${errors.map(e => `<tr><td>${esc(e)}</td></tr>`).join('')}</tbody></table>` : ''}
 ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ Descargar de verdad las ${willSync} nóminas reconocidas</a>` : ''}
+<h2>Trabajadores de la intranet</h2><p class="sub">Para que me digas los emparejamientos tal cual están escritos aquí.</p>
+<div class="card">${workers.map(u => esc(u.name)).sort().join(' · ')}</div>
 <p class="sub" style="margin-top:16px">Página temporal (no guardada en el menú).</p></body></html>`;
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(html);
