@@ -1,15 +1,15 @@
-# Proxy HTTPS del dominio de pruebas.
-# 'gestor' sigue sirviendo el puerto 80 (acceso por IP), así que Caddy solo usa el 443.
-# Por eso forzamos el reto TLS-ALPN (que va por el 443) y desactivamos el HTTP-01 (puerto 80).
+# Proxy del dominio de pruebas + acceso por IP.
+# Caddy ocupa 80 y 443 y reenvía todo a 'gestor' (puerto interno 3000).
 {
 	email info@conectaso.es
 }
 
+# Dominio: HTTPS automático. http://prueba.lol redirige SOLO a https (comportamiento por defecto).
 prueba.lol {
 	reverse_proxy gestor:3000
-	tls {
-		issuer acme {
-			disable_http_challenge
-		}
-	}
+}
+
+# Acceso por IP (sin dominio): se sirve por HTTP, SIN redirigir (no existe certificado para una IP).
+http://200.234.226.246 {
+	reverse_proxy gestor:3000
 }

@@ -3,9 +3,8 @@ services:
     build: .
     container_name: conectaso-gestor
     restart: unless-stopped
-    ports:
-      # Acceso por IP (HTTP) — se mantiene igual que siempre.
-      - "80:3000"
+    # Solo interno: Caddy (puertos 80 y 443) le hace de proxy. Así el dominio redirige a HTTPS
+    # y el acceso por IP sigue funcionando por HTTP a través de Caddy.
     expose:
       - "3000"
     env_file:
@@ -14,13 +13,14 @@ services:
       # Base de datos y archivos subidos (persisten aunque se reconstruya el contenedor).
       - ./data:/data
 
-  # Proxy con HTTPS automático (Let's Encrypt) para el dominio de pruebas.
-  # Solo ocupa el 443; el 80 lo sigue sirviendo 'gestor', así el acceso por IP no se toca.
+  # Proxy: HTTPS automático (Let's Encrypt) para el dominio + redirección HTTP→HTTPS.
+  # Ocupa 80 y 443; reenvía todo a 'gestor'. El acceso por IP (HTTP) sigue funcionando.
   caddy:
     image: caddy:2-alpine
     container_name: conectaso-caddy
     restart: unless-stopped
     ports:
+      - "80:80"
       - "443:443"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
