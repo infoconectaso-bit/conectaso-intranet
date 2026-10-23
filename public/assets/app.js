@@ -338,6 +338,7 @@ async function renderTyc() {
     .replace(/\{novios\}/g, `<b>${esc(a.novios || '—')}</b>`)
     .replace(/\{finca\}/g, `<b>${esc(a.finca || '—')}</b>`)
     .replace(/\{fecha\}/g, `<b>${esc(fecha || '—')}</b>`);
+  const privacyText = (r.privacy && r.privacy.text) || '';
   const nm = String(a.novios || '').split(/\s+y\s+/i).map(s => s.trim());
   const dniFields = isClient
     ? `<div class="grid-2">
@@ -353,10 +354,11 @@ async function renderTyc() {
     <p class="tyc-sub">Antes de entrar por primera vez, lee y firma el contrato. Solo tienes que hacerlo una vez.</p>
     ${isClient && (a.finca || fecha) ? `<div class="tyc-datos"><div><span>Lugar</span><b>${esc(a.finca || '—')}</b></div><div><span>Fecha</span><b>${esc(fecha || '—')}</b></div></div>` : ''}
     <div class="tyc-body">${text}</div>
+    ${isClient && privacyText ? `<details class="tyc-privacy"><summary>Ver política de privacidad</summary><div class="tyc-body" style="margin-top:8px">${privacyText}</div></details>` : ''}
     <form id="tycForm" class="tyc-form">
       ${dniFields}
       ${isClient ? '' : `<div class="field"><label>Firma (escribe tu nombre completo)</label><input class="control" id="tName" value="${esc(S.user.name || '')}" placeholder="Nombre y apellidos"></div>`}
-      <label class="tyc-accept"><input type="checkbox" id="tAccept"> He leído y acepto el contrato.</label>
+      <label class="tyc-accept"><input type="checkbox" id="tAccept"> ${isClient ? 'He leído y acepto el contrato y la política de privacidad.' : 'He leído y acepto el contrato.'}</label>
       <div class="tyc-actions"><button type="button" class="btn btn--ghost" id="tLogout">Salir</button><button type="submit" class="btn btn--primary">Firmar y entrar</button></div>
     </form></div></div>`;
   const form = el('tycForm');

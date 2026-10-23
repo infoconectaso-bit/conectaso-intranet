@@ -625,6 +625,18 @@ function meView(u) {
 /* ---------- contrato TyC ---------- */
 const DEFAULT_TYC = '<p><strong>Términos y condiciones de servicio</strong></p>'
   + '<p>El presente documento regula la prestación de servicios de Conecta So (DJ, sonorización, iluminación y animación) para el evento indicado.</p>';
+// Política de privacidad (RGPD). Se acepta JUNTO con el contrato, en el mismo acto de firma.
+// Solo aplica a las parejas (clientes): los planners y DJs no firman ni ven este flujo.
+const DEFAULT_PRIVACY = '<p><strong>Política de privacidad</strong></p>'
+  + '<p><strong>Responsable:</strong> Conecta Sonido e Iluminación, S.L. (Conecta So), con domicilio en C/ Indústria 9, 08107 Martorelles (Barcelona). Contacto: info@conectaso.es.</p>'
+  + '<p><strong>Qué datos tratamos:</strong> datos identificativos y de contacto (nombre, DNI, teléfono y correo electrónico), datos del evento y datos de facturación que nos facilitas para contratar y recibir el servicio.</p>'
+  + '<p><strong>Con qué finalidad:</strong> gestionar y ejecutar el contrato de servicios (DJ, sonorización, iluminación y animación), emitir las facturas correspondientes y comunicarnos contigo sobre tu evento.</p>'
+  + '<p><strong>Base legal:</strong> la ejecución del contrato que nos vincula, el cumplimiento de nuestras obligaciones legales (por ejemplo, fiscales y de facturación) y tu consentimiento para las comunicaciones relativas al servicio.</p>'
+  + '<p><strong>Conservación:</strong> conservamos tus datos mientras dure la relación y, después, durante los plazos exigidos legalmente (fiscales y mercantiles). Transcurridos, se suprimen o se bloquean.</p>'
+  + '<p><strong>Destinatarios:</strong> no cedemos tus datos a terceros, salvo obligación legal o a los proveedores necesarios para prestar el servicio (por ejemplo, la plataforma de facturación), que los tratan por cuenta nuestra.</p>'
+  + '<p><strong>Tus derechos:</strong> puedes ejercer los derechos de acceso, rectificación, supresión, oposición, limitación y portabilidad escribiendo a info@conectaso.es. También puedes reclamar ante la Agencia Española de Protección de Datos (www.aepd.es).</p>'
+  + '<p>No se toman decisiones automatizadas ni se realizan transferencias internacionales de datos.</p>';
+function privacyCurrent() { const p = store.setting('privacyPolicy') || {}; return { version: String(p.version || '2027'), title: p.title || 'Política de privacidad', text: p.text || DEFAULT_PRIVACY }; }
 function tycRec(t) { t = t || {}; return { id: t.id || 1, version: String(t.date || t.version || '1'), title: t.title || ('Términos y condiciones de servicio ' + (t.date || '')).trim(), text: t.text || DEFAULT_TYC }; }
 function tycCurrent() { const list = store.all('tacs'); return tycRec(list[list.length - 1] || {}); }
 function tycByVersion(v) { const t = store.all('tacs').find(x => String(x.date || x.version) === String(v)); return tycRec(t || store.all('tacs').slice(-1)[0] || {}); }
@@ -726,12 +738,22 @@ async function tycApi(req, res, user, seg, method) {
   if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
   const c = tycCurrent();
   if (seg[1] === 'current' && method === 'GET') {
-    return ok(res, { tyc: c, signed: tycSignedBy(user), signature: tycSignatureFor(user), autofill: tycAutofill(user) });
+    return ok(res, { tyc: c, privacy: privacyCurrent(), signed: tycSignedBy(user), signature: tycSignatureFor(user), autofill: tycAutofill(user) });
+  }
+  if (seg[1] === 'privacy' && method === 'GET') { return ok(res, { privacy: privacyCurrent() }); }
+  if (seg[1] === 'privacy' && method === 'PUT') {
+    if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    const body = await readBody(req);
+    const cur = privacyCurrent();
+    store.setSetting('privacyPolicy', { version: String(body.version || cur.version), title: body.title || cur.title, text: body.text != null ? body.text : cur.text });
+    store.audit(user.id, 'privacy-edit');
+    return ok(res, { ok: true, privacy: privacyCurrent() });
   }
   if (seg[1] === 'sign' && method === 'POST') {
     if (user.role !== 'user') return fail(res, 403, 'Solo los clientes firman el contrato.');
     const body = await readBody(req);
-    const sign = { version: c.version, name: (body.name1 || body.name || user.name || '').trim(), name2: String(body.name2 || '').trim(), dni: body.dni || '', dni2: body.dni2 || '', date: new Date().toISOString() };
+    // Al firmar el contrato se acepta también la política de privacidad (mismo acto, misma fecha).
+    const sign = { version: c.version, privacyVersion: privacyCurrent().version, name: (body.name1 || body.name || user.name || '').trim(), name2: String(body.name2 || '').trim(), dni: body.dni || '', dni2: body.dni2 || '', date: new Date().toISOString() };
     users.update(user.id, { data: { tycSign: sign } });
     try { autofillSpousesFromTyc(user, sign); } catch (e) { /* no bloquear la firma */ }
     store.audit(user.id, 'tyc-sign');
