@@ -466,21 +466,61 @@ async function api(req, res, url) {
       return ok(res, { ok: true, config: next, preview: cleanupPreview(next.months) });
     }
   }
-  // --- NÓMINAS QUE FALTAN (admin): huecos de meses entre la 1ª y la última nómina de cada trabajador ---
+  // --- NÓMINAS QUE FALTAN (admin): huecos de meses entre la 1ª y la última nómina de cada trabajador.
+  //     Lee de HOLDED (fuente real donde están subidas) y, si no hay, cae a las subidas en la intranet. ---
   if (seg[0] === 'payslip-gaps' && method === 'GET') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
-    const rows = db().prepare("SELECT record_id, description FROM files WHERE collection='payslip'").all();
-    const byUser = {};
-    rows.forEach(r => { const m = String(r.description || '').match(/(\d{4})-(\d{2})/); if (!m) return; (byUser[r.record_id] = byUser[r.record_id] || new Set()).add(m[1] + '-' + m[2]); });
     const monthsBetween = (a, b) => { let [y, mo] = a.split('-').map(Number); const [by, bm] = b.split('-').map(Number); const out = []; while (y < by || (y === by && mo <= bm)) { out.push(y + '-' + String(mo).padStart(2, '0')); mo++; if (mo > 12) { mo = 1; y++; } } return out; };
+    const monthOf = v => {
+      if (v == null || v === '') return null;
+      if (typeof v === 'number') { const d = new Date(v < 1e12 ? v * 1000 : v); return isNaN(d) ? null : d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); }
+      const m = String(v).match(/(\d{4})-(\d{2})/); if (m) return m[1] + '-' + m[2];
+      const d = new Date(v); return isNaN(d) ? null : d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
+    };
+    const byUser = {}, nameOf = {};
+    let source = 'intranet';
+    try {
+      if (holded.enabled()) {
+        const items = await holded.listPayslips();
+        items.forEach(it => {
+          if (it.is_draft || it.isDraft || it.draft) return;                 // ignora borradores
+          const eid = it.employee_id || it.employeeId || (it.employee && it.employee.id) || it.employee_name || it.employeeName;
+          if (!eid) return;
+          const mo = monthOf(it.period_start || it.periodStart || it.date || it.period_end || it.periodEnd);
+          if (!mo) return;
+          (byUser[eid] = byUser[eid] || new Set()).add(mo);
+          nameOf[eid] = it.employee_name || it.employeeName || (it.employee && it.employee.name) || nameOf[eid] || String(eid);
+        });
+        if (Object.keys(byUser).length) source = 'holded';
+      }
+    } catch (e) { /* si Holded falla, se usa lo subido en la intranet */ }
+    if (source !== 'holded') {
+      const rows = db().prepare("SELECT record_id, description FROM files WHERE collection='payslip'").all();
+      rows.forEach(r => { const m = String(r.description || '').match(/(\d{4})-(\d{2})/); if (!m) return; const k = 'u' + r.record_id; (byUser[k] = byUser[k] || new Set()).add(m[1] + '-' + m[2]); nameOf[k] = (users.get(+r.record_id) || {}).name || ('#' + r.record_id); });
+    }
     const workers = [];
-    Object.entries(byUser).forEach(([uid, set]) => {
+    Object.entries(byUser).forEach(([eid, set]) => {
       const have = [...set].sort(); if (have.length < 2) return;
       const missing = monthsBetween(have[0], have[have.length - 1]).filter(m => !set.has(m));
-      if (missing.length) { const u = users.get(+uid) || {}; workers.push({ uid: +uid, name: u.name || ('#' + uid), from: have[0], to: have[have.length - 1], have: have.length, missing }); }
+      if (missing.length) workers.push({ name: nameOf[eid] || String(eid), from: have[0], to: have[have.length - 1], have: have.length, missing });
     });
     workers.sort((a, b) => b.missing.length - a.missing.length || String(a.name).localeCompare(b.name));
-    return ok(res, { count: workers.length, totalMissing: workers.reduce((s, w) => s + w.missing.length, 0), workers });
+    const totalMissing = workers.reduce((s, w) => s + w.missing.length, 0);
+    if (url.searchParams.get('json') === '1') return ok(res, { source, count: workers.length, totalMissing, workers });
+    // Página temporal, legible en el móvil, para ponerse al día. No está enlazada en ningún menú.
+    const fmtM = s => { const p = String(s || '').split('-'); return p[1] ? p[1] + '/' + p[0] : s; };
+    const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const srcTxt = source === 'holded' ? 'según Holded' : 'según las nóminas subidas a la intranet';
+    const rowsHtml = workers.map(w => `<tr><td><b>${esc(w.name)}</b></td><td>${fmtM(w.from)} – ${fmtM(w.to)}</td><td style="text-align:center">${w.have}</td><td style="text-align:center;color:#b00020"><b>${w.missing.length}</b></td><td>${w.missing.map(fmtM).join(', ')}</td></tr>`).join('');
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nóminas que faltan</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:16px;background:#f6f7f9;color:#1b2430}h1{font-size:20px;margin:0 0 4px}p.sub{color:#5a6472;margin:0 0 16px;font-size:14px}.k{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px}.card .n{font-size:22px;font-weight:700}.card .t{font-size:12px;color:#5a6472}table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #eef0f3;font-size:14px;vertical-align:top}th{background:#f0f3f7;font-size:12px;text-transform:uppercase;letter-spacing:.3px;color:#5a6472}tr:last-child td{border-bottom:none}.empty{padding:24px;text-align:center;color:#5a6472}</style></head>
+<body><h1>Nóminas que faltan</h1><p class="sub">Meses sin nómina entre la primera y la última de cada trabajador (${srcTxt}). Para reclamar al gestor o al administrativo.</p>
+<div class="k"><div class="card"><div class="n">${workers.length}</div><div class="t">Trabajadores con huecos</div></div><div class="card"><div class="n">${totalMissing}</div><div class="t">Nóminas que faltan</div></div></div>
+${workers.length ? `<table><thead><tr><th>Trabajador</th><th>Periodo</th><th style="text-align:center">Tiene</th><th style="text-align:center">Faltan</th><th>Meses que faltan</th></tr></thead><tbody>${rowsHtml}</tbody></table>` : '<div class="card empty">No se detectan huecos. 🎉</div>'}
+<p class="sub" style="margin-top:16px">Fuente: ${srcTxt}. Página temporal (no guardada en el menú).</p></body></html>`;
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(html);
+    return;
   }
   if (seg[0] === 'backups' && seg[1] === 'create' && method === 'POST') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');

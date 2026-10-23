@@ -1234,22 +1234,6 @@ on(/^#\/backups$/, async () => {
   render();
 });
 
-on(/^#\/nominas-faltan$/, async () => {
-  if (!requireAdmin()) return;
-  loading(['Nóminas que faltan']);
-  const fmtM = s => { const p = String(s || '').split('-'); return p[1] ? p[1] + '/' + p[0] : s; };
-  const r = await api('payslip-gaps').catch(() => ({ workers: [] }));
-  const ws = r.workers || [];
-  const rows = ws.map(w => `<tr><td><b>${esc(w.name)}</b></td><td>${fmtM(w.from)} – ${fmtM(w.to)}</td><td style="text-align:center">${w.have}</td><td style="text-align:center"><b style="color:#B71C1C">${w.missing.length}</b></td><td>${w.missing.map(fmtM).join(', ')}</td></tr>`).join('');
-  shell(`${pageHead('Nóminas que faltan', 'Meses sin nómina subida entre la primera y la última de cada trabajador — para reclamar al gestor o al administrativo.')}
-    <div class="grid-3" style="margin-bottom:14px">
-      <div class="stat stat--blue"><div class="k">Trabajadores con huecos</div><div class="v">${r.count || 0}</div></div>
-      <div class="stat stat--yellow"><div class="k">Nóminas que faltan</div><div class="v">${r.totalMissing || 0}</div></div>
-    </div>
-    <p class="hint" style="margin-bottom:12px">Se detectan los meses <b>sin nómina</b> que quedan huecos entre la primera y la última nómina subida de cada persona. No se cuentan los meses anteriores a su primera nómina ni posteriores a la última (puede que aún no trabajara o ya no esté).</p>
-    <div class="table-wrap"><table class="dt"><thead><tr><th>Trabajador</th><th>Periodo con nóminas</th><th style="text-align:center">Tiene</th><th style="text-align:center">Faltan</th><th>Meses que faltan</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No se detectan huecos. 🎉</td></tr>'}</tbody></table></div>`, ['Nóminas que faltan']);
-});
-
 function chartSvg(data) {
   if (!data.length) return '<div class="empty">Sin datos.</div>';
   const W = 900, H = 320, pad = 40;

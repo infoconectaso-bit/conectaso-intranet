@@ -476,7 +476,7 @@ function navFor(role) {
     { s: 'Eventos' }, { t: 'Bodas pendientes', i: 'events', h: '#/eventos' }, { t: 'Bodas realizadas', i: 'events', h: '#/eventos/realizados' },
     { t: 'Servicios extras', i: 'extras', h: '#/extras' },
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
-    { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' }, { t: 'Nóminas', i: 'doc', h: '#/nominas' }, { t: 'Nóminas que faltan', i: 'doc', h: '#/nominas-faltan' },
+    { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' }, { t: 'Nóminas', i: 'doc', h: '#/nominas' },
     { s: 'Negocio' }, { t: 'Cobros de la semana', i: 'euro', h: '#/cobros' }, { t: 'Impagos', i: 'euro', h: '#/impagos' }, { t: 'Descuadre facturas', i: 'euro', h: '#/descuadres' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
     { t: 'Copias de seguridad', i: 'doc', h: '#/backups' },
     { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
