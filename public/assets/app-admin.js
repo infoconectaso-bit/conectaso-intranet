@@ -1089,6 +1089,7 @@ on(/^#\/analisis$/, async () => {
       return sect('Total de bodas por año', tbl + chart, 'Recomendado + Fiesta + Bodorrio + Tinglado (sin extras ni corporativos)');
     })(),
     (() => { const vp = a.ventasPack || {}; const keys = Object.keys(vp); const series = keys.map((k, i) => ({ label: k, color: PIE_COLORS[i % PIE_COLORS.length], values: years.map(y => vp[k][y] || 0) })); return sect('Evolución de bodas por pack (por año)', lineChartMulti(years, series)); })(),
+    (() => { const dw = a.bodasDow || {}; const cats = Object.keys(dw); if (!cats.length) return ''; const pieRows = cats.map(c => ({ label: c, value: sum(dw[c]) })); return sect('Bodas por día de la semana', crossTable(dw, 'Día') + pieChart(pieRows, { unit: ' bodas' }), 'Viernes, sábado, domingo y entre semana (lunes a jueves)'); })(),
   ].join('');
   const tabMasias = [
     sect('Bodas por masía y año', crossTable(a.ventasMasia, 'Masía', null, 2), 'Solo masías con 2 o más bodas'),
@@ -1107,11 +1108,18 @@ on(/^#\/analisis$/, async () => {
     sect('DJs con más horas extra (total)', pieChart((a.djPorTotal || []).map(r => ({ label: r.dj, value: r.horas })), { unit: 'h' }), 'Reparto del total de horas extra entre DJs'),
     sect('DJs con más horas extra por boda (media)', bars((a.djPorBoda || []).slice(0, 20).map(r => ({ label: r.dj, value: r.media, sub: `${r.media} h/boda · ${r.horas} h en ${r.bodas} bodas` })), v => ''), 'Mínimo 3 bodas para la media'),
   ].join('');
+  const tabExtras = [
+    sect('Extras más contratados', bars((a.extrasTop || []).map(r => ({ label: r.label, value: r.n, sub: `${r.n} bodas · ${r.pct}%` })), v => ''), `Sobre ${a.extrasTotalBodas || 0} bodas. Se cuenta por SERVICIO asignado (lo que de verdad se hizo), no por la pestaña de extras`),
+    sect('Reparto de extras (% de cada tipo)', pieChart((a.extrasTop || []).map(r => ({ label: r.label, value: r.n })), { topN: 16 }), 'Proporción de cada tipo de extra entre todos los contratados'),
+  ].join('');
+  const tabTecnicos = sect('Bodas por técnico (DJ) y año', crossTable(a.bodasDj, 'Técnico / DJ'), 'Número de bodas realizadas por cada DJ, por año');
   const tabPlanners = sect('Wedding planners con los que más trabajamos', pieChart((a.plannersTop || []).map(r => ({ label: r.name, value: r.n })), { unit: ' bodas', topN: 14 }), 'Excluye planners ligados a finca: UAUU (Castell de Tous / Mas Vivencs), Edelweiss, Can Ribas y Mas la Boella');
   const tabs = [
     { id: 'bodas', label: '💍 Bodas', html: tabBodas },
     { id: 'masias', label: '🏡 Masías', html: tabMasias },
     { id: 'horas', label: '⏱ Horas extra', html: tabHoras },
+    { id: 'extras', label: '🎉 Extras', html: tabExtras },
+    { id: 'tecnicos', label: '👥 Técnicos', html: tabTecnicos },
     { id: 'planners', label: '📋 Wedding planners', html: tabPlanners },
   ];
   let active = 'bodas'; try { const s = localStorage.getItem('anaTab'); if (s && tabs.some(t => t.id === s)) active = s; } catch (e) {}
