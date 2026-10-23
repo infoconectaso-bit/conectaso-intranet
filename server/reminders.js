@@ -13,7 +13,7 @@ const auth = require('./auth');
 // Enlace mágico de autologin para un usuario (novio o DJ) que lleva a su evento.
 const magicLink = (base, uid, kind, evId) => base + '/#/albaran?token=' + auth.createToken(uid, kind) + '&ev=' + evId;
 
-const APP_URL = () => (process.env.APP_URL || '').replace(/\/$/, '');
+const APP_URL = () => String(store.setting('appUrl') || process.env.APP_URL || '').replace(/\/$/, '');
 const bizToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
 
 // --- estructuras de momentos musicales (espejo de las del cliente, para medir el progreso) ---

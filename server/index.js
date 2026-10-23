@@ -25,7 +25,9 @@ const PUBLIC = path.join(__dirname, '..', 'public');
 const UPLOADS = path.join(DATA_DIR, 'uploads');
 fs.mkdirSync(UPLOADS, { recursive: true });
 const MAX_UPLOAD = +(process.env.MAX_UPLOAD_MB || 25) * 1024 * 1024;
-const APP_URL = () => (process.env.APP_URL || '').replace(/\/$/, '');
+// La URL base de los enlaces de email/magic links. Prioriza el ajuste guardado en la app
+// (store 'appUrl'), que el admin puede cambiar sin tocar el servidor (útil para el cutover al dominio).
+const APP_URL = () => String(store.setting('appUrl') || process.env.APP_URL || '').replace(/\/$/, '');
 
 /* ---------- utilidades HTTP ---------- */
 function send(res, status, body, headers = {}) {
@@ -184,6 +186,19 @@ async function api(req, res, url) {
 
   // --- eventos ---
   if (seg[0] === 'events') return events(req, res, user, seg, method, url);
+
+  // --- URL base de la app (para enlaces de email / magic links) ---
+  if (seg[0] === 'app-url') {
+    if (!user || user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    if (method === 'GET') return ok(res, { appUrl: APP_URL() });
+    if (method === 'PUT') {
+      const body = await readBody(req);
+      const u = String(body.url || '').trim().replace(/\/$/, '');
+      store.setSetting('appUrl', u);
+      store.audit(user.id, 'set-app-url');
+      return ok(res, { ok: true, appUrl: u });
+    }
+  }
 
   // --- usuarios ---
   if (seg[0] === 'users') return usersApi(req, res, user, seg, method);
