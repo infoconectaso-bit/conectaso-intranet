@@ -410,6 +410,44 @@ async function api(req, res, url) {
     fs.createReadStream(p).pipe(res);
     return;
   }
+  // --- DESCUADRES facturas/eventos (admin): facturas de Holded SIN vincular a un evento + descuadres de importe ---
+  if (seg[0] === 'holded-descuadres' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (!holded.enabled()) return ok(res, { enabled: false, sinVincular: [], descuadres: [] });
+    try {
+      const idx = await holded.buildIndex(url.searchParams.get('refresh') === '1');
+      const normE = s => String(s || '').trim().toLowerCase();
+      const normN = s => String(s || '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+      const normNm = s => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      // Mapa de claves de evento -> evento (por email/DNI/nombre de cónyuges y email del titular).
+      const evByKey = {};
+      store.all('events').forEach(e => {
+        const ev = { id: e.id, conyuges: e.conyuges || '', fecha: e.fecha || '' };
+        (e.spouses || []).forEach(s => { if (s) { if (s.email) evByKey['e:' + normE(s.email)] = ev; if (s.dni) evByKey['n:' + normN(s.dni)] = ev; if (s.name) evByKey['m:' + normNm(s.name)] = ev; } });
+        const u = users.get(e.userId); if (u && u.email) evByKey['e:' + normE(u.email)] = ev;
+      });
+      // CIF de empresa (finca/sociedad): empieza por letra. Esas facturas es NORMAL que no tengan evento.
+      const isCompany = code => /^[A-W]\d{7}[0-9A-J]$/.test(normN(code));
+      const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0;
+      Object.values(idx.byId).forEach(c => {
+        let ev = null;
+        (c.emails || []).forEach(em => { if (!ev) ev = evByKey['e:' + normE(em)]; });
+        if (!ev && c.code) ev = evByKey['n:' + normN(c.code)];
+        if (!ev && c.vat_number) ev = evByKey['n:' + normN(c.vat_number)];
+        if (!ev && c.name) ev = evByKey['m:' + normNm(c.name)];
+        const company = isCompany(c.code) || isCompany(c.vat_number);
+        (c.invoices || []).forEach(raw => {
+          totalInv++;
+          if (ev) { linkedInv++; return; }
+          if (company) { empresaInv++; return; }              // factura a empresa/finca: no es un descuadre
+          const inv = holded.mapInvoice(raw);
+          sinVincular.push({ number: inv.number, date: inv.date, total: inv.total, paid: inv.paid, pending: inv.pending, status: inv.status, contact: c.name || '', code: c.code || c.vat_number || '', invId: inv.id });
+        });
+      });
+      sinVincular.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, sinVincularN: sinVincular.length, sinVincular });
+    } catch (e) { return ok(res, { enabled: true, error: e.message, sinVincular: [] }); }
+  }
   // --- ANÁLISIS (admin): ventas por masía/pack, horas extra por masía/DJ, facturación masías y económico ---
   if (seg[0] === 'analisis' && method === 'GET') {
     if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');

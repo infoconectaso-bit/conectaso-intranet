@@ -810,6 +810,32 @@ on(/^#\/impagos$/, async () => {
   shell(`${pageHead('Impagos', `${invs.length} factura(s) pendiente(s)${overdueN ? ` · ${overdueN} vencida(s)` : ''} · ${eur(totalPend)} por cobrar`)}
     <div class="panel"><div class="panel__body">${table('dtImpagos', { rows: invs, order: [0, 'asc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas pendientes. 🎉' })}</div></div>`, ['Impagos']);
 });
+on(/^#\/descuadres$/, async () => {
+  if (!isAdmin()) { location.hash = '#/'; return; }
+  loading(['Descuadres']);
+  const r = await api('holded-descuadres').catch(() => ({ sinVincular: [] }));
+  if (r.enabled === false) { shell(`${pageHead('Descuadre facturas', 'Facturas de Holded sin vincular a un evento.')}<div class="empty">La integración de Holded no está activada.</div>`, ['Descuadres']); return; }
+  const eur = n => (Math.round((+n || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  const sv = r.sinVincular || [];
+  const cols = [
+    { t: 'Fecha', get: i => i.date || '', html: i => esc(slash(i.date) || '—') },
+    { t: 'Nº', get: i => i.number || '' },
+    { t: 'Cliente', get: i => i.contact || '', html: i => `<b>${esc(i.contact || '—')}</b>` },
+    { t: 'NIF/DNI', get: i => i.code || '' },
+    { t: 'Base', get: i => i.total || 0, num: true, html: i => eur(i.total) },
+    { t: 'Pagado', get: i => i.paid || 0, num: true, html: i => eur(i.paid) },
+    { t: 'Pendiente', get: i => i.pending || 0, num: true, html: i => eur(i.pending) },
+    { t: '', nosort: true, nofilter: true, html: i => i.invId ? `<a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver / descargar factura">📄</a>` : '' },
+  ];
+  shell(`${pageHead('Descuadre facturas / eventos', 'Facturas de Holded que NO están vinculadas a ningún evento (posible falta de vinculación).')}
+    <div class="grid-3" style="margin-bottom:14px">
+      <div class="stat stat--pink"><div class="k">Facturas sin vincular</div><div class="v">${r.sinVincularN || 0}</div></div>
+      <div class="stat stat--blue"><div class="k">Facturas vinculadas a boda</div><div class="v">${r.linkedInv || 0}</div></div>
+      <div class="stat"><div class="k">Facturas a empresas/fincas</div><div class="v">${r.empresaInv || 0}</div></div>
+    </div>
+    <p class="hint" style="margin-bottom:12px">Aquí salen facturas a <b>personas</b> (no a empresas/fincas) que <b>no cuadran con ningún evento</b>. Suele significar que falta vincularlas: revisa si el <b>email o DNI</b> de la pareja en el evento coincide con el de Holded. Las facturas a fincas/sociedades (CIF de empresa) se excluyen a propósito.</p>
+    <div class="panel"><div class="panel__body">${table('dtDescuadres', { rows: sv, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas sin vincular. 🎉' })}</div></div>`, ['Descuadres']);
+});
 
 on(/^#\/nominas$/, async () => {
   // Acceso a nóminas: SOLO administración y DJ/técnicos (sus propias). Wedding planner y
