@@ -106,6 +106,9 @@ button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var
 .notes{font-size:13.5px;background:#FFF6B8;border-radius:10px;padding:10px 12px;white-space:pre-wrap;margin:0}
 .msg{font-size:13px;margin:0;min-height:1em}
 .msg.err{color:var(--pink-d);font-weight:700}
+.sec{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:10px 2px -2px;border-bottom:3px solid var(--onyx);padding-bottom:6px}
+.sec h2{font-size:20px}
+.sec span{font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap}
 .empty{background:var(--paper);border:2px dashed var(--muted);border-radius:14px;padding:28px 18px;text-align:center;color:var(--muted)}
 .empty b{display:block;font-family:var(--display);color:var(--ink);font-size:16px;margin-bottom:6px}
 .foot{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
@@ -244,7 +247,7 @@ function render() {
     ${mine.length ? `
     <section class="cal"><h2>Calendario de vencimientos</h2>${cal}
       ${nWeak ? `<p class="msg" style="margin-top:8px;color:var(--bad);font-weight:700">${nWeak} puntos débiles a revisar en estas pólizas.</p>` : ''}</section>
-    ${mine.map(card).join('')}` : `
+    ${groups(mine)}` : `
     <div class="empty"><b>Aún no hay pólizas aquí</b>Pásame las pólizas de ${S.tab === 'empresa' ? 'Conecta Sonido e Iluminación S.L.' : TABS.find(t => t[0] === S.tab)[1]} y las añado con su resumen.</div>`}
     <div class="foot">
       <button class="btn ghost small" id="cpw">Cambiar contraseña</button>
@@ -259,6 +262,13 @@ function render() {
   $('#inst').onclick = install;
 }
 
+const VEH = new Set(['coche', 'moto']);
+function groups(list) {
+  const veh = list.filter(p => VEH.has(p.tipo)), rest = list.filter(p => !VEH.has(p.tipo));
+  if (!veh.length || !rest.length) return list.map(card).join('');
+  const head = (t, l) => `<div class="sec"><h2>${t}</h2><span>${l.length} · ${eur(l.reduce((s, p) => s + anual(p), 0))}/año</span></div>`;
+  return head(S.tab === 'empresa' ? 'Negocio' : 'Personales', rest) + rest.map(card).join('') + head('Vehículos', veh) + veh.map(card).join('');
+}
 function card(p) {
   const nx = nextDue(p);
   const per = p.periodicidad || 'anual';
