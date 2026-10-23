@@ -17,6 +17,7 @@ const fact = require('./facturacion');
 const { evFinished, evRealized } = require('./time');
 const volcado = require('./volcado');
 const holded = require('./holded');
+const backup = require('./backup');
 
 const PORT = +(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -310,6 +311,61 @@ async function api(req, res, url) {
       });
       return ok(res, { enabled: true, count: out.length, invoices: out });
     } catch (e) { return ok(res, { enabled: true, error: e.message, invoices: [] }); }
+  }
+  // --- CUADRE (admin): compara lo apuntado en cada evento (pagado / total cliente) con las facturas de Holded ---
+  if (seg[0] === 'holded-cuadre' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (!holded.enabled()) return ok(res, { enabled: false, rows: [] });
+    try {
+      await holded.buildIndex(url.searchParams.get('refresh') === '1');
+      const tol = 1; // tolerancia en € para ignorar redondeos
+      const rows = [];
+      let conFactura = 0;
+      for (const ev of store.all('events')) {
+        const emails = [], nifs = [], names = [];
+        const u = users.get(ev.userId); if (u && u.email) emails.push(u.email);
+        (ev.coUsers || []).forEach(id => { const c = users.get(id); if (c && c.email) emails.push(c.email); });
+        (ev.spouses || []).forEach(s => { if (s) { if (s.email) emails.push(s.email); if (s.dni) nifs.push(s.dni); if (s.name) names.push(s.name); } });
+        if (ev.conyuges) String(ev.conyuges).split(/\s+y\s+|&/i).forEach(n => { const t = n.trim(); if (t) names.push(t); });
+        if (!emails.length && !nifs.length && !names.length) continue;
+        const r = await holded.invoicesForClient({ emails, nifs, names }, false, { includeName: true });
+        if (!r.invoices.length) continue;
+        conFactura++;
+        const t = r.invoices.reduce((a, i) => ({ total: a.total + i.total, paid: a.paid + i.paid, pending: a.pending + i.pending }), { total: 0, paid: 0, pending: 0 });
+        const pagado = +ev.pagado || 0, pagoCliente = +ev.pagoCliente || 0;
+        const dPaid = Math.round((t.paid - pagado) * 100) / 100;
+        const dTotal = Math.round((t.total - pagoCliente) * 100) / 100;
+        if (Math.abs(dPaid) > tol || Math.abs(dTotal) > tol) {
+          rows.push({ id: ev.id, conyuges: ev.conyuges || '', fecha: ev.fecha || '', matchedBy: r.matchedBy, nInv: r.invoices.length,
+            ev_pagado: pagado, hd_paid: Math.round(t.paid * 100) / 100, dPaid,
+            ev_total: pagoCliente, hd_total: Math.round(t.total * 100) / 100, dTotal,
+            hd_pending: Math.round(t.pending * 100) / 100 });
+        }
+      }
+      rows.sort((a, b) => Math.abs(b.dPaid) - Math.abs(a.dPaid));
+      return ok(res, { enabled: true, conFactura, descuadres: rows.length, tol, rows });
+    } catch (e) { return ok(res, { enabled: true, error: e.message, rows: [] }); }
+  }
+  // --- COPIAS DE SEGURIDAD (admin): listar, crear al momento y descargar ---
+  if (seg[0] === 'backups' && method === 'GET' && !seg[1]) {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const items = backup.list();
+    const totalSize = items.reduce((s, b) => s + b.size, 0);
+    return ok(res, { count: items.length, lastBackup: items[0] || null, totalSize, dir: backup.BACKUP_DIR, backups: items });
+  }
+  if (seg[0] === 'backups' && seg[1] === 'create' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    try { const r = backup.snapshot('manual'); store.audit(user.id, 'backup-create'); return ok(res, { ok: true, backup: r }); }
+    catch (e) { return fail(res, 500, 'No se pudo crear la copia: ' + e.message); }
+  }
+  if (seg[0] === 'backups' && seg[1] === 'download' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const p = backup.fileFor(url.searchParams.get('name'));
+    if (!p) return fail(res, 404, 'Copia no encontrada.');
+    const stat = fs.statSync(p);
+    res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename="${path.basename(p)}"`, 'Content-Length': stat.size, 'Cache-Control': 'no-store' });
+    fs.createReadStream(p).pipe(res);
+    return;
   }
   // --- ANÁLISIS (admin): ventas por masía/pack, horas extra por masía/DJ, facturación masías y económico ---
   if (seg[0] === 'analisis' && method === 'GET') {
@@ -1706,4 +1762,5 @@ server.listen(PORT, HOST, () => {
   console.log(`Gestor Conecta So escuchando en http://${HOST}:${PORT}`);
   if (!mail.enabled()) console.log('Aviso: SMTP no configurado — los enlaces de invitación se mostrarán en pantalla al administrador.');
   try { require('./reminders').startReminders(); } catch (e) { console.error('[recordatorios] no se pudo iniciar:', e.message); }
+  try { backup.start(); } catch (e) { console.error('[backup] no se pudo iniciar:', e.message); }
 });
