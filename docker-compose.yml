@@ -4,12 +4,30 @@ services:
     container_name: conectaso-gestor
     restart: unless-stopped
     ports:
+      # Acceso por IP (HTTP) — se mantiene igual que siempre.
       - "80:3000"
+    expose:
+      - "3000"
     env_file:
       - .env
     volumes:
       # Base de datos y archivos subidos (persisten aunque se reconstruya el contenedor).
       - ./data:/data
+
+  # Proxy con HTTPS automático (Let's Encrypt) para el dominio de pruebas.
+  # Solo ocupa el 443; el 80 lo sigue sirviendo 'gestor', así el acceso por IP no se toca.
+  caddy:
+    image: caddy:2-alpine
+    container_name: conectaso-caddy
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - gestor
 
   # App del préstamo: independiente de la intranet (otro contenedor, puerto 8080 y datos propios).
   prestamo:
@@ -20,3 +38,8 @@ services:
       - "8080:8080"
     volumes:
       - ./data-prestamo:/data
+
+volumes:
+  # Certificados y estado de Caddy (persisten para no re-emitir el certificado en cada despliegue).
+  caddy_data:
+  caddy_config:
