@@ -466,6 +466,22 @@ async function api(req, res, url) {
       return ok(res, { ok: true, config: next, preview: cleanupPreview(next.months) });
     }
   }
+  // --- NÓMINAS QUE FALTAN (admin): huecos de meses entre la 1ª y la última nómina de cada trabajador ---
+  if (seg[0] === 'payslip-gaps' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const rows = db().prepare("SELECT record_id, description FROM files WHERE collection='payslip'").all();
+    const byUser = {};
+    rows.forEach(r => { const m = String(r.description || '').match(/(\d{4})-(\d{2})/); if (!m) return; (byUser[r.record_id] = byUser[r.record_id] || new Set()).add(m[1] + '-' + m[2]); });
+    const monthsBetween = (a, b) => { let [y, mo] = a.split('-').map(Number); const [by, bm] = b.split('-').map(Number); const out = []; while (y < by || (y === by && mo <= bm)) { out.push(y + '-' + String(mo).padStart(2, '0')); mo++; if (mo > 12) { mo = 1; y++; } } return out; };
+    const workers = [];
+    Object.entries(byUser).forEach(([uid, set]) => {
+      const have = [...set].sort(); if (have.length < 2) return;
+      const missing = monthsBetween(have[0], have[have.length - 1]).filter(m => !set.has(m));
+      if (missing.length) { const u = users.get(+uid) || {}; workers.push({ uid: +uid, name: u.name || ('#' + uid), from: have[0], to: have[have.length - 1], have: have.length, missing }); }
+    });
+    workers.sort((a, b) => b.missing.length - a.missing.length || String(a.name).localeCompare(b.name));
+    return ok(res, { count: workers.length, totalMissing: workers.reduce((s, w) => s + w.missing.length, 0), workers });
+  }
   if (seg[0] === 'backups' && seg[1] === 'create' && method === 'POST') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     try { const r = backup.snapshot('manual'); store.audit(user.id, 'backup-create'); return ok(res, { ok: true, backup: r }); }
