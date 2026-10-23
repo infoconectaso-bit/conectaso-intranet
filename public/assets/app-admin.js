@@ -1110,7 +1110,9 @@ on(/^#\/analisis$/, async () => {
     sect('Cobrado por horas extra, por DJ y año', crossTable(a.heEarnDj, 'DJ', eur), 'Horas extra × tarifa de cada DJ (según finca o pack), en bodas realizadas'),
   ].join('');
   const tabExtras = [
-    sect('Extras más contratados', bars((a.extrasTop || []).map(r => ({ label: r.label, value: r.n, sub: `${r.n} bodas · ${r.pct}%` })), v => ''), `Sobre ${a.extrasTotalBodas || 0} bodas. Se cuenta por SERVICIO asignado (lo que de verdad se hizo), no por la pestaña de extras`),
+    sect('Extras más contratados', bars((a.extrasTop || []).map(r => ({ label: r.label, value: r.n, sub: `${r.n} bodas · ${r.pct}%` })), v => ''), `Sobre ${a.extrasTotalBodas || 0} bodas. Por SERVICIO asignado (lo real). Solo los contratados 10 o más veces`),
+    sect('Extras por año', crossTable(a.extrasByYear, 'Extra'), 'Cuántas veces se ha contratado cada extra, por año y total'),
+    (() => { const eb = a.extrasByYear || {}; const top = Object.keys(eb).map(k => [k, sum(eb[k])]).sort((x, y) => y[1] - x[1]).slice(0, 8); if (!top.length) return ''; const series = top.map((t, i) => ({ label: t[0], color: PIE_COLORS[i % PIE_COLORS.length], values: years.map(y => eb[t[0]][y] || 0) })); return sect('Evolución de extras por año', lineChartMulti(years, series), 'Si cada extra se vende más o menos cada año (top 8)'); })(),
     sect('Reparto de extras (% de cada tipo)', pieChart((a.extrasTop || []).map(r => ({ label: r.label, value: r.n })), { topN: 16 }), 'Proporción de cada tipo de extra entre todos los contratados'),
   ].join('');
   const tabTecnicos = sect('Bodas por técnico (DJ) y año', crossTable(a.bodasDj, 'Técnico / DJ'), 'Número de bodas realizadas por cada DJ, por año');

@@ -727,10 +727,17 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
     const isWedPack = p => /recomendad|fiesta|bodorri|tinglado/i.test(p || '');
     const weddings = allEv.filter(e => isWedPack(e.tipo));
     const svcCat = {}; store.all('extras').forEach(x => { if (x && x.id != null) svcCat[x.id] = x.name || ('Servicio ' + x.id); });
-    const svcCnt = {};
-    weddings.forEach(e => { const seen = new Set(); (e.services || []).forEach(s => { const id = s && s.servicio; if (id == null || id === '' || seen.has(id)) return; seen.add(id); svcCnt[id] = (svcCnt[id] || 0) + 1; }); });
+    const svcYear = {}, svcTotal = {};
+    weddings.forEach(e => {
+      const y = (e.fecha || '').slice(0, 4); if (!y) return;
+      const seen = new Set();
+      (e.services || []).forEach(s => { const id = s && s.servicio; if (id == null || id === '' || seen.has(id)) return; seen.add(id); const label = svcCat[id] || ('Servicio ' + id); (svcYear[label] = svcYear[label] || {})[y] = (svcYear[label][y] || 0) + 1; svcTotal[label] = (svcTotal[label] || 0) + 1; });
+    });
     const extrasTotalBodas = weddings.length;
-    const extrasTop = Object.entries(svcCnt).map(([id, n]) => ({ label: svcCat[id] || ('Servicio ' + id), n, pct: extrasTotalBodas ? Math.round(n / extrasTotalBodas * 1000) / 10 : 0 })).sort((a, b) => b.n - a.n);
+    // Solo los extras contratados 10 o más veces en total.
+    const extrasByYear = {};
+    Object.keys(svcYear).forEach(label => { if ((svcTotal[label] || 0) >= 10) extrasByYear[label] = svcYear[label]; });
+    const extrasTop = Object.keys(extrasByYear).map(label => ({ label, n: svcTotal[label], pct: extrasTotalBodas ? Math.round(svcTotal[label] / extrasTotalBodas * 1000) / 10 : 0 })).sort((a, b) => b.n - a.n);
 
     // --- Bodas por técnico (DJ) y año ---
     const bodasDj = {};
@@ -757,7 +764,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       (heEarnDj[nm] = heEarnDj[nm] || {})[y] = Math.round(((heEarnDj[nm] || {})[y] || 0) + amt);
     });
 
-    const out = { years: [...years].sort(), ventasMasia, ventasPack, horasMasia, horasMasiaYear, horasYears, djPorTotal, djPorBoda, plannersTop, extrasTop, extrasTotalBodas, bodasDj, bodasDow, heEarnDj };
+    const out = { years: [...years].sort(), ventasMasia, ventasPack, horasMasia, horasMasiaYear, horasYears, djPorTotal, djPorBoda, plannersTop, extrasTop, extrasByYear, extrasTotalBodas, bodasDj, bodasDow, heEarnDj };
     if (holded.enabled()) {
       try {
         const idx = await holded.buildIndex(url.searchParams.get('refresh') === '1');
@@ -2176,6 +2183,8 @@ server.listen(PORT, HOST, () => {
   if (!mail.enabled()) console.log('Aviso: SMTP no configurado — los enlaces de invitación se mostrarán en pantalla al administrador.');
   try { require('./reminders').startReminders(); } catch (e) { console.error('[recordatorios] no se pudo iniciar:', e.message); }
   try { backup.start(); } catch (e) { console.error('[backup] no se pudo iniciar:', e.message); }
+  // Calienta el índice de Holded al arrancar para que la primera apertura de Análisis/Impagos sea rápida.
+  try { if (holded.enabled()) setTimeout(() => { holded.buildIndex(true).catch(() => {}); }, 20000); } catch (e) {}
   // Limpieza automática de adjuntos de bodas antiguas: una vez al día, solo si está activada.
   const runCleanupIfOn = () => {
     try { const c = store.setting('attachmentCleanup'); if (c && c.enabled) { const r = cleanupRun(c.months, null); if (r.files || r.logos) console.log('[cleanup] liberados', r.files, 'archivos y', r.logos, 'logos de', r.oldEvents, 'bodas antiguas'); } }

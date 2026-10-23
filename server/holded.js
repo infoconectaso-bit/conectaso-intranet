@@ -111,7 +111,7 @@ async function getInvoicePdf(id) {
 // Índice cacheado: contactos + facturas agrupadas por contacto. Evita pedir
 // todo a Holded en cada apertura de evento. TTL corto (se puede forzar refresco).
 // ---------------------------------------------------------------------------
-let _idx = null, _idxAt = 0;
+let _idx = null, _idxAt = 0, _idxRefreshing = null;
 const IDX_TTL = 10 * 60 * 1000;
 const normEmail = s => String(s || '').trim().toLowerCase();
 const normNif = s => String(s || '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
@@ -126,8 +126,7 @@ function parseAmount(v) {
   return isNaN(n) ? 0 : n;
 }
 
-async function buildIndex(force) {
-  if (!force && _idx && (Date.now() - _idxAt) < IDX_TTL) return _idx;
+async function _rebuildIndex() {
   const [contacts, invoices] = await Promise.all([listContacts(), listInvoices()]);
   // Un mismo NIF/email/nombre puede estar en VARIOS contactos (Holded permite duplicados), así que
   // cada clave apunta a una LISTA de contactos y luego se unen sus facturas.
@@ -145,6 +144,15 @@ async function buildIndex(force) {
   _idx = { byId, byEmail, byNif, byName, contactsN: contacts.length, invoicesN: invoices.length, builtAt: Date.now() };
   _idxAt = Date.now();
   return _idx;
+}
+
+// Índice con "stale-while-revalidate": si ya hay uno (aunque esté caducado) y no se fuerza, se devuelve
+// al INSTANTE y se refresca en segundo plano. Así abrir Análisis/Impagos no espera a Holded.
+async function buildIndex(force) {
+  if (!force && _idx && (Date.now() - _idxAt) < IDX_TTL) return _idx;   // fresco
+  if (!_idxRefreshing) _idxRefreshing = _rebuildIndex().finally(() => { _idxRefreshing = null; });
+  if (_idx && !force) { _idxRefreshing.catch(() => {}); return _idx; }  // caducado: devuelve lo que hay y refresca detrás
+  return _idxRefreshing;                                                // primera vez o refresco forzado: espera
 }
 
 /** Mapea una factura de Holded a la forma que usa la intranet.

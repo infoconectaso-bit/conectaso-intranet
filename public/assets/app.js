@@ -412,8 +412,11 @@ function renderAuth() {
   $('#loginForm').addEventListener('submit', async e => {
     e.preventDefault(); const f = e.target; const btn = $('button', f); btn.disabled = true;
     const errEl = el('loginErr'); errEl.style.display = 'none';
+    const emailVal = f.email.value.trim(), pwVal = f.password.value;
     try {
-      await api('auth/login', { method: 'POST', body: { email: f.email.value.trim(), password: f.password.value } });
+      await api('auth/login', { method: 'POST', body: { email: emailVal, password: pwVal } });
+      // Pide al navegador guardar la contraseña (Chrome/Android y similares). Safari usa sus propios autocomplete.
+      try { if (window.PasswordCredential && navigator.credentials && navigator.credentials.store) { navigator.credentials.store(new PasswordCredential({ id: emailVal, password: pwVal, name: emailVal })).catch(() => {}); } } catch (e) {}
       location.hash = '#/'; await afterLogin();
     } catch (err) { errEl.textContent = err.message; errEl.style.display = 'block'; btn.disabled = false; }
   });

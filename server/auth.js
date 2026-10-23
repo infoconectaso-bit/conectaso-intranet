@@ -4,6 +4,9 @@ const crypto = require('crypto');
 const { db, users } = require('./db');
 
 const SESSION_DAYS = +(process.env.SESSION_DAYS || 14);
+// Cierre de sesión por INACTIVIDAD: si no se navega durante estas horas, la sesión caduca.
+// La caducidad se desliza en cada request mientras se usa la intranet.
+const IDLE_MS = +(process.env.SESSION_IDLE_HOURS || 8) * 3600e3;
 const COOKIE = 'cs_session';
 const SECURE_COOKIE = (process.env.COOKIE_SECURE || 'auto');
 
@@ -35,6 +38,7 @@ const st = {
   del: db.prepare('DELETE FROM sessions WHERE token_hash = ?'),
   delUser: db.prepare('DELETE FROM sessions WHERE user_id = ?'),
   purge: db.prepare('DELETE FROM sessions WHERE expires_at < ?'),
+  touch: db.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?'),
   tokIns: db.prepare('INSERT INTO tokens (token_hash, user_id, kind, expires_at) VALUES (?, ?, ?, ?)'),
   tokGet: db.prepare('SELECT * FROM tokens WHERE token_hash = ?'),
   tokUse: db.prepare('UPDATE tokens SET used_at = ? WHERE token_hash = ?'),
@@ -54,7 +58,8 @@ function isSecure(req) {
 function createSession(req, res, userId) {
   const token = crypto.randomBytes(32).toString('base64url');
   const now = Date.now();
-  st.ins.run(sha(token), userId, now + SESSION_DAYS * 864e5, now, clientIp(req));
+  // La caducidad del servidor es por inactividad (se desliza); la cookie dura más y el servidor manda.
+  st.ins.run(sha(token), userId, now + IDLE_MS, now, clientIp(req));
   st.purge.run(now);
   res.setHeader('Set-Cookie', `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${isSecure(req) ? '; Secure' : ''}`);
 }
@@ -67,10 +72,14 @@ function destroySession(req, res) {
 function sessionUser(req) {
   const t = parseCookies(req)[COOKIE];
   if (!t) return null;
-  const s = st.get.get(sha(t));
-  if (!s || s.expires_at < Date.now()) return null;
+  const h = sha(t);
+  const s = st.get.get(h);
+  const now = Date.now();
+  if (!s || s.expires_at < now) return null;          // caducada por inactividad
   const row = users.getRow(s.user_id);
   if (!row || !row.active) return null;
+  // Desliza la caducidad por inactividad (como mucho una vez por minuto para no escribir en cada request).
+  if (s.expires_at - (IDLE_MS - 60000) < now) { try { st.touch.run(now + IDLE_MS, h); } catch (e) {} }
   return users.get(row.id);
 }
 const endAllSessions = uid => st.delUser.run(uid);
