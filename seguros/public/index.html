@@ -183,6 +183,7 @@ const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')
 const days = d => Math.round((d - today()) / 864e5);
 const anual = p => (+p.prima || 0) * (PER[p.periodicidad] || 1);
 function duePill(p) {
+  if (p.estado) return `<span class="pill late">${esc(p.estado)}</span>`;
   const d = nextDue(p);
   if (!d) return '<span class="pill">Sin fecha</span>';
   const n = days(d);
