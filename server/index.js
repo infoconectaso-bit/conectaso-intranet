@@ -18,6 +18,7 @@ const { evFinished, evRealized } = require('./time');
 const volcado = require('./volcado');
 const holded = require('./holded');
 const backup = require('./backup');
+const cloudBackup = require('./cloud-backup');
 
 const PORT = +(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -394,7 +395,51 @@ async function api(req, res, url) {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     const items = backup.list();
     const totalSize = items.reduce((s, b) => s + b.size, 0);
-    return ok(res, { count: items.length, lastBackup: items[0] || null, totalSize, dir: backup.BACKUP_DIR, status: backup.status(), backups: items });
+    let cloud = { configured: false };
+    try { cloud = await cloudBackup.statusAsync(); } catch (e) { cloud = { configured: cloudBackup.enabled(), reachError: e.message }; }
+    return ok(res, { count: items.length, lastBackup: items[0] || null, totalSize, dir: backup.BACKUP_DIR, status: backup.status(), cloud, backups: items });
+  }
+  // --- COPIA EN LA NUBE (admin): configuración de Backblaze B2 (claves nunca se devuelven) ---
+  if (seg[0] === 'cloud-backup-config') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (method === 'GET') {
+      const c = store.setting('cloudBackup') || {};
+      return ok(res, { config: { endpoint: c.endpoint || '', bucket: c.bucket || '', region: c.region || '', keyId: c.keyId || '', enabled: !!c.enabled, hasAppKey: !!c.appKey } });
+    }
+    if (method === 'POST') {
+      const b = await readBody(req);
+      const cur = store.setting('cloudBackup') || {};
+      const next = {
+        endpoint: String(b.endpoint || '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, ''),
+        bucket: String(b.bucket || '').trim(),
+        region: String(b.region || '').trim(),
+        keyId: String(b.keyId || '').trim(),
+        enabled: !!b.enabled,
+        // Conserva la clave guardada si el formulario la deja en blanco (no se reescribe).
+        appKey: (b.appKey != null && b.appKey !== '') ? String(b.appKey).trim() : cur.appKey,
+      };
+      store.setSetting('cloudBackup', next);
+      store.audit(user.id, 'cloud-backup-config-save');
+      return ok(res, { ok: true, enabled: cloudBackup.enabled(), hasAppKey: !!next.appKey });
+    }
+  }
+  // --- probar la copia en la nube (admin): sube y borra un objeto de prueba ---
+  if (seg[0] === 'cloud-backup-test' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    try { await cloudBackup.test(); store.audit(user.id, 'cloud-backup-test'); return ok(res, { ok: true }); }
+    catch (e) { return fail(res, 400, 'No se pudo conectar con la nube: ' + e.message); }
+  }
+  // --- subir ahora mismo la última copia a la nube (admin) ---
+  if (seg[0] === 'cloud-backup-sync' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (!cloudBackup.enabled()) return fail(res, 400, 'La copia en la nube no está configurada o activada.');
+    try {
+      const r = backup.snapshot('manual');
+      const p = backup.fileFor(r.name);
+      await cloudBackup.uploadFile(p, cloudBackup.PREFIX + r.name);
+      store.audit(user.id, 'cloud-backup-sync');
+      return ok(res, { ok: true, name: r.name });
+    } catch (e) { return fail(res, 400, 'No se pudo subir a la nube: ' + e.message); }
   }
   if (seg[0] === 'backups' && seg[1] === 'create' && method === 'POST') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');

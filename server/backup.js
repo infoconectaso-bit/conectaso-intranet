@@ -53,6 +53,11 @@ function snapshot(reason) {
   let size = 0; try { size = fs.statSync(dest).size; } catch (e) {}
   prune();
   lastOk = { name, date: new Date().toISOString() };
+  // Copia 2 (fuera del servidor): subida a la nube en segundo plano. No bloquea ni rompe la copia local.
+  try {
+    const cloud = require('./cloud-backup');
+    if (cloud.enabled()) cloud.syncSnapshot(dest, name).catch(() => {});
+  } catch (e) {}
   return { name, size, reason: reason || 'auto', date: lastOk.date };
 }
 

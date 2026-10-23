@@ -1135,12 +1135,20 @@ on(/^#\/backups$/, async () => {
   const fmtDate = s => { try { return new Date(s).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return s; } };
   async function render() {
     const r = await api('backups').catch(() => ({ backups: [] }));
+    const cc = await api('cloud-backup-config').catch(() => ({ config: {} }));
+    const cfg = cc.config || {};
+    const cloud = r.cloud || {};
     const list = r.backups || [], last = r.lastBackup;
     const st = r.status || {};
     let banner = '';
     if (st.lastError && !st.healthy) banner = `<div class="banner banner--err" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FDECEA;color:#B71C1C;border:1px solid #F5C6CB"><b>⚠ La última copia automática falló</b> (${fmtDate(st.lastError.date)}). ${esc(st.lastError.message || '')}. Se ha avisado por email a administración. Revisa el servidor (espacio en disco).</div>`;
     else if (st.stale) banner = `<div class="banner" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FFF8E1;color:#8a6d00;border:1px solid #FFE49A"><b>⚠ Hace más de 90 minutos que no se hace una copia correcta.</b> Comprueba que el servidor está funcionando.</div>`;
     else banner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Copias funcionando correctamente.</div>`;
+    let cloudBanner = '';
+    if (!cfg.enabled) cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#EEF2F7;color:#334;border:1px solid #D6DEE8">La copia en la nube está <b>desactivada</b>. Rellena los datos y marca «Activar».</div>`;
+    else if (cloud.reachError) cloudBanner = `<div class="banner banner--err" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FDECEA;color:#B71C1C;border:1px solid #F5C6CB"><b>⚠ No se pudo contactar con la nube.</b> ${esc(cloud.reachError)}. Revisa el endpoint, la región y las claves.</div>`;
+    else if (cloud.lastError && (!cloud.lastOk || new Date(cloud.lastError.date) > new Date(cloud.lastOk.date))) cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FFF8E1;color:#8a6d00;border:1px solid #FFE49A"><b>⚠ La última subida a la nube falló</b> (${fmtDate(cloud.lastError.date)}). ${esc(cloud.lastError.message || '')}</div>`;
+    else cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Copia en la nube activa. ${cloud.remoteCount != null ? cloud.remoteCount + ' copias en Backblaze' : ''}${cloud.remoteLast ? ' · última: ' + fmtDate(cloud.remoteLast) : ''}.</div>`;
     const rows = list.map(b => `<tr><td><b>${esc(b.name)}</b></td><td>${fmtDate(b.date)}</td><td style="text-align:right">${fmtSize(b.size)}</td><td style="text-align:right"><a class="btn btn--sm" href="/api/backups/download?name=${encodeURIComponent(b.name)}" download>⬇ Descargar</a></td></tr>`).join('');
     shell(`${pageHead('Copias de seguridad', 'Copias automáticas de la base de datos (bodas, usuarios, tarifas…).')}
       ${banner}
@@ -1151,9 +1159,40 @@ on(/^#\/backups$/, async () => {
       </div>
       <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--primary" id="bkNow">💾 Crear copia ahora</button></div>
       <p class="hint" style="margin-bottom:12px">Se hace una copia automática al arrancar y <b>cada 30 minutos</b>. Se conservan todas las de las últimas 48 h y una diaria durante 30 días. Para protección total conviene, además, copiar esta carpeta a un sitio externo (nube) y respaldar los archivos de nóminas.</p>
-      <div class="table-wrap"><table class="dt"><thead><tr><th>Archivo</th><th>Fecha</th><th style="text-align:right">Tamaño</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">Aún no hay copias (se creará una en breve).</td></tr>'}</tbody></table></div>`, ['Copias de seguridad']);
+      <div class="table-wrap"><table class="dt"><thead><tr><th>Archivo</th><th>Fecha</th><th style="text-align:right">Tamaño</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">Aún no hay copias (se creará una en breve).</td></tr>'}</tbody></table></div>
+
+      <h2 style="margin:26px 0 6px">☁️ Copia en la nube (fuera del servidor)</h2>
+      <p class="hint" style="margin-bottom:12px">Segunda copia automática en <b>Backblaze B2</b> (región Europa). Si el servidor se estropeara, los datos seguirían a salvo aquí. Cada copia local (cada 30 min) se sube también a la nube. La clave secreta se guarda <b>solo en tu servidor</b>; no se muestra una vez guardada.</p>
+      ${cloudBanner}
+      <div class="card" style="padding:16px;border:1px solid var(--line,#e5e7eb);border-radius:12px;max-width:560px">
+        <div style="display:grid;gap:10px">
+          <label>Endpoint (Punto final)<input id="cbEndpoint" class="inp" value="${esc(cfg.endpoint || '')}" placeholder="s3.eu-central-003.backblazeb2.com"></label>
+          <label>Bucket<input id="cbBucket" class="inp" value="${esc(cfg.bucket || '')}" placeholder="conectaso-backups"></label>
+          <label>Región<input id="cbRegion" class="inp" value="${esc(cfg.region || '')}" placeholder="eu-central-003"></label>
+          <label>keyID<input id="cbKeyId" class="inp" value="${esc(cfg.keyId || '')}" placeholder="000..."></label>
+          <label>applicationKey (clave secreta)<input id="cbAppKey" class="inp" type="password" autocomplete="new-password" placeholder="${cfg.hasAppKey ? '•••••••• (guardada — déjalo en blanco para no cambiarla)' : 'pega aquí tu clave'}"></label>
+          <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cbEnabled" ${cfg.enabled ? 'checked' : ''}> <span>Activar copia automática en la nube</span></label>
+        </div>
+        <div class="btn-row" style="margin-top:14px;flex-wrap:wrap;gap:8px">
+          <button class="btn btn--primary" id="cbSave">Guardar</button>
+          <button class="btn" id="cbTest">🔌 Probar conexión</button>
+          <button class="btn" id="cbSync">⬆ Subir copia ahora</button>
+        </div>
+      </div>`, ['Copias de seguridad']);
     const bn = el('bkNow');
     if (bn) bn.onclick = async () => { bn.disabled = true; bn.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST' }); toast('Copia creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
+    const cbSave = el('cbSave');
+    if (cbSave) cbSave.onclick = async () => {
+      const body = { endpoint: el('cbEndpoint').value, bucket: el('cbBucket').value, region: el('cbRegion').value, keyId: el('cbKeyId').value, enabled: el('cbEnabled').checked };
+      const ak = el('cbAppKey').value; if (ak) body.appKey = ak;   // en blanco = conservar la guardada
+      cbSave.disabled = true; cbSave.textContent = 'Guardando…';
+      try { await api('cloud-backup-config', { method: 'POST', body }); toast('Configuración guardada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); }
+      render();
+    };
+    const cbTest = el('cbTest');
+    if (cbTest) cbTest.onclick = async () => { cbTest.disabled = true; cbTest.textContent = 'Probando…'; try { await api('cloud-backup-test', { method: 'POST' }); toast('✅ Conexión correcta con la nube', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } cbTest.disabled = false; cbTest.textContent = '🔌 Probar conexión'; };
+    const cbSync = el('cbSync');
+    if (cbSync) cbSync.onclick = async () => { cbSync.disabled = true; cbSync.textContent = 'Subiendo…'; try { await api('cloud-backup-sync', { method: 'POST' }); toast('✅ Copia subida a la nube', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
   }
   render();
 });

@@ -1,0 +1,162 @@
+'use strict';
+/**
+ * Copia 2 (fuera del servidor): sube las copias de seguridad a Backblaze B2.
+ * - Usa la API S3 de B2 firmada con AWS SigV4 (sin dependencias externas, solo 'crypto' + fetch de Node 22).
+ * - Configuración (endpoint, bucket, región y claves) guardada en el setting 'cloudBackup'.
+ *   Las claves NUNCA se devuelven al navegador; solo se indica si hay una guardada.
+ * - Se dispara después de cada snapshot local (ver backup.js): sube el .db y, de vez en cuando,
+ *   limpia en la nube las copias antiguas con el mismo criterio que en local.
+ * - Si una subida falla, se avisa por email a administración (máx. 1 cada 3 h) y se marca el estado.
+ */
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { store, users } = require('./db');
+const mail = require('./mail');
+
+const PREFIX = 'conectaso/';                 // carpeta dentro del bucket
+let lastOk = null;                            // { key, date }
+let lastError = null;                         // { message, date }
+let lastAlert = 0;
+let pruneCheck = 0;                           // control de cada cuánto limpiamos en la nube
+
+function cfg() { return store.setting('cloudBackup') || {}; }
+function enabled() { const c = cfg(); return !!(c.enabled && c.endpoint && c.bucket && c.region && c.keyId && c.appKey); }
+
+function hostOf(c) { return String(c.endpoint || '').replace(/^https?:\/\//, '').replace(/\/+$/, ''); }
+const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
+const hmac = (key, data) => crypto.createHmac('sha256', key).update(data).digest();
+function amzDates(d) {
+  const p = n => String(n).padStart(2, '0');
+  const amz = `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}Z`;
+  return { amz, day: amz.slice(0, 8) };
+}
+// Codifica un segmento de ruta como exige AWS (encodeURIComponent + los caracteres que deja fuera).
+function enc(s) { return encodeURIComponent(s).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase()); }
+
+/**
+ * Petición S3 firmada (SigV4), estilo path: https://<host>/<bucket>/<key>?<query>.
+ * method: GET|PUT|DELETE. key: ruta del objeto (sin bucket) o ''. query: objeto de parámetros.
+ */
+async function s3(method, key, { query = {}, body = null, contentType } = {}) {
+  const c = cfg();
+  const host = hostOf(c);
+  const region = String(c.region || '').trim();
+  const service = 's3';
+  const payload = body == null ? Buffer.alloc(0) : (Buffer.isBuffer(body) ? body : Buffer.from(body));
+  const payloadHash = sha256(payload);
+  const { amz, day } = amzDates(new Date());
+
+  const keyPath = key ? '/' + String(key).split('/').map(enc).join('/') : '';
+  const canonicalUri = '/' + enc(c.bucket) + keyPath;
+  const qKeys = Object.keys(query).sort();
+  const canonicalQuery = qKeys.map(k => enc(k) + '=' + enc(query[k])).join('&');
+
+  const canonicalHeaders = `host:${host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amz}\n`;
+  const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
+  const canonicalRequest = `${method}\n${canonicalUri}\n${canonicalQuery}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+
+  const scope = `${day}/${region}/${service}/aws4_request`;
+  const stringToSign = `AWS4-HMAC-SHA256\n${amz}\n${scope}\n${sha256(Buffer.from(canonicalRequest))}`;
+  const kSigning = hmac(hmac(hmac(hmac('AWS4' + c.appKey, day), region), service), 'aws4_request');
+  const signature = crypto.createHmac('sha256', kSigning).update(stringToSign).digest('hex');
+  const authorization = `AWS4-HMAC-SHA256 Credential=${c.keyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const qs = canonicalQuery ? '?' + canonicalQuery : '';
+  const headers = { 'x-amz-date': amz, 'x-amz-content-sha256': payloadHash, 'Authorization': authorization };
+  if (method === 'PUT') headers['Content-Type'] = contentType || 'application/octet-stream';
+
+  const resp = await fetch(`https://${host}${canonicalUri}${qs}`, { method, headers, body: (method === 'PUT' ? payload : undefined) });
+  const text = await resp.text();
+  if (!resp.ok) throw new Error('B2 ' + resp.status + ': ' + text.slice(0, 400).replace(/\s+/g, ' '));
+  return text;
+}
+
+async function uploadFile(localPath, objectKey) {
+  const body = fs.readFileSync(localPath);
+  await s3('PUT', objectKey, { body, contentType: 'application/octet-stream' });
+  lastOk = { key: objectKey, date: new Date().toISOString() };
+  return true;
+}
+
+// Lista objetos bajo PREFIX. Devuelve [{ key, time }] (time deducido del nombre conectaso-YYYYMMDD-HHMMSS.db).
+const RE = /conectaso-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.db$/;
+async function listRemote() {
+  const out = [];
+  let token = null;
+  do {
+    const query = { 'list-type': '2', 'prefix': PREFIX, 'max-keys': '1000' };
+    if (token) query['continuation-token'] = token;
+    const xml = await s3('GET', '', { query });
+    const keys = [...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map(m => m[1]);
+    keys.forEach(k => { const m = RE.exec(k); if (m) out.push({ key: k, time: new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() }); });
+    const t = /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(xml);
+    const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
+    token = truncated && t ? t[1] : null;
+  } while (token);
+  return out.sort((a, b) => b.time - a.time);
+}
+
+// Limpieza remota con el MISMO criterio que en local: todas las de 48 h; 1/día hasta 30 días; el resto se borra.
+async function pruneRemote() {
+  const files = await listRemote();
+  const now = Date.now(), DAY = 86400000, keep = new Set(), daily = {};
+  files.forEach(f => {
+    if (now - f.time <= 2 * DAY) { keep.add(f.key); return; }
+    if (now - f.time <= 30 * DAY) { const d = new Date(f.time).toISOString().slice(0, 10); if (!daily[d]) { daily[d] = 1; keep.add(f.key); } return; }
+  });
+  for (const f of files) { if (!keep.has(f.key)) { try { await s3('DELETE', f.key); } catch (e) {} } }
+}
+
+// Se llama tras cada snapshot local correcto. No lanza: registra y avisa. No bloquea el backup local.
+async function syncSnapshot(localPath, name) {
+  if (!enabled()) return;
+  try {
+    await uploadFile(localPath, PREFIX + name);
+    // Limpiamos en la nube como mucho una vez cada ~6 h para no gastar peticiones de más.
+    if (Date.now() - pruneCheck > 6 * 60 * 60 * 1000) { pruneCheck = Date.now(); try { await pruneRemote(); } catch (e) {} }
+  } catch (e) {
+    lastError = { message: e.message, date: new Date().toISOString() };
+    console.error('[cloud-backup] fallo al subir:', e.message);
+    alertFail(e);
+  }
+}
+
+function alertFail(err) {
+  const now = Date.now();
+  if (now - lastAlert < 3 * 60 * 60 * 1000) return;
+  lastAlert = now;
+  if (!mail.enabled()) return;
+  let to = '';
+  try { to = users.all().filter(u => u.role === 'admin' && u.email && u.active).map(u => u.email).join(','); } catch (e) {}
+  if (!to) return;
+  const when = new Date().toLocaleString('es-ES');
+  const msg = String(err && err.message || err);
+  try {
+    mail.sendMail({
+      to,
+      subject: '⚠ Fallo en la copia en la nube — Conecta So',
+      text: 'La subida de la copia de seguridad a la nube (Backblaze) ha FALLADO el ' + when + '.\n\nError: ' + msg + '\n\nLa copia local del servidor sigue funcionando; conviene revisar la configuración de la nube en Admin → Copias de seguridad.',
+      html: '<p>La subida de la copia de seguridad <b>a la nube</b> (Backblaze) ha fallado el ' + when + '.</p><p>Error: ' + msg.replace(/</g, '&lt;') + '</p><p>La copia local del servidor sigue funcionando. Conviene revisar la configuración en <b>Admin → Copias de seguridad</b>.</p>'
+    });
+  } catch (e) {}
+}
+
+// Prueba de conexión: sube un pequeño objeto y lo borra. Devuelve { ok } o lanza con el motivo.
+async function test() {
+  if (!enabled()) throw new Error('Faltan datos de configuración (endpoint, bucket, región o claves).');
+  const key = PREFIX + '_test-' + Date.now() + '.txt';
+  await s3('PUT', key, { body: Buffer.from('conecta-so cloud backup test ' + new Date().toISOString()), contentType: 'text/plain' });
+  try { await s3('DELETE', key); } catch (e) {}
+  return { ok: true };
+}
+
+async function statusAsync() {
+  const base = { configured: enabled(), lastOk, lastError };
+  if (!enabled()) return base;
+  try { const r = await listRemote(); base.remoteCount = r.length; base.remoteLast = r[0] ? new Date(r[0].time).toISOString() : null; }
+  catch (e) { base.reachError = e.message; }
+  return base;
+}
+
+module.exports = { enabled, uploadFile, syncSnapshot, test, listRemote, pruneRemote, statusAsync, PREFIX };
