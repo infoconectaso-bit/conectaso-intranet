@@ -105,11 +105,12 @@ function list() { return listFiles().map(f => ({ name: f.name, size: f.size, dat
 function fileFor(name) { if (!RE.test(String(name || ''))) return null; const p = path.join(BACKUP_DIR, name); return fs.existsSync(p) ? p : null; }
 
 let timer = null;
+const INTERVAL_MIN = 15;   // cada cuántos minutos se hace copia (local + subida a la nube)
 function start() {
   if (timer) return;
   setTimeout(() => { safeSnapshot('startup'); }, 30000);
-  timer = setInterval(() => { safeSnapshot('auto'); }, 30 * 60 * 1000);
-  console.log('[backup] copias automáticas activas (cada 30 min). Carpeta:', BACKUP_DIR);
+  timer = setInterval(() => { safeSnapshot('auto'); }, INTERVAL_MIN * 60 * 1000);
+  console.log('[backup] copias automáticas activas (cada ' + INTERVAL_MIN + ' min). Carpeta:', BACKUP_DIR);
 }
 
 module.exports = { snapshot, safeSnapshot, list, fileFor, status, start, BACKUP_DIR };
