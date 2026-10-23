@@ -426,8 +426,13 @@ async function api(req, res, url) {
         (e.spouses || []).forEach(s => { if (s) { if (s.email) evByKey['e:' + normE(s.email)] = ev; if (s.dni) evByKey['n:' + normN(s.dni)] = ev; if (s.name) evByKey['m:' + normNm(s.name)] = ev; } });
         const u = users.get(e.userId); if (u && u.email) evByKey['e:' + normE(u.email)] = ev;
       });
-      // CIF de empresa (finca/sociedad): empieza por letra. Esas facturas es NORMAL que no tengan evento.
-      const isCompany = code => /^[A-W]\d{7}[0-9A-J]$/.test(normN(code));
+      // Facturas a EMPRESAS/FINCAS: es NORMAL que no tengan evento, así que se excluyen.
+      // Se detecta empresa por el CIF (empieza por letra) o por el nombre (termina en SL/SA/… o
+      // contiene palabras de negocio: hotel, restaurant, masía, catering, sociedad, etc.).
+      const CIF = s => /^[A-W]\d{7}[0-9A-J]$/.test(normN(s));
+      const COMPANY_NAME = /(,?\s*s\.?\s?[laup]\.?\s?[un]?\.?|s\.?\s?c\.?\s?p?\.?|c\.?\s?b\.?|\bcoop)\s*$/i;
+      const VENUE_NAME = /\b(hotel|restaurant|masia|mas |colonies|colonias|ajuntament|catering|gastronom|finca|celler|castell|hospitality|sinso|edelweiss|broquetas|boella|nou coberts|vents)/i;
+      const isCompany = c => CIF(c.code) || CIF(c.vat_number) || COMPANY_NAME.test(c.name || '') || VENUE_NAME.test(c.name || '');
       const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0;
       Object.values(idx.byId).forEach(c => {
         let ev = null;
@@ -435,7 +440,7 @@ async function api(req, res, url) {
         if (!ev && c.code) ev = evByKey['n:' + normN(c.code)];
         if (!ev && c.vat_number) ev = evByKey['n:' + normN(c.vat_number)];
         if (!ev && c.name) ev = evByKey['m:' + normNm(c.name)];
-        const company = isCompany(c.code) || isCompany(c.vat_number);
+        const company = isCompany(c);
         (c.invoices || []).forEach(raw => {
           totalInv++;
           if (ev) { linkedInv++; return; }
