@@ -639,7 +639,27 @@ ${workers.length ? `<table><thead><tr><th>Trabajador</th><th>Periodo</th><th sty
     const wpCnt = {};
     allEv.forEach(e => { if (!e.wpId) return; const nm = (users.get(+e.wpId) || {}).name || ''; if (!nm || EXCL_WP.test(nm)) return; const g = wpGroup(nm); wpCnt[g] = (wpCnt[g] || 0) + 1; });
     const plannersTop = Object.entries(wpCnt).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
-    const out = { years: [...years].sort(), ventasMasia, ventasPack, horasMasia, horasMasiaYear, horasYears, djPorTotal, djPorBoda, plannersTop };
+
+    // --- EXTRAS: se cuentan por SERVICIOS asignados (lo que manda), NO por la pestaña de extras,
+    //     porque muchas veces el servicio se hace pero no se marca en extras. Si el servicio está, cuenta. ---
+    const isWedPack = p => /recomendad|fiesta|bodorri|tinglado/i.test(p || '');
+    const weddings = allEv.filter(e => isWedPack(e.tipo));
+    const svcCat = {}; store.all('extras').forEach(x => { if (x && x.id != null) svcCat[x.id] = x.name || ('Servicio ' + x.id); });
+    const svcCnt = {};
+    weddings.forEach(e => { const seen = new Set(); (e.services || []).forEach(s => { const id = s && s.servicio; if (id == null || id === '' || seen.has(id)) return; seen.add(id); svcCnt[id] = (svcCnt[id] || 0) + 1; }); });
+    const extrasTotalBodas = weddings.length;
+    const extrasTop = Object.entries(svcCnt).map(([id, n]) => ({ label: svcCat[id] || ('Servicio ' + id), n, pct: extrasTotalBodas ? Math.round(n / extrasTotalBodas * 1000) / 10 : 0 })).sort((a, b) => b.n - a.n);
+
+    // --- Bodas por técnico (DJ) y año ---
+    const bodasDj = {};
+    weddings.forEach(e => { if (!e.djId) return; const y = (e.fecha || '').slice(0, 4); if (!y) return; const nm = (users.get(+e.djId) || {}).name || ('#' + e.djId); (bodasDj[nm] = bodasDj[nm] || {})[y] = (bodasDj[nm][y] || 0) + 1; });
+
+    // --- Día de la semana (viernes / sábado / domingo / entre semana L-J), por año ---
+    const dowCat = f => { const d = String(f || '').slice(0, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null; const wd = new Date(d + 'T12:00:00Z').getUTCDay(); return wd === 5 ? 'Viernes' : wd === 6 ? 'Sábado' : wd === 0 ? 'Domingo' : 'Entre semana (L-J)'; };
+    const bodasDow = {};
+    weddings.forEach(e => { const c = dowCat(e.fecha); const y = (e.fecha || '').slice(0, 4); if (!c || !y) return; (bodasDow[c] = bodasDow[c] || {})[y] = (bodasDow[c][y] || 0) + 1; });
+
+    const out = { years: [...years].sort(), ventasMasia, ventasPack, horasMasia, horasMasiaYear, horasYears, djPorTotal, djPorBoda, plannersTop, extrasTop, extrasTotalBodas, bodasDj, bodasDow };
     if (holded.enabled()) {
       try {
         const idx = await holded.buildIndex(url.searchParams.get('refresh') === '1');
