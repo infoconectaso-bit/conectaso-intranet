@@ -1107,6 +1107,7 @@ on(/^#\/analisis$/, async () => {
     })(),
     sect('DJs con más horas extra (total)', pieChart((a.djPorTotal || []).map(r => ({ label: r.dj, value: r.horas })), { unit: 'h' }), 'Reparto del total de horas extra entre DJs'),
     sect('DJs con más horas extra por boda (media)', bars((a.djPorBoda || []).slice(0, 20).map(r => ({ label: r.dj, value: r.media, sub: `${r.media} h/boda · ${r.horas} h en ${r.bodas} bodas` })), v => ''), 'Mínimo 3 bodas para la media'),
+    sect('Cobrado por horas extra, por DJ y año', crossTable(a.heEarnDj, 'DJ', eur), 'Horas extra × tarifa de cada DJ (según finca o pack), en bodas realizadas'),
   ].join('');
   const tabExtras = [
     sect('Extras más contratados', bars((a.extrasTop || []).map(r => ({ label: r.label, value: r.n, sub: `${r.n} bodas · ${r.pct}%` })), v => ''), `Sobre ${a.extrasTotalBodas || 0} bodas. Se cuenta por SERVICIO asignado (lo que de verdad se hizo), no por la pestaña de extras`),

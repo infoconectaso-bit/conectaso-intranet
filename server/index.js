@@ -741,7 +741,23 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
     const bodasDow = {};
     weddings.forEach(e => { const c = dowCat(e.fecha); const y = (e.fecha || '').slice(0, 4); if (!c || !y) return; (bodasDow[c] = bodasDow[c] || {})[y] = (bodasDow[c][y] || 0) + 1; });
 
-    const out = { years: [...years].sort(), ventasMasia, ventasPack, horasMasia, horasMasiaYear, horasYears, djPorTotal, djPorBoda, plannersTop, extrasTop, extrasTotalBodas, bodasDj, bodasDow };
+    // --- Cuánto cobra cada DJ por HORAS EXTRA al año (horas × tarifa HE según finca o pack, mismo criterio que facturación) ---
+    const djRates = store.setting('djRates') || {};
+    const packKeyHe = tipo => { const mm = { Fiesta: 'fiesta', Bodorrio: 'bodorrio', Tinglado: 'tinglado' }; const k = mm[tipo]; return k ? k + '_he' : null; };
+    const heEarnDj = {};
+    realized.forEach(e => {
+      const h = otH(e.djOvertime); if (!h || !e.djId) return;
+      const dj = String(e.djId); if (dj === '227') return;             // Adrià (dueño): no cobra base/HE como trabajador
+      const r = djRates[dj]; let he = null;
+      if (r) { const fr = r.fincas && r.fincas[e.lugar]; if (fr && fr.he != null) he = fr.he; else { const pk = packKeyHe(e.tipo); if (pk && r.packs && r.packs[pk] != null) he = r.packs[pk]; } }
+      if (he == null) { const loc = store.get('locations', e.lugar); if (loc && loc.extraPrice != null && loc.extraPrice !== '') he = parseFloat(loc.extraPrice) || 0; }
+      const amt = h * (+he || 0); if (!amt) return;
+      const y = (e.fecha || '').slice(0, 4); if (!y) return;
+      const nm = (users.get(+e.djId) || {}).name || ('#' + e.djId);
+      (heEarnDj[nm] = heEarnDj[nm] || {})[y] = Math.round(((heEarnDj[nm] || {})[y] || 0) + amt);
+    });
+
+    const out = { years: [...years].sort(), ventasMasia, ventasPack, horasMasia, horasMasiaYear, horasYears, djPorTotal, djPorBoda, plannersTop, extrasTop, extrasTotalBodas, bodasDj, bodasDow, heEarnDj };
     if (holded.enabled()) {
       try {
         const idx = await holded.buildIndex(url.searchParams.get('refresh') === '1');
