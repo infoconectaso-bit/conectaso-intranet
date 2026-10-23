@@ -179,7 +179,7 @@ function nextDue(p) {
   const t = today();
   if (p.fin && new Date(p.fin + 'T00:00:00') < t) return null;
   let guard = 0;
-  while (d < t && guard++ < 200) d.setMonth(d.getMonth() + (p.periodicidad === 'anual' || !p.periodicidad ? 12 : 12));
+  while (d < t && guard++ < 400) d.setMonth(d.getMonth() + step);
   return d;
 }
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -272,7 +272,7 @@ function groups(list) {
 function card(p) {
   const nx = nextDue(p);
   const per = p.periodicidad || 'anual';
-  const sub = per === 'anual' ? (nx ? `Próximo recibo: ${fmtD(iso(nx))}` : '') : `${eur(anual(p))} al año`;
+  const sub = (per === 'anual' ? '' : `${eur(anual(p))} al año · `) + (nx ? `Próximo recibo: ${fmtD(iso(nx))}` : '');
   const key = (p.destacadas || []).map(([a, b]) => `<li><b>${esc(a)}</b>${esc(b)}</li>`).join('');
   const weak = (p.debiles || []).map(w => `<li>${esc(w)}</li>`).join('');
   const cov = (p.coberturas || []).map(([a, b]) => `<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join('');
