@@ -351,7 +351,7 @@ async function api(req, res, url) {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     const items = backup.list();
     const totalSize = items.reduce((s, b) => s + b.size, 0);
-    return ok(res, { count: items.length, lastBackup: items[0] || null, totalSize, dir: backup.BACKUP_DIR, backups: items });
+    return ok(res, { count: items.length, lastBackup: items[0] || null, totalSize, dir: backup.BACKUP_DIR, status: backup.status(), backups: items });
   }
   if (seg[0] === 'backups' && seg[1] === 'create' && method === 'POST') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');

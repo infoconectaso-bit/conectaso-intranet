@@ -1104,22 +1104,27 @@ on(/^#\/beneficios$/, async () => {
 });
 on(/^#\/backups$/, async () => {
   if (!requireAdmin()) return;
-  if (!benefOk()) return benefGate('Copias de seguridad');
   loading(['Copias de seguridad']);
   const fmtSize = b => { b = +b || 0; if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(0) + ' KB'; return (b / 1048576).toFixed(1) + ' MB'; };
   const fmtDate = s => { try { return new Date(s).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return s; } };
   async function render() {
     const r = await api('backups').catch(() => ({ backups: [] }));
     const list = r.backups || [], last = r.lastBackup;
+    const st = r.status || {};
+    let banner = '';
+    if (st.lastError && !st.healthy) banner = `<div class="banner banner--err" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FDECEA;color:#B71C1C;border:1px solid #F5C6CB"><b>⚠ La última copia automática falló</b> (${fmtDate(st.lastError.date)}). ${esc(st.lastError.message || '')}. Se ha avisado por email a administración. Revisa el servidor (espacio en disco).</div>`;
+    else if (st.stale) banner = `<div class="banner" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FFF8E1;color:#8a6d00;border:1px solid #FFE49A"><b>⚠ Hace más de 90 minutos que no se hace una copia correcta.</b> Comprueba que el servidor está funcionando.</div>`;
+    else banner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Copias funcionando correctamente.</div>`;
     const rows = list.map(b => `<tr><td><b>${esc(b.name)}</b></td><td>${fmtDate(b.date)}</td><td style="text-align:right">${fmtSize(b.size)}</td><td style="text-align:right"><a class="btn btn--sm" href="/api/backups/download?name=${encodeURIComponent(b.name)}" download>⬇ Descargar</a></td></tr>`).join('');
     shell(`${pageHead('Copias de seguridad', 'Copias automáticas de la base de datos (bodas, usuarios, tarifas…).')}
+      ${banner}
       <div class="grid-3" style="margin-bottom:14px">
         <div class="stat stat--blue"><div class="k">Última copia</div><div class="v" style="font-size:18px">${last ? fmtDate(last.date) : '—'}</div></div>
         <div class="stat"><div class="k">Copias guardadas</div><div class="v">${r.count || 0}</div></div>
         <div class="stat stat--yellow"><div class="k">Espacio ocupado</div><div class="v" style="font-size:18px">${fmtSize(r.totalSize || 0)}</div></div>
       </div>
       <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--primary" id="bkNow">💾 Crear copia ahora</button></div>
-      <p class="hint" style="margin-bottom:12px">Se hace una copia automática al arrancar y <b>cada hora</b>. Se conservan todas las de las últimas 48 h y una diaria durante 30 días. Para protección total conviene, además, copiar esta carpeta a un sitio externo (nube) y respaldar los archivos de nóminas.</p>
+      <p class="hint" style="margin-bottom:12px">Se hace una copia automática al arrancar y <b>cada 30 minutos</b>. Se conservan todas las de las últimas 48 h y una diaria durante 30 días. Para protección total conviene, además, copiar esta carpeta a un sitio externo (nube) y respaldar los archivos de nóminas.</p>
       <div class="table-wrap"><table class="dt"><thead><tr><th>Archivo</th><th>Fecha</th><th style="text-align:right">Tamaño</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">Aún no hay copias (se creará una en breve).</td></tr>'}</tbody></table></div>`, ['Copias de seguridad']);
     const bn = el('bkNow');
     if (bn) bn.onclick = async () => { bn.disabled = true; bn.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST' }); toast('Copia creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
@@ -1315,7 +1320,7 @@ on(/^#\/cuenta$/, async () => {
     <div class="panel" style="margin-top:4px"><div class="panel__head"><h3>⚙ Configuración avanzada</h3></div><div class="panel__body">
       <p class="hint" style="margin-bottom:12px">Secciones de uso puntual, protegidas con contraseña.</p>
       ${benefOk()
-      ? `<div class="btn-row"><a class="btn btn--primary" href="#/beneficios">€ Beneficios</a> <a class="btn" href="#/analisis">📊 Análisis</a> <a class="btn" href="#/backups">💾 Copias de seguridad</a> <a class="btn" href="#/papelera">🗑 Papelera de eventos</a></div>
+      ? `<div class="btn-row"><a class="btn btn--primary" href="#/beneficios">€ Beneficios</a> <a class="btn" href="#/analisis">📊 Análisis</a> <a class="btn" href="#/papelera">🗑 Papelera de eventos</a></div>
          <p class="hint" style="margin-top:10px">Desbloqueado en este dispositivo durante esta sesión.</p>
          <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
          <h4 style="margin:0 0 6px">📧 Configuración del correo</h4>
