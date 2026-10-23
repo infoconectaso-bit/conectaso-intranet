@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Conecta Seguros</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Seguros">
+<meta name="application-name" content="Conecta Seguros">
+<meta name="theme-color" content="#130F17">
+<style>
+@font-face{font-family:'Lacquer';src:url('/fonts/lacquer.ttf') format('truetype');font-display:swap}
+@font-face{font-family:'Outer Sans';src:url('/fonts/outer-sans-black.woff2') format('woff2');font-weight:900;font-display:swap}
+@font-face{font-family:'Evolve Sans';src:url('/fonts/evolve-sans.woff2') format('woff2');font-display:swap}
+:root{
+  --onyx:#130F17; --onyx-soft:#2a2530; --cream:#F9F5E1; --paper:#FFFDF4; --pink:#E82C88; --pink-d:#c81e70;
+  --blue:#31B9CB; --yellow:#F0E85A; --ink:#130F17; --muted:#6a6472; --line:#e3ddd0; --ok:#0B8043; --okbg:#E3F2E8;
+  --warn:#9a4a00; --warnbg:#FFF0D6; --bad:#b3123f; --badbg:#FDE7EE;
+  --body:'Evolve Sans',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --display:'Outer Sans','Arial Black',var(--body);
+  --script:'Lacquer','Outer Sans',var(--body);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--cream);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  padding-bottom:max(24px,env(safe-area-inset-bottom,0px))}
+.gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.in{max-width:760px;margin:0 auto}
+.top{background:var(--onyx);color:var(--cream);padding-top:max(16px,env(safe-area-inset-top,0px));padding-bottom:22px}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.brand img{width:40px;height:45px;flex:none}
+.brand .w{display:flex;flex-direction:column;line-height:1}
+.brand .k{font-family:var(--display);font-weight:900;font-size:14px;letter-spacing:.12em}
+.brand .s{font-family:var(--script);color:var(--yellow);font-size:28px;text-shadow:2px 2px 0 var(--pink);transform:rotate(-3deg);transform-origin:left;margin-top:2px}
+.brand .sp{flex:1}
+.ico{font:inherit;font-size:12px;font-weight:700;background:transparent;border:1.5px solid rgba(249,245,225,.35);color:var(--cream);border-radius:99px;padding:6px 11px;cursor:pointer}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--onyx-soft);padding:4px;border-radius:14px;margin-bottom:18px}
+.tabs button{font:inherit;font-family:var(--display);font-weight:900;font-size:13px;letter-spacing:.03em;border:0;border-radius:10px;padding:10px 4px;background:transparent;color:rgba(249,245,225,.75);cursor:pointer;min-width:0}
+.tabs button[aria-selected="true"]{background:var(--yellow);color:var(--onyx)}
+.tabs button small{display:block;font-family:var(--body);font-weight:600;font-size:11px;letter-spacing:0;opacity:.8;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eyebrow{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted)}
+.top .eyebrow{color:rgba(249,245,225,.7)}
+.big{font-family:var(--display);font-weight:900;font-size:40px;line-height:1.05;color:var(--yellow);margin-top:4px}
+.big small{font-size:16px;color:var(--cream);margin-left:4px}
+.num{font-variant-numeric:tabular-nums}
+.toprow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.toprow b{display:block;font-family:var(--display);font-weight:900;font-size:16px}
+.toprow span{font-size:12px;color:rgba(249,245,225,.75)}
+.wrap{display:flex;flex-direction:column;gap:14px;padding-top:16px}
+.cal{background:var(--paper);border:2px solid var(--onyx);border-radius:12px;padding:14px 16px}
+.cal h2{margin-bottom:6px}
+.calrow{display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.calrow:first-of-type{border-top:0}
+.calrow .d{font-weight:800;font-variant-numeric:tabular-nums}
+.calrow .n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+h2{font-family:var(--display);font-weight:900;font-size:16px;margin:0;letter-spacing:.01em}
+h3{font-size:12px;letter-spacing:.09em;text-transform:uppercase;margin:0 0 6px;color:var(--muted)}
+.card{background:var(--paper);border:2px solid var(--onyx);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0;box-shadow:4px 4px 0 var(--onyx)}
+.head{display:flex;gap:12px;align-items:flex-start}
+.tico{width:42px;height:42px;border-radius:11px;background:var(--onyx);color:var(--yellow);display:grid;place-items:center;flex:none}
+.tico svg{width:24px;height:24px}
+.head .t{flex:1;min-width:0}
+.head .t b{display:block;font-family:var(--display);font-weight:900;font-size:17px;line-height:1.2}
+.head .t span{font-size:13px;color:var(--muted)}
+.money{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:var(--cream);border-radius:12px;padding:12px 14px}
+.money .amt{font-family:var(--display);font-weight:900;font-size:26px;line-height:1}
+.money .amt small{font-family:var(--body);font-size:13px;font-weight:600;color:var(--muted)}
+.money .sub{font-size:12px;color:var(--muted);margin-top:4px}
+.pill{font-size:12px;font-weight:800;padding:6px 11px;border-radius:99px;background:var(--onyx);color:var(--yellow);white-space:nowrap}
+.pill.soon{background:var(--pink);color:#fff}
+.pill.late{background:var(--bad);color:#fff}
+.hint{font-size:12px;color:var(--warn);background:var(--warnbg);border-radius:8px;padding:7px 10px;margin:0}
+ul.key{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ul.key li{background:var(--okbg);border-radius:10px;padding:9px 11px;font-size:13px;min-width:0}
+ul.key li b{display:block;font-size:12px;color:var(--ok);font-weight:800;margin-bottom:1px}
+ul.weak{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+ul.weak li{background:var(--badbg);border-left:4px solid var(--bad);border-radius:6px;padding:8px 11px;font-size:13.5px}
+details{border-top:1px solid var(--line);padding-top:10px}
+details summary{cursor:pointer;font-weight:800;color:var(--pink-d);list-style:none;font-size:14px}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"+ ";font-weight:900}
+details[open] summary::before{content:"– "}
+details > div{margin-top:10px}
+dl{display:grid;grid-template-columns:minmax(120px,40%) 1fr;gap:6px 14px;font-size:13.5px;margin:0}
+dt{color:var(--muted)} dd{margin:0;font-weight:600;min-width:0;overflow-wrap:anywhere}
+dd a{color:var(--pink-d)}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:inherit;font-family:var(--display);font-weight:900;font-size:15px;letter-spacing:.02em;border:2px solid var(--onyx);border-radius:12px;padding:13px 16px;background:var(--pink);color:#fff;cursor:pointer;width:100%;box-shadow:3px 3px 0 var(--onyx);text-decoration:none;text-align:center;display:inline-block}
+.btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--onyx)}
+.btn:disabled{opacity:.45;cursor:default;box-shadow:none;transform:none}
+.btn.ghost{background:var(--paper);color:var(--ink)}
+.btn.small{width:auto;padding:8px 12px;font-size:13px}
+label{font-size:13px;font-weight:700;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:#fff;border:2px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+textarea{min-height:80px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--onyx)}
+button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.full{grid-column:1/-1}
+.notes{font-size:13.5px;background:#FFF6B8;border-radius:10px;padding:10px 12px;white-space:pre-wrap;margin:0}
+.msg{font-size:13px;margin:0;min-height:1em}
+.msg.err{color:var(--pink-d);font-weight:700}
+.empty{background:var(--paper);border:2px dashed var(--muted);border-radius:14px;padding:28px 18px;text-align:center;color:var(--muted)}
+.empty b{display:block;font-family:var(--display);color:var(--ink);font-size:16px;margin-bottom:6px}
+.foot{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+.center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:var(--onyx)}
+.login{width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px;color:var(--cream)}
+.login .brand{justify-content:center;margin-bottom:8px}
+.login .brand img{width:64px;height:72px}
+.login .brand .s{font-size:40px}
+.login .brand .k{font-size:17px}
+.login label{color:rgba(249,245,225,.8)}
+.login .msg.err{color:#ff8fc4}
+dialog{border:2px solid var(--onyx);border-radius:14px;padding:18px;max-width:440px;width:calc(100% - 32px);background:var(--paper);box-shadow:5px 5px 0 var(--pink)}
+dialog::backdrop{background:rgba(19,15,23,.55)}
+dialog h2{margin-bottom:12px}
+dialog ol{padding-left:20px;margin:8px 0;font-size:14px}
+dialog ol li{margin-bottom:6px}
+@media (max-width:520px){
+  ul.key{grid-template-columns:1fr}
+  .toprow{grid-template-columns:1fr 1fr}
+  .toprow div:last-child{grid-column:1/-1}
+  .big{font-size:34px}
+  .calrow{grid-template-columns:84px 1fr}
+  .calrow .pill{display:none}
+  dl{grid-template-columns:1fr}
+  dd{margin-bottom:6px}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<dialog id="dlg"></dialog>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const eur = n => (Math.round(n * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const eur0 = n => Math.round(n).toLocaleString('es-ES') + ' €';
+const fmtD = s => { if (!s) return ''; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+const TABS = [['adri', 'Adri'], ['alba', 'Alba'], ['empresa', 'Conecta Sonido']];
+const PER = { anual: 1, semestral: 2, trimestral: 4, mensual: 12 };
+const PERTXT = { anual: 'al año', semestral: 'cada 6 meses', trimestral: 'cada 3 meses', mensual: 'al mes' };
+const ICONS = {
+  vida: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
+  hogar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
+  hipoteca: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M5 10v10h14V10"/><path d="M12 17v-5m-2 2h4"/></svg>',
+  coche: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16h14v-4l-2-5H7l-2 5z"/><circle cx="8" cy="16.5" r="1.8"/><circle cx="16" cy="16.5" r="1.8"/></svg>',
+  moto: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="16" r="3"/><circle cx="18" cy="16" r="3"/><path d="M6 16h5l3-6h3l1 6M13 10h-3"/></svg>',
+  empresa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5h6v2M3 13h18"/></svg>',
+  salud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+  otro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 20 6v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>'
+};
+let S = { polizas: [], tab: 'adri' };
+try { S.tab = localStorage.getItem('cs_tab') || 'adri'; } catch (e) {}
+
+async function api(url, opts = {}) {
+  const r = await fetch(url, Object.assign({ headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' }, opts));
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw Object.assign(new Error(j.error || 'Error'), { status: r.status });
+  return j;
+}
+
+/* ---- fechas: la renovación es anual, así que si la fecha ya pasó saltamos al año siguiente ---- */
+const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+function nextDue(p) {
+  if (!p.vencimiento) return null;
+  let d = new Date(p.vencimiento + 'T00:00:00');
+  const step = 12 / (PER[p.periodicidad] || 1);
+  const t = today();
+  if (p.fin && new Date(p.fin + 'T00:00:00') < t) return null;
+  let guard = 0;
+  while (d < t && guard++ < 200) d.setMonth(d.getMonth() + (p.periodicidad === 'anual' || !p.periodicidad ? 12 : 12));
+  return d;
+}
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const days = d => Math.round((d - today()) / 864e5);
+const anual = p => (+p.prima || 0) * (PER[p.periodicidad] || 1);
+function duePill(p) {
+  const d = nextDue(p);
+  if (!d) return '<span class="pill">Sin fecha</span>';
+  const n = days(d);
+  const cls = n <= 30 ? 'late' : n <= 60 ? 'soon' : '';
+  const txt = n === 0 ? 'vence hoy' : n === 1 ? 'vence mañana' : `vence en ${n} días`;
+  return `<span class="pill ${cls}" title="${fmtD(iso(d))}">${txt}</span>`;
+}
+
+/* ---- pantallas ---- */
+function login(err) {
+  document.body.style.background = 'var(--onyx)';
+  $('#app').innerHTML = `<div class="center"><form class="login" id="f">
+    <div class="brand"><img src="/logo.svg" alt=""><div class="w"><span class="k">CONECTA</span><span class="s">Seguros</span></div></div>
+    <label>Contraseña<input type="password" id="pw" autocomplete="current-password" required autofocus></label>
+    <button class="btn" type="submit">Entrar</button>
+    <p class="msg ${err ? 'err' : ''}" id="m">${esc(err || 'La primera vez, usa la contraseña inicial que te pasé.')}</p>
+  </form></div>`;
+  $('#f').onsubmit = async e => {
+    e.preventDefault();
+    const b = e.target.querySelector('button'); b.disabled = true; $('#m').textContent = 'Comprobando…'; $('#m').className = 'msg';
+    try { await api('/api/entrar', { method: 'POST', body: JSON.stringify({ clave: $('#pw').value }) }); await start(); }
+    catch (x) { b.disabled = false; $('#m').textContent = x.message; $('#m').className = 'msg err'; }
+  };
+}
+
+function render() {
+  document.body.style.background = '';
+  const all = S.polizas;
+  const mine = all.filter(p => p.titular === S.tab).sort((a, b) => (nextDue(a) || 9e15) - (nextDue(b) || 9e15));
+  const tot = mine.reduce((s, p) => s + anual(p), 0);
+  const next = mine.find(p => nextDue(p));
+  const nWeak = mine.reduce((s, p) => s + (p.debiles || []).length, 0);
+  const tabs = TABS.map(([k, n]) => {
+    const l = all.filter(p => p.titular === k);
+    const t = l.reduce((s, p) => s + anual(p), 0);
+    return `<button role="tab" aria-selected="${k === S.tab}" data-tab="${k}">${n}<small>${l.length ? `${l.length} · ${eur0(t)}/año` : 'sin pólizas'}</small></button>`;
+  }).join('');
+
+  const cal = mine.filter(p => nextDue(p)).map(p => {
+    const d = nextDue(p);
+    return `<div class="calrow"><span class="d">${fmtD(iso(d))}</span><span class="n">${esc(p.nombre)}</span>${duePill(p)}</div>`;
+  }).join('');
+
+  $('#app').innerHTML = `
+  <header class="top gut"><div class="in">
+    <div class="brand"><img src="/logo.svg" alt=""><div class="w"><span class="k">CONECTA</span><span class="s">Seguros</span></div><span class="sp"></span>
+      <button class="ico" id="inst">Acceso directo</button></div>
+    <div class="tabs" role="tablist">${tabs}</div>
+    <div class="eyebrow">Pagas en seguros</div>
+    <div class="big num">${eur(tot)}<small>/año</small></div>
+    <div class="toprow">
+      <div><b class="num">${eur(tot / 12)}</b><span>al mes de media</span></div>
+      <div><b class="num">${mine.length}</b><span>${mine.length === 1 ? 'póliza' : 'pólizas'}</span></div>
+      <div><b>${next ? fmtD(iso(nextDue(next))) : '—'}</b><span>${next ? 'próximo vencimiento · ' + esc(next.nombre) : 'próximo vencimiento'}</span></div>
+    </div>
+  </div></header>
+  <main class="gut"><div class="in wrap">
+    ${mine.length ? `
+    <section class="cal"><h2>Calendario de vencimientos</h2>${cal}
+      ${nWeak ? `<p class="msg" style="margin-top:8px;color:var(--bad);font-weight:700">${nWeak} puntos débiles a revisar en estas pólizas.</p>` : ''}</section>
+    ${mine.map(card).join('')}` : `
+    <div class="empty"><b>Aún no hay pólizas aquí</b>Pásame las pólizas de ${S.tab === 'empresa' ? 'Conecta Sonido e Iluminación S.L.' : TABS.find(t => t[0] === S.tab)[1]} y las añado con su resumen.</div>`}
+    <div class="foot">
+      <button class="btn ghost small" id="cpw">Cambiar contraseña</button>
+      <button class="btn ghost small" id="out">Salir</button>
+    </div>
+  </div></main>`;
+
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; try { localStorage.setItem('cs_tab', S.tab); } catch (e) {} render(); window.scrollTo(0, 0); });
+  document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => edit(b.dataset.edit));
+  $('#out').onclick = async () => { await api('/api/salir', { method: 'POST' }).catch(() => {}); login(); };
+  $('#cpw').onclick = changePw;
+  $('#inst').onclick = install;
+}
+
+function card(p) {
+  const nx = nextDue(p);
+  const per = p.periodicidad || 'anual';
+  const sub = per === 'anual' ? (nx ? `Próximo recibo: ${fmtD(iso(nx))}` : '') : `${eur(anual(p))} al año`;
+  const key = (p.destacadas || []).map(([a, b]) => `<li><b>${esc(a)}</b>${esc(b)}</li>`).join('');
+  const weak = (p.debiles || []).map(w => `<li>${esc(w)}</li>`).join('');
+  const cov = (p.coberturas || []).map(([a, b]) => `<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join('');
+  const tels = (p.telefonos || []).map(([a, b]) => `<dt>${esc(a)}</dt><dd><a href="tel:${esc(b.replace(/\s/g, ''))}">${esc(b)}</a></dd>`).join('');
+  return `<article class="card">
+    <div class="head"><div class="tico">${ICONS[p.tipo] || ICONS.otro}</div>
+      <div class="t"><b>${esc(p.nombre)}</b><span>${esc(p.aseguradora)}${p.objeto ? ' · ' + esc(p.objeto) : ''}</span></div></div>
+    <div class="money"><div><div class="amt num">${eur(+p.prima || 0)} <small>${PERTXT[per]}</small></div><div class="sub">${esc(sub)}</div></div>${duePill(p)}</div>
+    ${p.primaNota ? `<p class="hint">${esc(p.primaNota)}</p>` : ''}
+    ${key ? `<div><h3>Lo más útil que cubre</h3><ul class="key">${key}</ul></div>` : ''}
+    ${weak ? `<div><h3 style="color:var(--bad)">Puntos débiles</h3><ul class="weak">${weak}</ul></div>` : ''}
+    ${p.notas ? `<p class="notes">${esc(p.notas)}</p>` : ''}
+    ${cov ? `<details><summary>Todas las coberturas</summary><div><dl>${cov}</dl></div></details>` : ''}
+    <details><summary>Datos de la póliza y teléfonos</summary><div><dl>
+      <dt>Nº de póliza</dt><dd>${esc(p.numero)}</dd>
+      <dt>Producto</dt><dd>${esc(p.producto)}</dd>
+      ${p.efecto ? `<dt>Contratada</dt><dd>${fmtD(p.efecto)}</dd>` : ''}
+      ${p.renovacion ? `<dt>Renovación</dt><dd>${esc(p.renovacion)}</dd>` : ''}
+      ${p.fin ? `<dt>Fin del seguro</dt><dd>${fmtD(p.fin)}</dd>` : ''}
+      ${tels}
+    </dl></div></details>
+    <div class="acts">
+      ${p.pdf ? `<a class="btn ghost small" href="/api/pdf/${esc(p.pdf)}" target="_blank" rel="noopener">Ver póliza (PDF)</a>` : ''}
+      <button class="btn ghost small" data-edit="${esc(p.id)}">Actualizar precio / fecha / notas</button>
+    </div>
+  </article>`;
+}
+
+function edit(id) {
+  const p = S.polizas.find(x => x.id === id); if (!p) return;
+  const d = $('#dlg');
+  d.innerHTML = `<form method="dialog" id="ef"><h2>${esc(p.nombre)}</h2>
+    <div class="form">
+      <label>Importe del recibo (€)<input type="number" step="0.01" min="0" id="e_pr" value="${esc(p.prima)}" inputmode="decimal"></label>
+      <label>Se paga<select id="e_per">${Object.keys(PER).map(k => `<option value="${k}" ${k === (p.periodicidad || 'anual') ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
+      <label class="full">Próximo vencimiento<input type="date" id="e_v" value="${esc(nextDue(p) ? iso(nextDue(p)) : (p.vencimiento || ''))}"></label>
+      <label class="full">Pestaña<select id="e_t">${TABS.map(([k, n]) => `<option value="${k}" ${k === p.titular ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label class="full">Notas<textarea id="e_n" placeholder="Ej.: llamado al banco para cambiar beneficiario…">${esc(p.notas || '')}</textarea></label>
+    </div>
+    <p class="msg" id="em"></p>
+    <div class="acts"><button class="btn small" value="ok" id="es">Guardar</button><button class="btn ghost small" value="no" formnovalidate>Cancelar</button></div>
+  </form>`;
+  d.showModal();
+  $('#es').onclick = async e => {
+    e.preventDefault();
+    try {
+      const r = await api('/api/polizas/' + id, { method: 'PATCH', body: JSON.stringify({ prima: $('#e_pr').value, periodicidad: $('#e_per').value, vencimiento: $('#e_v').value, notas: $('#e_n').value, titular: $('#e_t').value }) });
+      Object.assign(p, r.poliza); d.close(); render();
+    } catch (x) { $('#em').textContent = x.message; $('#em').className = 'msg err'; }
+  };
+}
+
+function changePw() {
+  const d = $('#dlg');
+  d.innerHTML = `<form method="dialog"><h2>Cambiar contraseña</h2>
+    <div class="form"><label class="full">Contraseña actual<input type="password" id="c_a" autocomplete="current-password"></label>
+    <label class="full">Nueva contraseña (mín. 6)<input type="password" id="c_n" autocomplete="new-password"></label></div>
+    <p class="msg" id="cm"></p>
+    <div class="acts"><button class="btn small" id="cs">Guardar</button><button class="btn ghost small" value="no" formnovalidate>Cancelar</button></div></form>`;
+  d.showModal();
+  $('#cs').onclick = async e => {
+    e.preventDefault();
+    try { await api('/api/cambiar-clave', { method: 'POST', body: JSON.stringify({ actual: $('#c_a').value, nueva: $('#c_n').value }) }); $('#cm').textContent = 'Contraseña cambiada.'; $('#cm').className = 'msg'; setTimeout(() => d.close(), 900); }
+    catch (x) { $('#cm').textContent = x.message; $('#cm').className = 'msg err'; }
+  };
+}
+
+/* ---- acceso directo ---- */
+let deferred = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; });
+async function install() {
+  if (deferred) { deferred.prompt(); deferred = null; return; }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const mac = /Macintosh/.test(navigator.userAgent);
+  const d = $('#dlg');
+  d.innerHTML = `<form method="dialog"><h2>Acceso directo</h2>
+    ${ios ? `<ol><li>Abre esta página en <b>Safari</b>.</li><li>Pulsa el botón <b>Compartir</b> (cuadrado con flecha).</li><li>Elige <b>Añadir a pantalla de inicio</b>.</li></ol>` : `
+    <p style="font-size:14px;margin:0 0 6px">En <b>Google Chrome</b>:</p>
+    <ol><li>Pulsa los <b>tres puntos ⋮</b> arriba a la derecha.</li>
+      <li>Ve a <b>Enviar, guardar y compartir</b> (o «Guardar y compartir»).</li>
+      <li>Elige <b>Crear acceso directo…</b>, marca <b>Abrir como ventana</b> y pulsa <b>Crear</b>.</li></ol>
+    <p style="font-size:13px;color:var(--muted);margin:0">Te aparecerá el icono de Conecta Seguros en el escritorio${mac ? ' (en Mac, en la carpeta «Aplicaciones de Chrome»)' : ''}.</p>`}
+    <div class="acts" style="margin-top:12px"><button class="btn small" value="ok">Entendido</button></div></form>`;
+  d.showModal();
+}
+
+async function start() {
+  try { const j = await api('/api/datos'); S.polizas = j.polizas || []; render(); }
+  catch (x) { if (x.status === 401) login(); else $('#app').innerHTML = `<p class="gut">No se ha podido cargar: ${esc(x.message)}</p>`; }
+}
+start();
+</script>
+</body>
+</html>

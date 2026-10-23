@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 72" role="img" aria-label="Conecta Seguros">
+  <path d="M32 4 58 13v20c0 17-11 29-26 35C17 62 6 50 6 33V13z" fill="#E82C88" transform="translate(3 3)"/>
+  <path d="M32 4 58 13v20c0 17-11 29-26 35C17 62 6 50 6 33V13z" fill="#F0E85A" stroke="#130F17" stroke-width="4" stroke-linejoin="round"/>
+  <g fill="#130F17">
+    <rect x="17" y="30" width="5.5" height="12" rx="2.75"/>
+    <rect x="25.5" y="22" width="5.5" height="28" rx="2.75"/>
+    <rect x="34" y="26" width="5.5" height="20" rx="2.75"/>
+    <rect x="42.5" y="32" width="5.5" height="8" rx="2.75"/>
+  </g>
+</svg>
