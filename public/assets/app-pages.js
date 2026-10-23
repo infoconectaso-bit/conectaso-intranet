@@ -243,9 +243,28 @@ on(/^#\/eventos\/(\d+)$/, async m => {
   loading(['Eventos', '#' + m[1]]);
   let data; try { data = await api('events/' + m[1]); } catch (e) { return shell(`<div class="empty"><span class="script">No disponible</span>${esc(e.message)}</div>`, ['Eventos']); }
   const ev = data.event;
-  if (isAdmin()) return eventEditorAdmin(ev);
-  return eventViewRole(ev);
+  if (isAdmin()) eventEditorAdmin(ev); else eventViewRole(ev);
+  loadEventInfo(ev.id);
 });
+const WMO = { 0: ['☀️', 'Despejado'], 1: ['🌤️', 'Poco nuboso'], 2: ['⛅', 'Nubes y claros'], 3: ['☁️', 'Nublado'], 45: ['🌫️', 'Niebla'], 48: ['🌫️', 'Niebla'], 51: ['🌦️', 'Llovizna'], 53: ['🌦️', 'Llovizna'], 55: ['🌦️', 'Llovizna'], 56: ['🌧️', 'Llovizna helada'], 57: ['🌧️', 'Llovizna helada'], 61: ['🌧️', 'Lluvia'], 63: ['🌧️', 'Lluvia'], 65: ['🌧️', 'Lluvia fuerte'], 66: ['🌧️', 'Lluvia helada'], 67: ['🌧️', 'Lluvia helada'], 71: ['🌨️', 'Nieve'], 73: ['🌨️', 'Nieve'], 75: ['🌨️', 'Nieve fuerte'], 77: ['🌨️', 'Aguanieve'], 80: ['🌦️', 'Chubascos'], 81: ['🌦️', 'Chubascos'], 82: ['⛈️', 'Chubascos fuertes'], 85: ['🌨️', 'Chubascos de nieve'], 86: ['🌨️', 'Chubascos de nieve'], 95: ['⛈️', 'Tormenta'], 96: ['⛈️', 'Tormenta/granizo'], 99: ['⛈️', 'Tormenta/granizo'] };
+async function loadEventInfo(id) {
+  const box = document.getElementById('evInfoBox'); if (!box) return;
+  let d; try { d = await api('event-weather/' + id); } catch (e) { return; }
+  const chip = (html, muted) => `<span style="display:inline-flex;align-items:center;gap:6px;background:${muted ? 'rgba(0,0,0,.04)' : 'rgba(232,44,136,.10)'};color:${muted ? '#7a8392' : 'inherit'};padding:6px 11px;border-radius:999px;font-size:13px;margin:0 8px 8px 0">${html}</span>`;
+  const parts = [];
+  if (d.travelKm != null || d.travelMin != null) {
+    const dist = [d.travelKm != null ? d.travelKm + ' km' : '', d.travelMin != null ? d.travelMin + ' min' : ''].filter(Boolean).join(' · ');
+    parts.push(chip(`🚗 ${esc(dist)} desde Martorelles${d.directionLink ? ` · <a href="${esc(d.directionLink)}" target="_blank" rel="noopener">Cómo llegar</a>` : ''}`));
+  }
+  if (d.weather) {
+    const w = d.weather, wm = WMO[w.code] || ['🌡️', ''];
+    parts.push(chip(`${wm[0]} ${w.tmax}° / ${w.tmin}°${wm[1] ? ' · ' + wm[1] : ''}${w.precip != null ? ' · 💧 ' + w.precip + '%' : ''}`));
+  } else {
+    const txt = { lejos: '🌤️ Previsión del tiempo disponible ~15 días antes', sincoords: '🌤️ Finca sin coordenadas (sin previsión)', error: '🌤️ Tiempo no disponible ahora' }[d.weatherReason];
+    if (txt) parts.push(chip(esc(txt), true));
+  }
+  box.innerHTML = parts.join('');
+}
 
 /* ---- editor completo (admin) ---- */
 function eventEditorAdmin(ev) {
@@ -264,6 +283,7 @@ function eventEditorAdmin(ev) {
   const body = `<form id="evForm" data-id="${ev.id}">
     <div class="page-head"><div><h1 style="font-size:24px">${headLabel}</h1><div class="lead">${esc(ev.conyuges || 'Sin cónyuges')} · ${dmy(ev.fecha)}</div><div class="page-head__accent"></div></div>
       <div class="btn-row"><a class="btn" href="#/eventos/${ev.id}/pdf">Resumen PDF</a></div></div>
+    <div id="evInfoBox" style="margin:2px 0 12px;display:flex;flex-wrap:wrap"></div>
     <div class="panel evtop"><div class="panel__body">
       <div class="evtop-top">
         <div class="field evtop-method"><label>Método de pago</label>
@@ -362,7 +382,7 @@ function eventViewRole(ev) {
     ? `<div class="ev-cli-head"><h1>${esc(ev.conyuges || 'Mi boda')}</h1><div class="ev-cli-sub">${dmy(ev.fecha)}${ev.hora ? ' · ' + ev.hora : ''}</div></div>`
     : pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''));
   shell(`${headHtml}
-    ${intro}${progHtml}<form id="evForm" class="${role === 'user' ? 'ev-client' : ''}" data-id="${ev.id}">${tabs}${role === 'dj' ? `<div class="panel dj-estado"><div class="panel__body"><div class="field evtop-estado"><label>Estado de contacto</label>${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div><p class="hint" style="margin-top:6px">Marca en qué punto estás con esta boda (contactado, meeting, etc.).</p></div></div>` : ''}${panes}
+    ${intro}${role === 'dj' ? '<div id="evInfoBox" style="margin:2px 0 12px;display:flex;flex-wrap:wrap"></div>' : ''}${progHtml}<form id="evForm" class="${role === 'user' ? 'ev-client' : ''}" data-id="${ev.id}">${tabs}${role === 'dj' ? `<div class="panel dj-estado"><div class="panel__body"><div class="field evtop-estado"><label>Estado de contacto</label>${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div><p class="hint" style="margin-top:6px">Marca en qué punto estás con esta boda (contactado, meeting, etc.).</p></div></div>` : ''}${panes}
     ${canSave ? `<div class="floatbar"><button type="submit" class="btn btn--primary">Guardar</button></div>` : ''}</form>`, role === 'user' ? [tt('Mi boda', 'La meva boda', 'My wedding', 'Mon mariage')] : ['Eventos', '#' + ev.id]);
   wireEventForm(ev, { full: false, role, canEditMusic, canSave });
 }

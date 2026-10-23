@@ -1517,7 +1517,26 @@ on(/^#\/cuenta$/, async () => {
         <button class="btn btn--primary" type="submit" style="margin-top:12px">Actualizar</button>
       </form></div></div>
     </div>
+    ${['dj', 'admin'].includes(S.user.role) ? `
+      <div class="panel" style="margin-top:4px"><div class="panel__head"><h3>📅 Mis bodas en tu calendario</h3></div><div class="panel__body">
+        <p class="hint" style="margin-bottom:12px">Suscríbete y tus bodas asignadas aparecerán en tu calendario (Google o iPhone) y se <b>actualizarán solas</b>: cuando te asignen una nueva, aparece sin que tengas que entrar. Es de <b>solo lectura</b> — no borra ni duplica tus propios eventos.</p>
+        <div id="calBox"><p class="hint">Cargando enlace…</p></div>
+      </div></div>` : ''}
     ${adv}`, ['Mi cuenta']);
+  (async () => {
+    const box = el('calBox'); if (!box) return;
+    let d; try { d = await api('my-calendar'); } catch (e) { box.innerHTML = '<p class="hint">No se pudo generar el enlace.</p>'; return; }
+    box.innerHTML = `
+      <div class="field"><label>Tu enlace de suscripción</label><input class="control" id="calUrl" readonly value="${esc(d.url)}"></div>
+      <div class="btn-row" style="flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <a class="btn btn--primary" href="${esc(d.webcal)}">📱 Añadir al iPhone</a>
+        <button class="btn" id="calCopy">📋 Copiar enlace</button>
+        <a class="btn" href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl" target="_blank" rel="noopener">➕ Añadir a Google Calendar</a>
+      </div>
+      <p class="hint"><b>iPhone:</b> pulsa «Añadir al iPhone» y confirma. <b>Google Calendar (desde el ordenador):</b> pulsa «Añadir a Google Calendar», pega el enlace en «Desde URL» y Añadir. Se actualiza solo cada pocas horas.</p>`;
+    const u = el('calUrl'); if (u) u.onclick = () => u.select();
+    const c = el('calCopy'); if (c) c.onclick = async () => { try { await navigator.clipboard.writeText(d.url); toast('Enlace copiado', 'ok'); } catch (e) { const i = el('calUrl'); if (i) { i.select(); } } };
+  })();
   el('pwForm').onsubmit = async e => {
     e.preventDefault(); const d = collectForm(e.target); const errEl = el('pwErr'); errEl.style.display = 'none';
     try { await api('auth/change-password', { method: 'POST', body: { current: d.current, password: d.password } }); toast('Contraseña actualizada', 'ok'); e.target.reset(); }

@@ -396,6 +396,7 @@ function authShell(inner) {
   </div><div class="auth__form"><div class="auth__card">${inner}</div></div></div>`;
 }
 function renderAuth() {
+  removeSpotlight();
   const h = location.hash;
   if (h.startsWith('#/activar')) return renderActivate();
   if (h.startsWith('#/recuperar')) return renderForgot();
@@ -549,8 +550,66 @@ function shell(bodyHtml, crumbs) {
   if (ls) $$('button[data-lang]', ls).forEach(b => b.onclick = () => setLang(b.dataset.lang));
   startLangObserver();
   applyLang(app);
+  initSpotlight();
 }
 const roleLabel = r => ({ admin: 'Administración', dj: 'DJ / Técnico', planner: 'Wedding planner', user: 'Cliente' }[r] || r);
+
+/* ---------- Buscador global tipo Spotlight (lupa fija + overlay, Ctrl/Cmd+K) ---------- */
+function removeSpotlight() { ['spot-btn', 'spot-overlay', 'spot-style'].forEach(id => { const e = document.getElementById(id); if (e) e.remove(); }); }
+function initSpotlight() {
+  if (!S.user || document.getElementById('spot-btn')) return;   // vive en <body>, sobrevive a los re-render
+  const mag = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>';
+  const st = document.createElement('style'); st.id = 'spot-style';
+  st.textContent = `
+  #spot-btn{position:fixed;right:18px;bottom:18px;z-index:9000;width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;background:#E82C88;color:#fff;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center}
+  #spot-btn svg{width:24px;height:24px}
+  #spot-overlay{position:fixed;inset:0;z-index:9001;background:rgba(10,12,20,.45);display:none;align-items:flex-start;justify-content:center}
+  #spot-overlay.open{display:flex}
+  .spot-box{margin-top:12vh;width:min(620px,92vw);background:#fff;color:#1b2430;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden}
+  .spot-in{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid rgba(0,0,0,.08)}
+  .spot-in input{flex:1;border:none;outline:none;font-size:18px;background:transparent;color:inherit}
+  .spot-res{max-height:60vh;overflow:auto}
+  .spot-item{display:flex;flex-direction:column;gap:2px;padding:11px 16px;cursor:pointer;border-bottom:1px solid rgba(0,0,0,.05)}
+  .spot-item.sel,.spot-item:hover{background:rgba(232,44,136,.10)}
+  .spot-item .t{font-weight:600}.spot-item .s{font-size:12px;color:#6a7382}
+  .spot-item .tag{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#E82C88;font-weight:700}
+  .spot-empty{padding:18px 16px;color:#889;text-align:center;font-size:14px}
+  @media (prefers-color-scheme: dark){.spot-box{background:#1c1e26;color:#eee}.spot-item .s{color:#9aa4b2}}`;
+  document.head.appendChild(st);
+  const btn = document.createElement('button'); btn.id = 'spot-btn'; btn.title = 'Buscar (Ctrl/Cmd+K)'; btn.setAttribute('aria-label', 'Buscar'); btn.innerHTML = mag;
+  document.body.appendChild(btn);
+  const ov = document.createElement('div'); ov.id = 'spot-overlay';
+  ov.innerHTML = `<div class="spot-box"><div class="spot-in">${mag.replace('width:24px', '')}<input type="text" placeholder="Buscar bodas, personas, fincas…" autocomplete="off" spellcheck="false"></div><div class="spot-res"></div></div>`;
+  document.body.appendChild(ov);
+  const input = ov.querySelector('input'); const resBox = ov.querySelector('.spot-res');
+  let items = [], sel = -1, timer = null, seq = 0;
+  const open = () => { ov.classList.add('open'); input.value = ''; resBox.innerHTML = '<div class="spot-empty">Escribe para buscar…</div>'; items = []; sel = -1; setTimeout(() => input.focus(), 30); };
+  const close = () => ov.classList.remove('open');
+  const scrollSel = () => { const e = resBox.querySelector('.spot-item.sel'); if (e) e.scrollIntoView({ block: 'nearest' }); };
+  const render = () => {
+    if (!items.length) { resBox.innerHTML = '<div class="spot-empty">Sin resultados.</div>'; return; }
+    resBox.innerHTML = items.map((r, i) => `<div class="spot-item ${i === sel ? 'sel' : ''}" data-i="${i}"><span class="tag">${esc(r.type)}</span><span class="t">${esc(r.title)}</span>${r.sub ? `<span class="s">${esc(r.sub)}</span>` : ''}</div>`).join('');
+    $$('.spot-item', resBox).forEach(e => e.onclick = () => go(+e.dataset.i));
+  };
+  const go = i => { const r = items[i]; if (!r) return; close(); location.hash = r.hash; };
+  const search = async () => {
+    const q = input.value.trim();
+    if (q.length < 2) { items = []; resBox.innerHTML = '<div class="spot-empty">Escribe al menos 2 letras…</div>'; return; }
+    const my = ++seq;
+    try { const r = await api('search?q=' + encodeURIComponent(q)); if (my !== seq) return; items = r.results || []; sel = items.length ? 0 : -1; render(); }
+    catch (e) { if (my === seq) resBox.innerHTML = '<div class="spot-empty">Error al buscar.</div>'; }
+  };
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 180); });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(items.length - 1, sel + 1); render(); scrollSel(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); render(); scrollSel(); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (sel >= 0) go(sel); }
+    else if (e.key === 'Escape') { close(); }
+  });
+  btn.onclick = open;
+  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K') && S.user) { e.preventDefault(); ov.classList.contains('open') ? close() : open(); } });
+}
 // --- Modo noche automático: atenúa la intranet a partir de las 21:00 (hasta las 7:00).
 // Se guarda en el dispositivo (localStorage), así queda activado cada vez que entran. ---
 const NIGHT_START = 21, NIGHT_END = 7;

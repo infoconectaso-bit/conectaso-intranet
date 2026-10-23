@@ -25,6 +25,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 const PUBLIC = path.join(__dirname, '..', 'public');
 const UPLOADS = path.join(DATA_DIR, 'uploads');
 fs.mkdirSync(UPLOADS, { recursive: true });
+const _wxCache = new Map();   // caché en memoria del tiempo: clave "lat,lng:fecha" -> { at, w }
 const MAX_UPLOAD = +(process.env.MAX_UPLOAD_MB || 25) * 1024 * 1024;
 // La URL base de los enlaces de email/magic links. Prioriza el ajuste guardado en la app
 // (store 'appUrl'), que el admin puede cambiar sin tocar el servidor (útil para el cutover al dominio).
@@ -186,11 +187,91 @@ async function api(req, res, url) {
   // --- volcado/migración (protegido por secreto, NO por sesión): operación puntual ---
   if (seg[0] === 'volcado') return volcado.handle(req, res, seg, method, url);
 
+  // --- Calendario ICS (sin sesión: autenticado por el token del propio enlace) ---
+  if (seg[0] === 'calendar' && seg[1] && method === 'GET') return serveCalendar(req, res, seg[1]);
+
   if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
 
   // --- metadatos (catálogos para la interfaz) ---
   if (seg[0] === 'meta' && method === 'GET') return ok(res, meta(user));
   if (seg[0] === 'brand' && method === 'GET') return ok(res, store.setting('brand') || {});
+
+  // --- BUSCADOR global (tipo Spotlight): eventos (según permisos), y personas/fincas (solo admin) ---
+  if (seg[0] === 'search' && method === 'GET') {
+    const q = String(url.searchParams.get('q') || '').trim();
+    const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const nq = norm(q);
+    if (nq.length < 2) return ok(res, { results: [] });
+    const locName = id => (store.get('locations', id) || {}).name || '';
+    const isNum = /^\d+$/.test(q);
+    const evs = listEventsFor(user);
+    const evHits = [];
+    for (const e of evs) {
+      const parts = [e.conyuges, locName(e.lugar), e.lugarOtro, e.tipo, e.fecha, String(e.id)];
+      (e.spouses || []).forEach(s => { parts.push(s.name, s.email, s.dni, s.mobile); });
+      if (user.role === 'admin') { parts.push((users.get(+e.djId) || {}).name, (users.get(+e.wpId) || {}).name); }
+      const hay = parts.filter(Boolean).map(norm).join(' ');
+      if (hay.includes(nq) || (isNum && +e.id === +q)) {
+        evHits.push({ type: 'Evento', id: e.id, title: e.conyuges || ('Boda #' + e.id), sub: [locName(e.lugar) || e.lugarOtro, e.fecha, e.tipo].filter(Boolean).join(' · '), hash: '#/eventos/' + e.id, date: e.fecha || '' });
+      }
+    }
+    evHits.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    let results = evHits.slice(0, 25);
+    if (user.role === 'admin') {
+      const rl = { admin: 'Administración', dj: 'DJ / Técnico', planner: 'Wedding planner', user: 'Cliente' };
+      const persons = [];
+      users.all().forEach(u => { if ([u.name, u.email].filter(Boolean).map(norm).join(' ').includes(nq)) persons.push({ type: 'Persona', id: u.id, title: u.name || u.email, sub: [rl[u.role] || u.role, u.email].filter(Boolean).join(' · '), hash: '#/usuario/' + u.id }); });
+      const fincas = [];
+      store.all('locations').forEach(l => { if (l.name && norm(l.name).includes(nq)) fincas.push({ type: 'Finca', id: l.id, title: l.name, sub: 'Localización', hash: '#/localizaciones' }); });
+      results = results.concat(persons.slice(0, 12), fincas.slice(0, 8));
+    }
+    return ok(res, { results });
+  }
+
+  // --- TIEMPO (clima) + DISTANCIA del evento: coords de la finca + pronóstico Open-Meteo (si falta <=15 días) ---
+  if (seg[0] === 'event-weather' && method === 'GET') {
+    const ev = store.get('events', +seg[1]);
+    if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 404, 'Evento no encontrado');
+    const loc = store.get('locations', ev.lugar) || {};
+    const out = { destName: loc.name || ev.lugarOtro || '', travelMin: (loc.travelMin != null ? loc.travelMin : null), travelKm: (loc.travelKm != null ? loc.travelKm : null), directionLink: loc.directionLink || '', weather: null, weatherReason: null };
+    const lat = loc.lat, lng = loc.lng, fecha = (ev.fecha || '').slice(0, 10);
+    if (lat == null || lng == null) out.weatherReason = 'sincoords';
+    else if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) out.weatherReason = 'sinfecha';
+    else {
+      const today = require('./time').bizToday();
+      const days = Math.round((new Date(fecha + 'T12:00:00Z') - new Date(today + 'T12:00:00Z')) / 86400000);
+      if (days < 0) out.weatherReason = 'pasado';
+      else if (days > 15) out.weatherReason = 'lejos';
+      else {
+        const key = (+lat).toFixed(3) + ',' + (+lng).toFixed(3) + ':' + fecha;
+        const c = _wxCache.get(key);
+        if (c && (Date.now() - c.at) < 3 * 3600 * 1000) out.weather = c.w;
+        else {
+          try {
+            const u = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Europe%2FMadrid&start_date=${fecha}&end_date=${fecha}`;
+            const r = await fetch(u);
+            if (r.ok) {
+              const j = await r.json(); const d = j.daily || {};
+              if (d.time && d.time.length) {
+                const w = { code: (d.weather_code || [])[0], tmax: Math.round((d.temperature_2m_max || [])[0]), tmin: Math.round((d.temperature_2m_min || [])[0]), precip: (d.precipitation_probability_max || [])[0] };
+                out.weather = w; _wxCache.set(key, { at: Date.now(), w });
+              }
+            } else out.weatherReason = 'error';
+          } catch (e) { out.weatherReason = 'error'; }
+        }
+      }
+    }
+    return ok(res, out);
+  }
+
+  // --- CALENDARIO: URL de suscripción (el DJ la suya; admin puede pedir ?uid= de cualquiera) ---
+  if (seg[0] === 'my-calendar' && method === 'GET') {
+    let uid = +user.id;
+    if (user.role === 'admin' && url.searchParams.get('uid')) uid = +url.searchParams.get('uid');
+    const base = (APP_URL() || ('https://' + (req.headers.host || ''))).replace(/\/$/, '');
+    const path2 = '/api/calendar/' + uid + '-' + calToken(uid) + '.ics';
+    return ok(res, { url: base + path2, webcal: base.replace(/^https?:/, 'webcal:') + path2 });
+  }
 
   // --- eventos ---
   if (seg[0] === 'events') return events(req, res, user, seg, method, url);
@@ -1376,6 +1457,42 @@ function listEventsFor(user) {
   if (user.role === 'planner') return all.filter(e => +e.wpId === uid);
   if (user.role === 'dj') return all.filter(e => +e.djId === uid || (e.services || []).some(s => +s.resp === uid || +s.resp2 === uid));
   return [];
+}
+
+/* ---------- Calendario (suscripción ICS): feed por usuario con token HMAC estable ---------- */
+function calSecret() { let s = store.setting('calSecret'); if (!s) { s = crypto.randomBytes(24).toString('hex'); store.setSetting('calSecret', s); } return s; }
+function calToken(uid) { return crypto.createHmac('sha256', calSecret()).update('cal:' + uid).digest('base64url').slice(0, 24); }
+function serveCalendar(req, res, file) {
+  const m = /^(\d+)-([A-Za-z0-9_-]{10,})\.ics$/.exec(String(file || ''));
+  if (!m) return fail(res, 404, 'No encontrado');
+  const uid = +m[1];
+  if (m[2] !== calToken(uid)) return fail(res, 403, 'Token no válido');
+  const u = users.get(uid); if (!u) return fail(res, 404, 'No encontrado');
+  const locName = id => (store.get('locations', id) || {}).name || '';
+  const esc = t => String(t == null ? '' : t).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date();
+  const dtstamp = now.getUTCFullYear() + pad(now.getUTCMonth() + 1) + pad(now.getUTCDate()) + 'T' + pad(now.getUTCHours()) + pad(now.getUTCMinutes()) + pad(now.getUTCSeconds()) + 'Z';
+  // Solo bodas recientes (6 meses atrás) y futuras, para no generar un ICS gigante.
+  const since = (() => { const d = new Date(); d.setDate(d.getDate() - 180); return d.toISOString().slice(0, 10); })();
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Conecta So//Intranet//ES', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Bodas Conecta So', 'X-WR-TIMEZONE:Europe/Madrid', 'X-PUBLISHED-TTL:PT6H', 'REFRESH-INTERVAL;VALUE=DURATION:PT6H'];
+  listEventsFor(u).forEach(e => {
+    const f = (e.fecha || '').slice(0, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(f) || f < since) return;
+    const ymd = f.replace(/-/g, '');
+    const hm = /^(\d{1,2}):(\d{2})/.exec(e.hora || '');
+    const venue = locName(e.lugar) || e.lugarOtro || '';
+    const title = (e.conyuges ? '💍 ' + e.conyuges : (e.tipo || 'Evento') + ' #' + e.id) + (venue ? ' — ' + venue : '');
+    const desc = [e.hora ? 'Hora: ' + e.hora : '', e.tipo ? 'Pack: ' + e.tipo : '', venue ? 'Lugar: ' + venue : '', 'Boda #' + e.id].filter(Boolean).join('\n');
+    lines.push('BEGIN:VEVENT', 'UID:conecta-' + e.id + '-u' + uid + '@conectaso.es', 'DTSTAMP:' + dtstamp);
+    if (hm) { let eh = +hm[1] + 6; if (eh > 23) eh = 23; lines.push('DTSTART:' + ymd + 'T' + pad(+hm[1]) + hm[2] + '00', 'DTEND:' + ymd + 'T' + pad(eh) + hm[2] + '00'); }
+    else { const d = new Date(+f.slice(0, 4), +f.slice(5, 7) - 1, +f.slice(8, 10) + 1); lines.push('DTSTART;VALUE=DATE:' + ymd, 'DTEND;VALUE=DATE:' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate())); }
+    lines.push('SUMMARY:' + esc(title));
+    if (venue) lines.push('LOCATION:' + esc(venue));
+    lines.push('DESCRIPTION:' + esc(desc), 'END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  res.writeHead(200, { 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'no-cache' });
+  res.end(lines.join('\r\n') + '\r\n');
 }
 // Listado global de solicitudes de extras (para la pestaña "Servicios extras" y el aviso de inicio).
 function extraRequestsApi(req, res, user) {
