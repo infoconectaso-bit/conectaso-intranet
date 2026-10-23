@@ -357,8 +357,20 @@ async function handle(req, res, seg, method, url) {
           (u.djServices || []).forEach(s => { if (s.s != null && num(s.p) != null) r.services[s.s] = num(s.p); });
           n++;
         });
+        // Re-aplica los ajustes MANUALES de tarifas (setting 'djRatesManual') para que el rebuild
+        // desde la intranet no machaque las correcciones hechas a mano.
+        const man = store.setting('djRatesManual') || {};
+        Object.keys(man).forEach(uid => {
+          if (uid[0] === '_') return; const o = man[uid]; if (!o || typeof o !== 'object') return;
+          const r = rates[uid] || (rates[uid] = { packs: {}, fincas: {}, services: {} });
+          r.fincas = r.fincas || {}; r.packs = r.packs || {}; r.services = r.services || {};
+          if (o.zeroAll) { Object.keys(r.fincas).forEach(k => { const f = r.fincas[k] || {}; ['boda', 'he', 'evento', 'ceremonia', 'disco'].forEach(x => { if (f[x] != null) f[x] = 0; }); }); Object.keys(r.packs).forEach(k => r.packs[k] = 0); Object.keys(r.services).forEach(k => r.services[k] = 0); }
+          if (o.fincas) Object.keys(o.fincas).forEach(fid => { r.fincas[fid] = Object.assign({}, r.fincas[fid] || {}, o.fincas[fid]); });
+          if (o.packs) Object.assign(r.packs, o.packs);
+          if (o.services) Object.assign(r.services, o.services);
+        });
         store.setSetting('djRates', rates);
-        return send(res, 200, { ok: true, djsConRate: n });
+        return send(res, 200, { ok: true, djsConRate: n, manualAplicados: Object.keys(man).filter(k => k[0] !== '_').length });
       }
       if (cmd === 'mark-tyc') { // marca usuarios como TYC firmado (data.tyc=true) desde los firmados de la intranet
         const ids = (body.ids || []).map(Number); const val = body.value !== false; let n = 0;

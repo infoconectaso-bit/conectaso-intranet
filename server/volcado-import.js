@@ -50,7 +50,11 @@ function run(seed, db) {
     //   Pasada 2: asignar el email final; los repetidos se renombran (local+uID@dominio).
     // Dos pasadas evitan choques transitorios del UNIQUE al reescribir filas existentes.
     const dataFor = u => { const d = {}; ['worker_type', 'color', 'vehicle_allowed', 'sending', 'prices', 'tyc', 'djFincas', 'djServices'].forEach(k => { if (u[k] !== undefined) d[k] = u[k]; }); return d; };
+    // Usuarios eliminados a mano que NO deben re-crearse en el volcado (setting 'importExclude').
+    const exclude = new Set(((store.setting && store.setting('importExclude')) || []).map(Number));
+    counts.users.excluidos = 0;
     for (const u of seed.users) {
+      if (exclude.has(u.id)) { counts.users.excluidos++; continue; }
       const row = users.getRow(u.id);
       const tmp = `volcado-tmp-${u.id}@conectaso.local`;
       if (row) {
@@ -65,11 +69,12 @@ function run(seed, db) {
     }
     // Pasada 2: email final deduplicado. Reservamos primero los emails de usuarios existentes que
     // NO están en el volcado (p. ej. el admin de desarrollo) para no chocar con ellos.
-    const volcadoIds = new Set(seed.users.map(u => u.id));
+    const volcadoIds = new Set(seed.users.filter(u => !exclude.has(u.id)).map(u => u.id));
     const seen = new Map();
     if (typeof users.all === 'function') users.all().forEach(x => { if (!volcadoIds.has(x.id) && x.email) seen.set(String(x.email).toLowerCase(), x.id); });
     counts.emailDuplicados = 0;
     for (const u of seed.users) {
+      if (exclude.has(u.id)) continue;
       let email = (u.mail || '').trim() || `sin-email-${u.id}@conectaso.local`;
       const key = email.toLowerCase();
       let extra = null;

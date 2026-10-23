@@ -202,6 +202,19 @@ async function api(req, res, url) {
     }
   }
 
+  // --- Usuarios excluidos del volcado (no re-crearlos al reimportar) ---
+  if (seg[0] === 'import-exclude') {
+    if (!user || user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    if (method === 'GET') return ok(res, { ids: store.setting('importExclude') || [] });
+    if (method === 'POST') {
+      const body = await readBody(req);
+      const ids = (Array.isArray(body.ids) ? body.ids : []).map(Number).filter(Boolean);
+      store.setSetting('importExclude', ids);
+      store.audit(user.id, 'import-exclude');
+      return ok(res, { ok: true, ids });
+    }
+  }
+
   // --- URL base de la app (para enlaces de email / magic links) ---
   if (seg[0] === 'app-url') {
     if (!user || user.role !== 'admin') return fail(res, 403, 'Sin acceso');
