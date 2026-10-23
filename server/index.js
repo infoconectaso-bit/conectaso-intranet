@@ -448,6 +448,24 @@ async function api(req, res, url) {
     try { store.setSetting('filesBackupSig', ''); await cloudBackup.syncFiles(); store.audit(user.id, 'cloud-backup-sync-files'); return ok(res, { ok: true }); }
     catch (e) { return fail(res, 400, 'No se pudieron subir los archivos: ' + e.message); }
   }
+  // --- LIBERAR ESPACIO: limpieza de adjuntos de bodas pasadas (admin). Config + vista previa + ejecutar ---
+  if (seg[0] === 'attachment-cleanup') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const curCfg = () => { const c = store.setting('attachmentCleanup') || {}; return { enabled: !!c.enabled, months: Math.min(60, Math.max(1, +c.months || 3)) }; };
+    if (method === 'GET') { const cfg = curCfg(); return ok(res, { config: cfg, preview: cleanupPreview(cfg.months) }); }
+    if (seg[1] === 'run' && method === 'POST') {
+      const cfg = curCfg();
+      try { const r = cleanupRun(cfg.months, user.id); return ok(res, { ok: true, result: r }); }
+      catch (e) { return fail(res, 500, 'No se pudo limpiar: ' + e.message); }
+    }
+    if (method === 'POST') {
+      const b = await readBody(req);
+      const next = { enabled: !!b.enabled, months: Math.min(60, Math.max(1, +b.months || 3)) };
+      store.setSetting('attachmentCleanup', next);
+      store.audit(user.id, 'attachment-cleanup-config:' + (next.enabled ? 'on' : 'off') + '/' + next.months + 'm');
+      return ok(res, { ok: true, config: next, preview: cleanupPreview(next.months) });
+    }
+  }
   if (seg[0] === 'backups' && seg[1] === 'create' && method === 'POST') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     try { const r = backup.snapshot('manual'); store.audit(user.id, 'backup-create'); return ok(res, { ok: true, backup: r }); }
@@ -1738,6 +1756,40 @@ const payslipDir = (uid, period) => { const m = String(period || '').match(/^(\d
 const fileFull = f => (f.collection === 'payslip')
   ? path.join(payslipDir(f.record_id, f.description), f.id + '-' + safeName(f.name))
   : path.join(UPLOADS, colPrefix(f.collection) + f.record_id, f.id + '-' + safeName(f.name));
+
+/* ---------- Liberar espacio: adjuntos de bodas pasadas hace más de N meses ----------
+ * SOLO toca archivos de EVENTOS (collection='events': fotos y adjuntos de la boda) y el logo de
+ * fotomatón (dataURL que pesa en la BD). NUNCA toca nóminas (collection='payslip') ni mantenimiento.
+ * Es irreversible en el servidor, pero los archivos siguen en la copia de la nube durante su retención. */
+function cleanupCutoff(months) { const d = new Date(); d.setMonth(d.getMonth() - (+months || 3)); return d.toISOString().slice(0, 10); }
+function cleanupOldEvents(months) { const cut = cleanupCutoff(months); return store.all('events').filter(e => { const f = (e.fecha || '').slice(0, 10); return f && f < cut; }); }
+function cleanupPreview(months) {
+  const evs = cleanupOldEvents(months);
+  const sel = db().prepare("SELECT size FROM files WHERE collection='events' AND record_id=?");
+  let files = 0, bytes = 0, logos = 0, logoBytes = 0; const evSet = new Set();
+  evs.forEach(e => {
+    sel.all(+e.id).forEach(r => { files++; bytes += (+r.size || 0); evSet.add(e.id); });
+    const fl = e.disco && e.disco.fotoLogo;
+    if (typeof fl === 'string' && fl.slice(0, 5) === 'data:') { logos++; logoBytes += fl.length; evSet.add(e.id); }
+  });
+  return { months: +months || 3, cutoff: cleanupCutoff(months), oldEvents: evs.length, events: evSet.size, files, bytes, logos, logoBytes, totalBytes: bytes + logoBytes };
+}
+function cleanupRun(months, uid) {
+  const evs = cleanupOldEvents(months);
+  const sel = db().prepare("SELECT * FROM files WHERE collection='events' AND record_id=?");
+  const del = db().prepare('DELETE FROM files WHERE id = ?');
+  let files = 0, bytes = 0, logos = 0;
+  evs.forEach(e => {
+    sel.all(+e.id).forEach(f => {
+      try { fs.unlinkSync(fileFull(f)); } catch (err) { try { fs.unlinkSync(path.join(UPLOADS, f.id)); } catch (e2) {} }
+      del.run(f.id); files++; bytes += (+f.size || 0);
+    });
+    try { fs.rmdirSync(path.join(UPLOADS, 'boda-' + e.id)); } catch (err) {}
+    if (e.disco && typeof e.disco.fotoLogo === 'string' && e.disco.fotoLogo.slice(0, 5) === 'data:') { e.disco.fotoLogo = ''; store.put('events', e); logos++; }
+  });
+  if (files || logos) store.audit(uid, 'cleanup-attachments:' + files + 'f/' + logos + 'logos/' + bytes + 'b', 'events', null);
+  return { months: +months || 3, oldEvents: evs.length, files, bytes, logos };
+}
 /* ---------- planos de montaje ----------
  * Imagen (vista aérea) guardada en disco; símbolos ("marks") en un setting.
  * Clave = keyBase: plantilla de finca "<locId>_<pack>" o copia de evento "ev_<id>".
@@ -1950,4 +2002,11 @@ server.listen(PORT, HOST, () => {
   if (!mail.enabled()) console.log('Aviso: SMTP no configurado — los enlaces de invitación se mostrarán en pantalla al administrador.');
   try { require('./reminders').startReminders(); } catch (e) { console.error('[recordatorios] no se pudo iniciar:', e.message); }
   try { backup.start(); } catch (e) { console.error('[backup] no se pudo iniciar:', e.message); }
+  // Limpieza automática de adjuntos de bodas antiguas: una vez al día, solo si está activada.
+  const runCleanupIfOn = () => {
+    try { const c = store.setting('attachmentCleanup'); if (c && c.enabled) { const r = cleanupRun(c.months, null); if (r.files || r.logos) console.log('[cleanup] liberados', r.files, 'archivos y', r.logos, 'logos de', r.oldEvents, 'bodas antiguas'); } }
+    catch (e) { console.error('[cleanup] error:', e.message); }
+  };
+  setTimeout(runCleanupIfOn, 90 * 1000);              // al arrancar (tras margen)
+  setInterval(runCleanupIfOn, 24 * 60 * 60 * 1000);   // y cada 24 h
 });

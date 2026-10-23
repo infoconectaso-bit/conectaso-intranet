@@ -1138,6 +1138,8 @@ on(/^#\/backups$/, async () => {
     const cc = await api('cloud-backup-config').catch(() => ({ config: {} }));
     const cfg = cc.config || {};
     const cloud = r.cloud || {};
+    const ac = await api('attachment-cleanup').catch(() => ({ config: { enabled: false, months: 3 }, preview: {} }));
+    const acc = ac.config || { enabled: false, months: 3 }; const acp = ac.preview || {};
     const list = r.backups || [], last = r.lastBackup;
     const st = r.status || {};
     let banner = '';
@@ -1180,6 +1182,26 @@ on(/^#\/backups$/, async () => {
           <button class="btn" id="cbSyncFiles">🗂 Subir archivos ahora</button>
         </div>
         <p class="hint" style="margin-top:10px">La copia incluye <b>la base de datos</b> (bodas, pagos, facturas, tarifas, observaciones…) <b>y todos los archivos subidos</b> (nóminas, planos, adjuntos y fotos de eventos, logos de fotomatón). Los archivos solo se vuelven a subir cuando cambian.</p>
+      </div>
+
+      <h2 style="margin:26px 0 6px">🧹 Liberar espacio (bodas antiguas)</h2>
+      <p class="hint" style="margin-bottom:12px">Borra los archivos adjuntos (fotos, documentos) y el logo de fotomatón de las bodas que ya pasaron hace más de los meses indicados, para no acumular peso. <b>Nunca toca nóminas.</b> Es irreversible en el servidor, aunque los archivos siguen en la copia de la nube durante su retención (hasta ~90 días).</p>
+      <div class="card" style="padding:16px;border:1px solid var(--line,#e5e7eb);border-radius:12px;max-width:560px">
+        <div class="grid-3" style="margin-bottom:12px">
+          <div class="stat stat--blue"><div class="k">Bodas antiguas</div><div class="v">${acp.oldEvents || 0}</div></div>
+          <div class="stat"><div class="k">Archivos a liberar</div><div class="v">${acp.files || 0}${acp.logos ? ' + ' + acp.logos + ' logos' : ''}</div></div>
+          <div class="stat stat--yellow"><div class="k">Espacio liberable</div><div class="v" style="font-size:18px">${fmtSize(acp.totalBytes || 0)}</div></div>
+        </div>
+        <div style="display:grid;gap:10px">
+          <label>Borrar adjuntos de bodas de hace más de
+            <select id="acMonths" class="inp">${[2, 3, 4, 6, 9, 12].map(m => `<option value="${m}" ${(+acc.months === m) ? 'selected' : ''}>${m} meses</option>`).join('')}</select>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="acEnabled" ${acc.enabled ? 'checked' : ''}> <span>Activar limpieza automática (se ejecuta una vez al día)</span></label>
+        </div>
+        <div class="btn-row" style="margin-top:14px;flex-wrap:wrap;gap:8px">
+          <button class="btn btn--primary" id="acSave">Guardar</button>
+          <button class="btn btn--red" id="acRun">🧹 Limpiar ahora</button>
+        </div>
       </div>`, ['Copias de seguridad']);
     const bn = el('bkNow');
     if (bn) bn.onclick = async () => { bn.disabled = true; bn.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST' }); toast('Copia creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
@@ -1197,6 +1219,17 @@ on(/^#\/backups$/, async () => {
     if (cbSync) cbSync.onclick = async () => { cbSync.disabled = true; cbSync.textContent = 'Subiendo…'; try { await api('cloud-backup-sync', { method: 'POST' }); toast('✅ Base de datos subida a la nube', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
     const cbSyncFiles = el('cbSyncFiles');
     if (cbSyncFiles) cbSyncFiles.onclick = async () => { cbSyncFiles.disabled = true; cbSyncFiles.textContent = 'Subiendo…'; try { await api('cloud-backup-sync-files', { method: 'POST' }); toast('✅ Archivos subidos a la nube', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
+    const acSave = el('acSave');
+    if (acSave) acSave.onclick = async () => { acSave.disabled = true; acSave.textContent = 'Guardando…'; try { await api('attachment-cleanup', { method: 'POST', body: { enabled: el('acEnabled').checked, months: +el('acMonths').value } }); toast('Guardado', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
+    const acRun = el('acRun');
+    if (acRun) acRun.onclick = () => {
+      const m = +el('acMonths').value;
+      modal('Liberar espacio', `Se borrarán <b>definitivamente del servidor</b> los adjuntos y logos de las bodas de hace más de <b>${m} meses</b> (${acp.files || 0} archivos${acp.logos ? ' + ' + acp.logos + ' logos' : ''}, ${fmtSize(acp.totalBytes || 0)}).<br><br>Las nóminas no se tocan. Los archivos seguirán en la copia de la nube durante su retención. ¿Continuar?`, {
+        okText: 'Sí, liberar espacio', danger: true, onOk: async () => {
+          try { const r = await api('attachment-cleanup/run', { method: 'POST' }); const rr = r.result || {}; toast(`✅ Liberados ${rr.files || 0} archivos y ${rr.logos || 0} logos`, 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render();
+        }
+      });
+    };
   }
   render();
 });
