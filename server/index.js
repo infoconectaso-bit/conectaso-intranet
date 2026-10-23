@@ -579,7 +579,7 @@ async function api(req, res, url) {
     const EXCL_WP = /uauu|edelwe|can\s*ribas|boaella|bodas\s*rv|can\s*cuch|dalmau/i;
     // Varios planners pueden ser la MISMA empresa: se agrupan en un único trozo del quesito.
     // Entretornos (Patricia, Ana, Claudia…) cuentan juntas.
-    const wpGroup = nm => /entretornos/i.test(nm) ? 'Entretornos' : nm;
+    const wpGroup = nm => /entre\s*tonos|entretornos/i.test(nm) ? 'Entretonos Pastel' : nm;
     const wpCnt = {};
     allEv.forEach(e => { if (!e.wpId) return; const nm = (users.get(+e.wpId) || {}).name || ''; if (!nm || EXCL_WP.test(nm)) return; const g = wpGroup(nm); wpCnt[g] = (wpCnt[g] || 0) + 1; });
     const plannersTop = Object.entries(wpCnt).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
