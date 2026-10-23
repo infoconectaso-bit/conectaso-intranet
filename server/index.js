@@ -522,7 +522,69 @@ ${workers.length ? `<table><thead><tr><th>Trabajador</th><th>Periodo</th><th sty
     res.end(html);
     return;
   }
+  // --- SINCRONIZAR NÓMINAS DESDE HOLDED a la intranet (admin, temporal). Dry-run por defecto; ?go=1 descarga de verdad. ---
+  if (seg[0] === 'holded-payslip-sync' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (!holded.enabled()) return fail(res, 400, 'Holded no está activado.');
+    const go = url.searchParams.get('go') === '1';
+    const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const monthOf = v => { if (v == null || v === '') return null; if (typeof v === 'number') { const d = new Date(v < 1e12 ? v * 1000 : v); return isNaN(d) ? null : d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); } const m = String(v).match(/(\d{4})-(\d{2})/); if (m) return m[1] + '-' + m[2]; const d = new Date(v); return isNaN(d) ? null : d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); };
+    const workers = users.all().filter(u => u.name && ['dj', 'admin', 'planner'].includes(u.role));
+    const byNorm = {}; workers.forEach(u => { byNorm[norm(u.name)] = u; });
+    const matchUser = name => {
+      const n = norm(name); if (!n) return null;
+      if (byNorm[n]) return byNorm[n];
+      const nt = n.split(' ').filter(Boolean); if (nt.length < 2) return null;
+      let best = null; workers.forEach(u => { const ut = norm(u.name).split(' ').filter(Boolean); if (ut.length < 2) return; const aInB = nt.every(t => ut.includes(t)); const bInA = ut.every(t => nt.includes(t)); if ((aInB || bInA) && !best) best = u; }); return best;
+    };
+    let items = []; try { items = await holded.listPayslips(); } catch (e) { return fail(res, 502, 'No se pudieron leer las nóminas de Holded: ' + e.message); }
+    const existsStmt = db().prepare("SELECT COUNT(*) c FROM files WHERE collection='payslip' AND record_id=? AND description LIKE ?");
+    const insStmt = db().prepare('INSERT INTO files (id, collection, record_id, name, description, mime, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const matched = {}, unmatched = {}; let willSync = 0, skipped = 0, done = 0; const errors = [];
+    for (const it of items) {
+      if (it.is_draft || it.isDraft || it.draft) continue;
+      const ename = it.employee_name || it.employeeName || (it.employee && it.employee.name) || '(sin nombre)';
+      const period = monthOf(it.period_start || it.periodStart || it.date || it.period_end || it.periodEnd);
+      if (!period) continue;
+      const u = matchUser(ename);
+      if (!u) { (unmatched[ename] = unmatched[ename] || new Set()).add(period); continue; }
+      const key = u.name; const M = matched[key] = matched[key] || { uid: u.id, holdedName: ename, months: new Set(), toSync: 0, skip: 0 };
+      M.months.add(period);
+      if (existsStmt.get(u.id, period + '%').c > 0) { skipped++; M.skip++; continue; }
+      if (!go) { willSync++; M.toSync++; continue; }
+      try {
+        const buf = await holded.getPayslipPdf(it.id);
+        const fname = 'Nomina ' + period + '.pdf';
+        const fid = crypto.randomBytes(12).toString('hex');
+        const dir = payslipDir(u.id, period); fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, fid + '-' + safeName(fname)), buf);
+        insStmt.run(fid, 'payslip', u.id, fname, period, 'application/pdf', buf.length, user.id);
+        done++; M.toSync++;
+      } catch (e) { errors.push(ename + ' ' + period + ': ' + String(e.message).slice(0, 120)); }
+    }
+    store.audit(user.id, go ? 'holded-payslip-sync' : 'holded-payslip-sync-dryrun');
+    const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const mRows = Object.keys(matched).sort().map(k => { const M = matched[k]; return `<tr><td><b>${esc(k)}</b>${norm(k) !== norm(M.holdedName) ? `<br><span style="color:#5a6472;font-size:12px">Holded: ${esc(M.holdedName)}</span>` : ''}</td><td style="text-align:center">${M.months.size}</td><td style="text-align:center;color:#1B5E20">${M.toSync}</td><td style="text-align:center;color:#5a6472">${M.skip}</td></tr>`; }).join('');
+    const uRows = Object.keys(unmatched).sort().map(n => `<tr><td><b>${esc(n)}</b></td><td>${[...unmatched[n]].sort().length} nóminas</td></tr>`).join('');
+    const totalHolded = items.length;
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sincronizar nóminas de Holded</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:16px;background:#f6f7f9;color:#1b2430}h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:22px 0 8px}p.sub{color:#5a6472;margin:0 0 12px;font-size:14px}.k{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px}.card .n{font-size:22px;font-weight:700}.card .t{font-size:12px;color:#5a6472}table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:8px}th,td{padding:9px 12px;text-align:left;border-bottom:1px solid #eef0f3;font-size:14px}th{background:#f0f3f7;font-size:12px;text-transform:uppercase;color:#5a6472}tr:last-child td{border-bottom:none}.btn{display:inline-block;background:#E82C88;color:#fff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700;margin-top:8px}.warn{background:#FFF8E1;border:1px solid #FFE49A;color:#8a6d00;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:14px}.ok{background:#E8F5E9;border:1px solid #BEE3C2;color:#1B5E20;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:14px}</style></head>
+<body><h1>Sincronizar nóminas de Holded → intranet</h1>
+<p class="sub">${go ? 'Descarga REALIZADA.' : 'Modo PRUEBA (no se ha descargado nada todavía).'} Nóminas leídas de Holded: ${totalHolded}.</p>
+${go ? `<div class="ok"><b>✅ Descargadas ${done} nóminas</b> a la intranet.${skipped ? ' ' + skipped + ' ya estaban.' : ''}${errors.length ? ' ' + errors.length + ' con error.' : ''}</div>` : `<div class="warn"><b>Esto es una prueba.</b> Revisa abajo que los nombres cuadran. Si está bien, pulsa el botón del final para descargar de verdad.</div>`}
+<div class="k"><div class="card"><div class="n">${Object.keys(matched).length}</div><div class="t">Trabajadores reconocidos</div></div><div class="card"><div class="n">${go ? done : willSync}</div><div class="t">${go ? 'Descargadas' : 'Se descargarían'}</div></div><div class="card"><div class="n">${skipped}</div><div class="t">Ya estaban</div></div><div class="card"><div class="n">${Object.keys(unmatched).length}</div><div class="t">Sin reconocer</div></div></div>
+<h2>✅ Reconocidos</h2>
+${mRows ? `<table><thead><tr><th>Trabajador (intranet)</th><th style="text-align:center">Nóminas en Holded</th><th style="text-align:center">${go ? 'Descargadas' : 'A descargar'}</th><th style="text-align:center">Ya estaban</th></tr></thead><tbody>${mRows}</tbody></table>` : '<div class="card">Ninguno reconocido automáticamente.</div>'}
+${Object.keys(unmatched).length ? `<h2>⚠️ Sin reconocer (nombre de Holded que no cuadra con ningún trabajador)</h2><p class="sub">Estos no se tocan. Si alguno es un trabajador tuyo con otro nombre, dímelo y lo enlazo a mano.</p><table><thead><tr><th>Nombre en Holded</th><th>Nóminas</th></tr></thead><tbody>${uRows}</tbody></table>` : ''}
+${errors.length ? `<h2>Errores</h2><table><tbody>${errors.map(e => `<tr><td>${esc(e)}</td></tr>`).join('')}</tbody></table>` : ''}
+${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ Descargar de verdad las ${willSync} nóminas reconocidas</a>` : ''}
+<p class="sub" style="margin-top:16px">Página temporal (no guardada en el menú).</p></body></html>`;
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(html);
+    return;
+  }
   if (seg[0] === 'backups' && seg[1] === 'create' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     try { const r = backup.snapshot('manual'); store.audit(user.id, 'backup-create'); return ok(res, { ok: true, backup: r }); }
     catch (e) { return fail(res, 500, 'No se pudo crear la copia: ' + e.message); }
