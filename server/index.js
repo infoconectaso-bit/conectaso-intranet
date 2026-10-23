@@ -161,7 +161,14 @@ async function api(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean); // ['api', ...]
   const seg = parts.slice(1);
   const method = req.method;
-  const user = auth.sessionUser(req);
+  let user = auth.sessionUser(req);
+
+  // Acceso temporal por clave en la URL (sin sesión) SOLO para las páginas puntuales de nóminas,
+  // porque abrirlas desde el móvil/otro navegador no lleva la cookie de sesión. Se quitarán al terminar.
+  const TMP_KEY = 'cstmp4e76f701be27bbfab821487e8f44caa2';
+  if (!user && method === 'GET' && (seg[0] === 'payslip-gaps' || seg[0] === 'holded-payslip-sync') && url.searchParams.get('k') === TMP_KEY) {
+    user = { id: null, role: 'admin', name: 'acceso temporal' };
+  }
 
   // --- autenticación pública ---
   if (seg[0] === 'auth') {
