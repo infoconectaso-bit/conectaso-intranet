@@ -1227,11 +1227,11 @@ on(/^#\/backups$/, async () => {
         <div class="stat stat--yellow"><div class="k">Espacio ocupado</div><div class="v" style="font-size:18px">${fmtSize(r.totalSize || 0)}</div></div>
       </div>
       <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--primary" id="bkNow">💾 Crear copia ahora</button></div>
-      <p class="hint" style="margin-bottom:12px">Se hace una copia automática al arrancar y <b>cada 5 minutos</b>. Se conservan todas las de las últimas 24 h y una diaria durante 30 días; las más antiguas se borran solas (no se llena el disco). Para protección total conviene, además, la copia en la nube de abajo y respaldar los archivos de nóminas.</p>
+      <p class="hint" style="margin-bottom:12px">Se hace una copia automática al arrancar y <b>cada 7 minutos</b>. Se conservan todas las de las últimas 24 h y una diaria durante 30 días; las más antiguas se borran solas (no se llena el disco). Para protección total conviene, además, la copia en la nube de abajo y respaldar los archivos de nóminas.</p>
       <div class="table-wrap"><table class="dt"><thead><tr><th>Archivo</th><th>Fecha</th><th style="text-align:right">Tamaño</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">Aún no hay copias (se creará una en breve).</td></tr>'}</tbody></table></div>
 
       <h2 style="margin:26px 0 6px">☁️ Copia en la nube (fuera del servidor)</h2>
-      <p class="hint" style="margin-bottom:12px">Segunda copia automática en <b>Backblaze B2</b> (región Europa). Si el servidor se estropeara, los datos seguirían a salvo aquí. Cada copia local (cada 5 min) se sube también a la nube, y las antiguas se borran solas. La clave secreta se guarda <b>solo en tu servidor</b>; no se muestra una vez guardada.</p>
+      <p class="hint" style="margin-bottom:12px">Segunda copia automática en <b>Backblaze B2</b> (región Europa). Si el servidor se estropeara, los datos seguirían a salvo aquí. Cada copia local (cada 7 min) se sube también a la nube, y las antiguas se borran solas. La clave secreta se guarda <b>solo en tu servidor</b>; no se muestra una vez guardada.</p>
       ${cloudBanner}
       ${storageBar}
       <div class="card" style="padding:16px;border:1px solid var(--line,#e5e7eb);border-radius:12px;max-width:560px">

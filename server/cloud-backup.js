@@ -110,14 +110,29 @@ async function listRemote(prefix = PREFIX, re = RE) {
 }
 
 // Limpieza remota: todas las de <allDays> días; 1/día hasta <dailyDays> días; el resto se borra.
-async function pruneRemote(prefix = PREFIX, re = RE, allDays = 1, dailyDays = 30) {
-  const files = await listRemote(prefix, re);
+// Si keepN > 0, se ignoran las fechas y se conservan solo las <keepN> más recientes (por nº).
+async function pruneRemote(prefix = PREFIX, re = RE, allDays = 1, dailyDays = 30, keepN = 0) {
+  const files = await listRemote(prefix, re);   // ya vienen de más reciente a más antigua
+  if (keepN > 0) { for (const f of files.slice(keepN)) { try { await s3('DELETE', f.key); } catch (e) {} } return; }
   const now = Date.now(), DAY = 86400000, keep = new Set(), daily = {};
   files.forEach(f => {
     if (now - f.time <= allDays * DAY) { keep.add(f.key); return; }
     if (now - f.time <= dailyDays * DAY) { const d = new Date(f.time).toISOString().slice(0, 10); if (!daily[d]) { daily[d] = 1; keep.add(f.key); } return; }
   });
   for (const f of files) { if (!keep.has(f.key)) { try { await s3('DELETE', f.key); } catch (e) {} } }
+}
+// Tamaño TOTAL del bucket (todos los objetos), para que coincida con lo que muestra Backblaze.
+async function bucketBytes() {
+  let bytes = 0, count = 0, token = null;
+  do {
+    const query = { 'list-type': '2', 'max-keys': '1000' };
+    if (token) query['continuation-token'] = token;
+    const xml = await s3('GET', '', { query });
+    (xml.match(/<Size>(\d+)<\/Size>/g) || []).forEach(m => { bytes += +(m.match(/\d+/)[0]); count++; });
+    const t = /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(xml);
+    token = /<IsTruncated>true<\/IsTruncated>/.test(xml) && t ? t[1] : null;
+  } while (token);
+  return { bytes, count };
 }
 
 // --- Copia de los ARCHIVOS subidos (/data/uploads): nóminas, planos, adjuntos de eventos, logos de fotomatón… ---
@@ -157,7 +172,7 @@ async function syncFiles() {
     } finally {
       try { fs.unlinkSync(tmp); } catch (e) {}           // el tar local es redundante (los archivos ya están en disco)
     }
-    if (Date.now() - filesPruneCheck > 6 * 60 * 60 * 1000) { filesPruneCheck = Date.now(); try { await pruneRemote(FILES_PREFIX, FILE_RE, 14, 90); } catch (e) {} }
+    if (Date.now() - filesPruneCheck > 6 * 60 * 60 * 1000) { filesPruneCheck = Date.now(); try { await pruneRemote(FILES_PREFIX, FILE_RE, 0, 0, 8); } catch (e) {} }
   } catch (e) {
     lastFilesError = { message: e.message, date: new Date().toISOString() };
     console.error('[cloud-backup] fallo al subir archivos:', e.message);
@@ -171,7 +186,7 @@ async function syncSnapshot(localPath, name) {
   try {
     await uploadFile(localPath, PREFIX + name);
     // Limpiamos en la nube como mucho una vez cada ~6 h para no gastar peticiones de más.
-    if (Date.now() - pruneCheck > 6 * 60 * 60 * 1000) { pruneCheck = Date.now(); try { await pruneRemote(); } catch (e) {} }
+    if (Date.now() - pruneCheck > 6 * 60 * 60 * 1000) { pruneCheck = Date.now(); try { await pruneRemote(PREFIX, RE, 0.25, 60); } catch (e) {} }
   } catch (e) {
     lastError = { message: e.message, date: new Date().toISOString() };
     console.error('[cloud-backup] fallo al subir:', e.message);
@@ -211,12 +226,12 @@ async function test() {
 async function statusAsync() {
   const base = { configured: enabled(), lastOk, lastError, filesOk: lastFilesOk, filesError: lastFilesError };
   if (!enabled()) return base;
-  let bytes = 0;
-  try { const r = await listRemote(); base.remoteCount = r.length; base.remoteLast = r[0] ? new Date(r[0].time).toISOString() : null; bytes += r.reduce((s, x) => s + (x.size || 0), 0); }
+  try { const r = await listRemote(); base.remoteCount = r.length; base.remoteLast = r[0] ? new Date(r[0].time).toISOString() : null; }
   catch (e) { base.reachError = e.message; }
-  try { const fr = await listRemote(FILES_PREFIX, FILE_RE); base.filesCount = fr.length; base.filesLast = fr[0] ? new Date(fr[0].time).toISOString() : null; bytes += fr.reduce((s, x) => s + (x.size || 0), 0); }
+  try { const fr = await listRemote(FILES_PREFIX, FILE_RE); base.filesCount = fr.length; base.filesLast = fr[0] ? new Date(fr[0].time).toISOString() : null; }
   catch (e) { if (!base.reachError) base.reachError = e.message; }
-  base.bytes = bytes;
+  // Tamaño TOTAL del bucket (todos los objetos) para que coincida con lo que ves en Backblaze.
+  try { const b = await bucketBytes(); base.bytes = b.bytes; base.objects = b.count; } catch (e) { if (!base.reachError) base.reachError = e.message; }
   base.freeLimit = 10 * 1024 * 1024 * 1024;   // 10 GB gratis de Backblaze B2
   return base;
 }

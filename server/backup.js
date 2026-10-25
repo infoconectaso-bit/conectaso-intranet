@@ -106,7 +106,7 @@ function list() { return listFiles().map(f => ({ name: f.name, size: f.size, dat
 function fileFor(name) { if (!RE.test(String(name || ''))) return null; const p = path.join(BACKUP_DIR, name); return fs.existsSync(p) ? p : null; }
 
 let timer = null;
-const INTERVAL_MIN = 5;   // cada cuántos minutos se hace copia (local + subida a la nube)
+const INTERVAL_MIN = 7;   // cada cuántos minutos se hace copia (local + subida a la nube)
 function start() {
   if (timer) return;
   setTimeout(() => { safeSnapshot('startup'); }, 30000);

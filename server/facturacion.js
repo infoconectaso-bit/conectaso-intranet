@@ -56,15 +56,20 @@ function workerOvertime(ev) {
   if (he == null) { const loc = locById(ev.lugar); if (loc && loc.extraPrice != null && loc.extraPrice !== '') he = parseFloat(loc.extraPrice) || 0; }
   return oh * (he || 0);
 }
-// Cobro de la ceremonia al DJ: solo si marcó que la realizó (ev.djCeremony) y su tarifa de ceremonia
-// en esa finca está configurada. Es parte de los importes de la masía.
+// ¿Se realizó la ceremonia? Se intuye si hay MÚSICA de ceremonia rellenada; y si el DJ lo marca en
+// el parte es una confirmación añadida. El coste se suma UNA sola vez (nunca se duplica).
+function ceremonyHasMusic(ev) {
+  const m = ev.music || {};
+  return Object.keys(m).some(k => /^ceremony_/.test(k) && m[k] && (m[k].song || m[k].link));
+}
 function workerCeremony(ev) {
-  if (!ev.djCeremony) return 0;
   const dj = String(ev.djId); if (dj === '227') return 0;
+  const performed = ev.djCeremony === true || (ev.djCeremony !== false && ceremonyHasMusic(ev));
+  if (!performed) return 0;
   const r = djRate(dj); if (!r) return 0;
   const fr = r.fincas && r.fincas[ev.lugar];
   const c = (fr && fr.ceremonia != null) ? parseFloat(fr.ceremonia) : 0;
-  return isNaN(c) ? 0 : c;
+  return isNaN(c) ? 0 : c;   // se devuelve una sola vez, aunque se cumplan ambas condiciones
 }
 function workerPlus(ev, wid) { return (ev.plus || []).filter(p => String(p.userId) === String(wid)).reduce((t, p) => t + (parseFloat(p.amount) || 0), 0); }
 function assignedWorkers(ev) {
