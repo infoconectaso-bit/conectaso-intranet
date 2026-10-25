@@ -253,11 +253,12 @@ function allBalances() {
   const CUT = volcadoCutoff();
   const FS = freshStart();
   const out = {};
+  const saldados = new Set((store.setting('factSaldados') || []).map(String));   // bodas marcadas como pagadas por trabajador ("evId:uid")
   const get = id => out[id] || (out[id] = { rest: 0, last: '' });
   if (!FS) store.all('history').forEach(h => { const b = get(h.id); b.rest += (h.rest || 0); (h.items || []).forEach(i => { if (i.date && i.date > b.last) b.last = i.date; }); });
   store.all('events').forEach(ev => {
     if (!(ev.fecha && ev.fecha >= CUT) || !evRealized(ev)) return;
-    assignedWorkers(ev).forEach(wid => { const b = get(wid); b.rest += workerEarning(ev, wid).amount; if (ev.fecha > b.last) b.last = ev.fecha; });
+    assignedWorkers(ev).forEach(wid => { if (saldados.has(ev.id + ':' + wid)) return; const b = get(wid); b.rest += workerEarning(ev, wid).amount; if (ev.fecha > b.last) b.last = ev.fecha; });
   });
   store.all('adjustments').forEach(a => { if (FS) return; const b = get(a.userId); b.rest += (parseFloat(a.amount) || 0); if (a.date && a.date > b.last) b.last = a.date; });
   return out;
@@ -275,11 +276,13 @@ function aggregateFor(uid, skipRefresh) {
   const FS = freshStart();
   const histById = {}; if (!FS) store.all('history').forEach(h => { histById[h.id] = h; });
   const snap = (FS ? null : histById[uid]) || { cobrar: 0, cobrado: 0, rest: 0, items: [] };
+  const saldados = new Set((store.setting('factSaldados') || []).map(String));   // bodas marcadas como pagadas ("evId:uid")
   const extraItems = []; let extra = 0;
   store.all('events').forEach(ev => {
     if (!(ev.fecha && ev.fecha >= CUT)) return;
     if (!evRealized(ev)) return;
     if (assignedWorkers(ev).indexOf(String(uid)) < 0) return;
+    if (saldados.has(ev.id + ':' + uid)) return;   // marcada como pagada para este trabajador
     const e = workerEarning(ev, uid);
     const locN = (locById(ev.lugar) || {}).name || ev.lugarOtro || '';
     extraItems.push({ type: 'ev', evId: ev.id, lugar: locN, title: 'Boda #' + ev.id + (locN ? ' · ' + locN : ''), date: ev.fecha, amount: e.amount,

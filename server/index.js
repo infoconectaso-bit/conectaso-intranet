@@ -2177,6 +2177,8 @@ function finance(req, res, user, seg, method) {
     }
     // Re-aplicar la tarifa actual a bodas concretas (por id).
     if (seg[1] === 'reapply' && method === 'POST') return reapplyRate(req, res, user);
+    // Marcar/desmarcar una boda como PAGADA a un trabajador (deja de contar en su saldo).
+    if (seg[1] === 'saldar' && method === 'POST') return saldarEvento(req, res, user);
     return fail(res, 404, 'Ruta no encontrada');
   }
   // DJ: solo su propio balance (histórico + eventos realizados)
@@ -2193,6 +2195,17 @@ async function reapplyRate(req, res, user) {
   const n = fact.reapplyRateToEvents(body.eventIds || []);
   store.audit(user.id, 'rate-reapply');
   return ok(res, { ok: true, n });
+}
+async function saldarEvento(req, res, user) {
+  const body = await readBody(req);
+  const eid = +body.eventId, uid = +body.userId;
+  if (!eid || !uid) return fail(res, 400, 'Faltan datos.');
+  const key = eid + ':' + uid;
+  const l = new Set((store.setting('factSaldados') || []).map(String));
+  if (body.saldar === false) l.delete(key); else l.add(key);
+  store.setSetting('factSaldados', [...l]);
+  store.audit(user.id, 'fact-saldar', 'events', eid);
+  return ok(res, { ok: true });
 }
 async function addAdjust(req, res, user) {
   const body = await readBody(req);
