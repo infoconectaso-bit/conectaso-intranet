@@ -298,7 +298,8 @@ function eventEditorAdmin(ev) {
         <div class="field evtop-prog"><label>Progreso</label><div class="progress progress--green"><div id="progBar" style="width:${prog}%">${prog}%</div></div></div>
       </div>
       <div class="evtop-pay">
-        <div class="field"><label>Pago cliente (€)</label>${inp('event_total_import', ev.pagoCliente)}</div>
+        <div class="field"><label>Pago finca (€)</label>${inp('event_restaurant_import', ev.pagoRestaurante)}</div>
+        <div class="field"><label>Pago cliente / novios (€)</label>${inp('event_total_import', ev.pagoCliente)}</div>
         <div class="field"><label>Pagado (€)</label>${inp('event_payed_import', ev.pagado)}</div>
         <div class="field"><label>Pendiente</label><input class="control" readonly value="${pend} €" id="pendField"></div>
       </div>
@@ -345,7 +346,7 @@ function eventViewRole(ev) {
       intro = `<p class="hint cli-hint cli-hint--closed"><b>Edición cerrada</b> (desde 7 días antes de la boda). Para cambiar algo, <b>contacta con nosotros</b> y te la reabrimos.</p>`;
     }
   }
-  if (role === 'dj') intro = `<div class="alert alert--info">Puedes editar la <b>música</b> cuando quieras (incluso en la última semana) y marcar el <b>estado de contacto</b> abajo. El <b>parte de trabajo</b> (horas extra, opinión y observaciones) se rellena <b>tras la boda</b>.</div>`;
+  // (El DJ ya no ve un mensaje azul de bienvenida: era redundante y ocupaba mucho.)
   if (role === 'planner') intro = `<div class="alert alert--info">Como <b>wedding planner</b> puedes editar la <b>música</b>, los <b>extras</b>, los <b>horarios</b>, el <b>nº de invitados</b> y el <b>lugar de la ceremonia</b> (incluido si es fuera de la finca). La <b>finca</b> y la <b>fecha</b> solo las cambia administración. Recuerda <b>Guardar</b> al terminar.</div>`;
 
   const simple = isSimpleEvent(ev);
@@ -357,7 +358,7 @@ function eventViewRole(ev) {
     ? `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="archivos">Archivos</button></div>`
     : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button>${role === 'dj' ? '<button data-tab="servicios">Servicios</button><button data-tab="ruta">Ruta</button>' : ''}</div>`);
   const panes = `
-    <div data-pane="datos">${paneDatos(ev, locOpts, { readonly: !(role === 'user' && ev.canEdit), horariosEditable: isPlanner && ev.canEdit })}${role === 'user' ? clientPaymentBlock(ev) + `<div id="holdedFacturas" style="margin-top:16px"></div>` + accessBlock(ev) : (isPlanner ? `<div id="holdedFacturas" style="margin-top:16px"></div>` : '')}</div>
+    <div data-pane="datos">${role === 'dj' ? `<div class="dj-estado-row" style="display:flex;align-items:center;gap:8px;margin:0 0 12px;flex-wrap:wrap"><label style="font-size:13px;font-weight:600;white-space:nowrap;margin:0">Estado de contacto</label><div style="min-width:160px;max-width:220px">${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div></div>` : ''}${paneDatos(ev, locOpts, { readonly: !(role === 'user' && ev.canEdit), horariosEditable: isPlanner && ev.canEdit })}${role === 'user' ? clientPaymentBlock(ev) + `<div id="holdedFacturas" style="margin-top:16px"></div>` + accessBlock(ev) : (isPlanner ? `<div id="holdedFacturas" style="margin-top:16px"></div>` : '')}</div>
     ${simple ? '' : `<div data-pane="musica" style="display:none">${paneMusica(ev, canEditMusic)}</div>
     <div data-pane="extras" style="display:none">${paneExtras(ev, { readonly: !canEditExtras })}</div>`}
     ${role === 'dj' ? `<div data-pane="servicios" style="display:none">${paneServicios(ev, null, null, { readonly: true })}${(role === 'dj' && !simple) ? (eventFinished(ev)
@@ -386,7 +387,7 @@ function eventViewRole(ev) {
     : pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''));
   shell(`${headHtml}
     <div class="btn-row" style="margin-bottom:10px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button></div>
-    ${intro}${role === 'dj' ? '<div id="evInfoBox" style="margin:2px 0 12px;display:flex;flex-wrap:wrap"></div>' : ''}${progHtml}<form id="evForm" class="${role === 'user' ? 'ev-client' : ''}" data-id="${ev.id}">${tabs}${role === 'dj' ? `<div class="panel dj-estado"><div class="panel__body"><div class="field evtop-estado"><label>Estado de contacto</label>${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div><p class="hint" style="margin-top:6px">Marca en qué punto estás con esta boda (contactado, meeting, etc.).</p></div></div>` : ''}${panes}
+    ${intro}${role === 'dj' ? '<div id="evInfoBox" style="margin:2px 0 12px;display:flex;flex-wrap:wrap"></div>' : ''}${progHtml}<form id="evForm" class="${role === 'user' ? 'ev-client' : ''}" data-id="${ev.id}">${tabs}${panes}
     ${canSave ? `<div class="floatbar"><button type="submit" class="btn btn--primary">Guardar</button></div>` : ''}</form>`, role === 'user' ? [tt('Mi boda', 'La meva boda', 'My wedding', 'Mon mariage')] : ['Eventos', '#' + ev.id]);
   wireEventForm(ev, { full: false, role, canEditMusic, canSave });
 }
@@ -1330,7 +1331,7 @@ function buildEventPayload(ev, form, { full, role, canEditMusic }) {
     tipo: d.wedding_type, fecha: d.wedding_date, hora: d.wedding_hour, celebrationHour: d.celebration_hour,
     lugar: d.celebration_location === 'otro' ? 0 : +d.celebration_location, lugarOtro: d.celebration_location === 'otro' ? d.celebration_location_other : '',
     lugarCeremonia: d.wedding_location, ceremoniaFuera: !!d.ceremony_outside, guests: d.guest_number, obsPriv: d.privat_observations,
-    metodo: d.payment_method, estado: +d.event_status, pagoCliente: +d.event_total_import || 0, pagado: +d.event_payed_import || 0,
+    metodo: d.payment_method, estado: +d.event_status, pagoCliente: +d.event_total_import || 0, pagado: +d.event_payed_import || 0, pagoRestaurante: +d.event_restaurant_import || 0,
     editUser: d.habilitar_edicion_para_usuario, editUnlock: d.habilitar_edicion_para_usuario,
     djId: +d.dj_vinculated || '', djOvertime: d.dj_assigned_overtime, wpId: +d.wp_vinculated || '',
     vehicleId: +d.vehicle_id || '', reassignVehicle: form.dataset.reassignVehicle === '1',

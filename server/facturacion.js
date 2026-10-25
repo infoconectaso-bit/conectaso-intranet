@@ -11,8 +11,35 @@
  *   - Servicios sin tarifa configurada para ese trabajador = 0 €.
  * Depende de las tarifas por DJ/finca (setting 'djRates') y del histórico (colección 'history').
  */
+const fs = require('fs');
+const path = require('path');
 const { store, users } = require('./db');
 const { evRealized, bizToday } = require('./time');
+
+// --- Fecha de corte del volcado ---------------------------------------------
+// El histórico congelado ('history') cubre TODO lo anterior al volcado. Los eventos
+// creados en la intranet nueva (fecha posterior al corte) deben contar SIEMPRE en la
+// facturación, aunque su día ya haya pasado; antes se usaba "hoy" como frontera y por eso
+// un evento desaparecía al pasar su fecha. El corte es FIJO (la fecha del volcado), así no
+// se duplica con el histórico ni se pierde nada. Se cachea en un setting tras calcularlo.
+let _cutoff = null;
+function volcadoCutoff() {
+  if (_cutoff) return _cutoff;
+  let c = null;
+  try { c = store.setting('volcadoCutoff'); } catch (e) {}
+  if (!c) {
+    // 1) fecha de construcción del volcado (data/volcado-seed.json → "today"), si está
+    try {
+      const p = path.join(__dirname, '..', 'data', 'volcado-seed.json');
+      if (fs.existsSync(p)) { const seed = JSON.parse(fs.readFileSync(p, 'utf8')); if (seed && seed.today) c = String(seed.today).slice(0, 10); }
+    } catch (e) {}
+    // 2) si no, la última fecha que aparece en el histórico congelado
+    if (!c) { let mx = ''; try { store.all('history').forEach(h => (h.items || []).forEach(i => { if (i && i.date && i.date > mx) mx = i.date; })); } catch (e) {} c = mx || '2000-01-01'; }
+    try { store.setSetting('volcadoCutoff', c); } catch (e) {}
+  }
+  _cutoff = c;
+  return c;
+}
 
 const money = n => (Math.round((+n || 0) * 100) / 100).toFixed(2) + ' €';
 const OVERTIME = { 'Media Hora': 0.5, '1 Hora': 1, '1 hora y media': 1.5, '2 Horas': 2, '2 hora y media': 2.5, '3 Horas': 3, '3 hora y media': 3.5, '4 Horas': 4, '4 hora y media': 4.5, '5 Horas': 5 };
@@ -125,24 +152,33 @@ function computeRevenue(ev) {
   const loc = locById(ev.lugar) || {};
   const isMasia = !!(ev.lugar && loc.id);
   const rows = []; let fincaTot = 0, cliTot = 0;
+  // PAGO FINCA = lo que paga el restaurante. Dos fuentes, que se suman:
+  //  1) tarifas configuradas de la masía (caché + ceremonia + hora extra),
+  //  2) importe manual que administración apunte en la ficha (ev.pagoRestaurante),
+  //     útil para fincas sin tarifas configuradas o pagos puntuales.
+  const pagoRest = parseFloat(ev.pagoRestaurante) || 0;
   rows.push(['PAGO FINCA', '', 'h']);
   if (isMasia) {
     const wp = parseFloat(loc.weddingPrice) || 0, cpr = parseFloat(loc.ceremonyPrice) || 0, xp = parseFloat(loc.extraPrice) || 0, oh = OVERTIME[ev.djOvertime] || 0;
     if (wp) { rows.push(['Caché de la finca', money(wp)]); fincaTot += wp; }
     if (!ev.ceremoniaFuera && cpr > 0) { rows.push(['Ceremonia en la finca', money(cpr)]); fincaTot += cpr; }
-    if (oh > 0) { const he = oh * xp; rows.push([oh + ' h extra (finca)', money(he)]); fincaTot += he; }
-    if (!fincaTot) rows.push(['Finca sin importes configurados', '—']);
-  } else { rows.push(['Cliente externo · la finca no nos paga', '—']); }
+    if (oh > 0 && xp > 0) { const he = oh * xp; rows.push([oh + ' h extra (finca)', money(he)]); fincaTot += he; }
+  }
+  if (pagoRest) { rows.push(['Pago finca (manual)', money(pagoRest)]); fincaTot += pagoRest; }
+  if (!fincaTot) rows.push([isMasia ? 'La finca no paga en este evento' : 'Cliente externo · la finca no nos paga', '—']);
   rows.push(['Subtotal finca', money(fincaTot), 's']);
+  // PAGO CLIENTE = lo que pagan los novios. Fuente principal: ev.pagoCliente (importe pactado
+  // con la pareja). Se suman además los servicios extra con precio y los "plus cliente".
+  const pagoNovios = parseFloat(ev.pagoCliente) || 0;
   rows.push(['PAGO CLIENTE', '', 'h']);
-  if (!isMasia) { rows.push(['Pack ' + (ev.tipo || '') + ' (cliente externo)', 'precio a indicar']); }
+  if (pagoNovios) { rows.push(['Pago novios', money(pagoNovios)]); cliTot += pagoNovios; }
   (ev.services || []).forEach(s => {
     if (s.servicio == 42) return; const p = parseFloat(s.precio), nm = extraName(s.servicio);
     if (isNaN(p)) { rows.push([nm, 'precio a indicar']); } else { rows.push([nm, money(p)]); cliTot += p; }
   });
   const cliPlus = (ev.plus || []).filter(p => !p.userId).reduce((t, p) => t + (parseFloat(p.amount) || 0), 0);
   if (cliPlus) { rows.push(['Plus cliente', money(cliPlus)]); cliTot += cliPlus; }
-  if (cliTot === 0 && isMasia) rows.push(['Sin extras contratados', '—']);
+  if (cliTot === 0) rows.push(['Los novios no pagan en este evento', '—']);
   rows.push(['Subtotal cliente', money(cliTot), 's']);
   const ingresos = fincaTot + cliTot, coste = factTotal(ev);
   rows.push(['Ingresos (finca + cliente)', money(ingresos), 't']);
@@ -166,6 +202,8 @@ function eventTotals(ev, skipRefresh) {
     if (!ev.ceremoniaFuera && cpr > 0) fincaTot += cpr;
     if (oh > 0) fincaTot += oh * xp;
   }
+  fincaTot += parseFloat(ev.pagoRestaurante) || 0;         // pago finca manual
+  cliTot += parseFloat(ev.pagoCliente) || 0;               // lo que pagan los novios
   (ev.services || []).forEach(s => { if (s.servicio == 42) return; const p = parseFloat(s.precio); if (!isNaN(p)) cliTot += p; });
   const cliPlus = (ev.plus || []).filter(p => !p.userId).reduce((t, p) => t + (parseFloat(p.amount) || 0), 0);
   cliTot += cliPlus;
@@ -176,12 +214,12 @@ function eventTotals(ev, skipRefresh) {
  * Devuelve { id: { rest, last } }. Mucho más rápido que llamar aggregateFor por cada trabajador. */
 function allBalances() {
   refresh();
-  const TODAY = bizToday();
+  const CUT = volcadoCutoff();
   const out = {};
   const get = id => out[id] || (out[id] = { rest: 0, last: '' });
   store.all('history').forEach(h => { const b = get(h.id); b.rest += (h.rest || 0); (h.items || []).forEach(i => { if (i.date && i.date > b.last) b.last = i.date; }); });
   store.all('events').forEach(ev => {
-    if (!(ev.fecha && ev.fecha >= TODAY) || !evRealized(ev)) return;
+    if (!(ev.fecha && ev.fecha >= CUT) || !evRealized(ev)) return;
     assignedWorkers(ev).forEach(wid => { const b = get(wid); b.rest += workerEarning(ev, wid).amount; if (ev.fecha > b.last) b.last = ev.fecha; });
   });
   store.all('adjustments').forEach(a => { const b = get(a.userId); b.rest += (parseFloat(a.amount) || 0); if (a.date && a.date > b.last) b.last = a.date; });
@@ -196,18 +234,18 @@ function withFacturacion(ev) {
  * skipRefresh=true cuando ya se llamó a prime() en un bucle grande (p. ej. facturación equipo). */
 function aggregateFor(uid, skipRefresh) {
   if (!skipRefresh) refresh();
-  const TODAY = bizToday();
+  const CUT = volcadoCutoff();
   const histById = {}; store.all('history').forEach(h => { histById[h.id] = h; });
   const snap = histById[uid] || { cobrar: 0, cobrado: 0, rest: 0, items: [] };
   const extraItems = []; let extra = 0;
   store.all('events').forEach(ev => {
-    if (!(ev.fecha && ev.fecha >= TODAY)) return;
+    if (!(ev.fecha && ev.fecha >= CUT)) return;
     if (!evRealized(ev)) return;
     if (assignedWorkers(ev).indexOf(String(uid)) < 0) return;
     const e = workerEarning(ev, uid);
     const locN = (locById(ev.lugar) || {}).name || ev.lugarOtro || '';
-    extraItems.push({ type: 'ev', evId: ev.id, lugar: locN, title: 'Boda #' + ev.id + ' · ' + (ev.tipo || ''), date: ev.fecha, amount: e.amount,
-      body: ['Fecha del evento: ' + (ev.fecha || ''), 'Lugar: ' + (locN || '—')].concat(e.lines.map(l => l[0] + ': ' + l[1])) });
+    extraItems.push({ type: 'ev', evId: ev.id, lugar: locN, title: 'Boda #' + ev.id + (locN ? ' · ' + locN : ''), date: ev.fecha, amount: e.amount,
+      body: ['Fecha del evento: ' + (ev.fecha || '')].concat(e.lines.map(l => l[0] + ': ' + l[1])) });
     extra += e.amount;
   });
   // Ajustes manuales del trabajador (gasolina, comidas…): positivos o negativos, no ligados a un evento.

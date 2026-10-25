@@ -972,9 +972,12 @@ async function historyView(uid, admin) {
     const bord = left ? '#0B8043' : '#E82C88';
     let inner;
     if (i.type === 'adj') inner = `<div style="font-weight:700">${esc(i.title)}${admin ? ` <button class="btn btn--icon" data-del-adj="${i.adjId}" title="Quitar ajuste">🗑</button>` : ''}</div>${(i.body || []).map(b => `<div>${esc(b)}</div>`).join('')}<div style="font-size:12px;color:#667;margin-top:3px">${dmy(i.date)} · <b style="color:${i.amount < 0 ? '#D50000' : '#0B8043'}">${i.amount > 0 ? '+' : ''}${e2(i.amount)}</b></div>`;
-    else if (i.type === 'ev') inner = `<div style="font-weight:700">${i.evId && admin ? `<a href="#/eventos/${i.evId}">${esc(i.title)}</a>` : esc(i.title)}</div>${(i.body || []).map(b => { const mt = b.match(/^([^:]+):\s*(.*)$/); return mt ? `<div><b>${esc(mt[1])}:</b> ${esc(mt[2])}</div>` : `<div>${esc(b)}</div>`; }).join('')}<div style="font-size:12px;color:#667;margin-top:3px">${i.lugar ? '📍 ' + esc(i.lugar) + ' · ' : ''}${dmy(i.date)}</div>`;
+    else if (i.type === 'ev') inner = `<div style="font-weight:700">${i.evId && admin ? `<a href="#/eventos/${i.evId}">${esc(i.title)}</a>` : esc(i.title)}</div>${(i.body || []).map(b => { const mt = b.match(/^([^:]+):\s*(.*)$/); return mt ? `<div><b>${esc(mt[1])}:</b> ${esc(mt[2])}</div>` : `<div>${esc(b)}</div>`; }).join('')}<div style="font-size:12px;color:#667;margin-top:3px">${dmy(i.date)}</div>`;
     else inner = `<div style="font-weight:700">🧾 Pago realizado</div><div><b>Cantidad:</b> ${e2(i.amount)}</div>${i.description ? `<div><b>Concepto:</b> ${esc(i.description)}</div>` : ''}<div style="font-size:12px;color:#667;margin-top:3px">${dmy(i.date)} · saldo ${fmtEur(i.bal)}</div>`;
-    return `<div data-year="${String(i.date || '').slice(0, 4)}" style="display:flex;justify-content:${left ? 'flex-start' : 'flex-end'};margin-bottom:9px"><div style="max-width:85%;min-width:0;background:${bg};border-${left ? 'left' : 'right'}:3px solid ${bord};border-radius:10px;padding:9px 12px;font-size:14px;line-height:1.35">${inner}</div></div>`;
+    return `<div data-year="${String(i.date || '').slice(0, 4)}" style="position:relative;display:flex;justify-content:${left ? 'flex-start' : 'flex-end'};margin-bottom:10px">`
+      + `<div style="width:calc(50% - 8px);min-width:0;background:${bg};border-${left ? 'left' : 'right'}:3px solid ${bord};border-radius:10px;padding:10px 13px;font-size:14px;line-height:1.38">${inner}</div>`
+      + `<span style="position:absolute;top:15px;left:50%;transform:translate(-50%,-50%);width:11px;height:11px;border-radius:50%;background:${bord};box-shadow:0 0 0 3px rgba(255,255,255,.65)"></span>`
+      + `</div>`;
   };
   const byDateDesc = (a, b) => String(b.date || '').localeCompare(String(a.date || ''));
   const allMov = (H.items || []).filter(i => i.type === 'ev' || i.type === 'adj').concat(locals, (H.items || []).filter(i => i.type === 'pay')).sort(byDateDesc);
