@@ -169,9 +169,9 @@ function computeRevenue(ev) {
   rows.push(['Subtotal finca', money(fincaTot), 's']);
   // PAGO CLIENTE = lo que pagan los novios. Fuente principal: ev.pagoCliente (importe pactado
   // con la pareja). Se suman además los servicios extra con precio y los "plus cliente".
-  const pagoNovios = parseFloat(ev.pagoCliente) || 0;
+  const pagoNovios = parseFloat(ev.pagoCliente) || 0;   // ojo: "1" es el marcador antiguo de "sin importe", no un pago real
   rows.push(['PAGO CLIENTE', '', 'h']);
-  if (pagoNovios) { rows.push(['Pago novios', money(pagoNovios)]); cliTot += pagoNovios; }
+  if (pagoNovios > 1) { rows.push(['Pago novios', money(pagoNovios)]); cliTot += pagoNovios; }
   (ev.services || []).forEach(s => {
     if (s.servicio == 42) return; const p = parseFloat(s.precio), nm = extraName(s.servicio);
     if (isNaN(p)) { rows.push([nm, 'precio a indicar']); } else { rows.push([nm, money(p)]); cliTot += p; }
@@ -203,7 +203,7 @@ function eventTotals(ev, skipRefresh) {
     if (oh > 0) fincaTot += oh * xp;
   }
   fincaTot += parseFloat(ev.pagoRestaurante) || 0;         // pago finca manual
-  cliTot += parseFloat(ev.pagoCliente) || 0;               // lo que pagan los novios
+  { const pn = parseFloat(ev.pagoCliente) || 0; if (pn > 1) cliTot += pn; }   // novios ("1" = marcador de sin importe)
   (ev.services || []).forEach(s => { if (s.servicio == 42) return; const p = parseFloat(s.precio); if (!isNaN(p)) cliTot += p; });
   const cliPlus = (ev.plus || []).filter(p => !p.userId).reduce((t, p) => t + (parseFloat(p.amount) || 0), 0);
   cliTot += cliPlus;

@@ -585,6 +585,11 @@ a.tyc-status:hover{filter:brightness(.97);text-decoration:none}
 .fact-sub td{font-size:12.5px;color:var(--muted);padding-top:3px;padding-bottom:3px;border-top:0}
 .fact-sub td:first-child{padding-left:26px;position:relative}
 .fact-sub td:first-child::before{content:"•";position:absolute;left:12px;color:var(--pink)}
+/* El rayado (nth-child) y el hover de .dt tienen el mismo peso que .fact-* y, al ir después,
+   pisaban el fondo de las filas de CABECERA y TOTAL dejando el texto claro sobre fondo claro
+   (ilegible en las filas pares). Se reafirma el fondo con colores fijos que valen en día y noche. */
+table.dt tbody tr.fact-h td,table.dt tbody tr.fact-h:hover td{background:#130F17 !important;color:#F9F5E1 !important}
+table.dt tbody tr.fact-t td,table.dt tbody tr.fact-t:hover td{background:#0B8043 !important;color:#fff !important}
 
 /* acceso a la boda (dos emails: novio + novia) */
 .access-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
