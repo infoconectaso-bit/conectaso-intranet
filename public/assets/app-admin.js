@@ -853,7 +853,9 @@ on(/^#\/descuadres$/, async () => {
       { t: 'Pendiente', get: i => i.pending || 0, num: true, html: i => eur(i.pending) },
       { t: 'Boda sugerida (por el PDF)', nosort: true, nofilter: true, html: i => i.suggestedEventId
         ? `<button class="btn btn--xs btn--primary" data-link-sug="${esc(i.invId)}" data-ev="${i.suggestedEventId}" title="Vincular a la boda detectada por la fecha y el lugar del concepto">↩ Vincular ${esc(i.suggestedLabel || ('#' + i.suggestedEventId))}</button>${i.catWarn ? `<div class="hint" style="color:#D50000;margin-top:3px">⚠ ${esc(i.catWarn)}</div>` : ''}`
-        : (i.catWarn ? `<span class="hint" style="color:#D50000">⚠ ${esc(i.catWarn)}</span>` : `<span class="hint" title="${esc(i.concept || '')}">${i.why ? esc(i.why) : '—'}</span>`) },
+        : (i.options && i.options.length
+          ? `<div class="hint" style="margin-bottom:3px">Varias posibles ese día, ¿cuál?</div>${i.options.map(o => `<button class="btn btn--xs" data-link-sug="${esc(i.invId)}" data-ev="${o.id}" style="margin:0 3px 3px 0" title="Vincular a esta boda">↩ ${esc(o.label)}</button>`).join('')}`
+          : (i.catWarn ? `<span class="hint" style="color:#D50000">⚠ ${esc(i.catWarn)}</span>` : `<span class="hint" title="${esc(i.concept || '')}">${i.why ? esc(i.why) : '—'}</span>`)) },
       { t: '', nosort: true, nofilter: true, html: i => `${i.invId ? `<button class="btn btn--icon" data-link-inv="${esc(i.invId)}" title="Vincular a mano a otra boda">🔗</button> <a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver / descargar factura">📄</a> <button class="btn btn--icon" data-ignore-inv="${esc(i.invId)}" title="Obviar (quitar de la lista)">🚫</button>` : ''}` },
     ];
     const sw = (r.serviceWarnings || []).map(w => Object.assign({}, w, { svc: (w.services || []).join(', ') }));

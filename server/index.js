@@ -762,10 +762,12 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
           const ntv = softv(nt);
           const scored = cand.map(e => ({ e, sc: evLocTokens(e).filter(t => ntv.indexOf(t) >= 0).length }));
           const max = Math.max.apply(null, scored.map(s => s.sc));
-          if (max > 0) { const top = scored.filter(s => s.sc === max); if (top.length === 1) cand = [top[0].e]; }
+          if (max > 0) cand = scored.filter(s => s.sc === max).map(s => s.e);   // nos quedamos con los de mejor coincidencia de lugar
         }
-        if (!date || cand.length !== 1) return { eventId: null, pack, date, nOnDate };
-        return { eventId: cand[0].id, pack, date, nOnDate };
+        if (!date || cand.length === 0) return { eventId: null, pack, date, nOnDate };
+        if (cand.length === 1) return { eventId: cand[0].id, pack, date, nOnDate };
+        if (cand.length <= 3) return { eventId: null, pack, date, nOnDate, options: cand.map(e => e.id) };   // ambiguo: varias posibles
+        return { eventId: null, pack, date, nOnDate };
       };
       const conceptUnknownServices = raw => {
         const nt = normNm(invConcept(raw)); const found = [];
@@ -815,20 +817,23 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
           if (inv.paid <= 0.5) { sinPagarInv++; return; }      // sin ningún pago: reserva no confirmada, aún no hay evento
           if (ignored.has(String(inv.id))) { ignoradas.push({ number: inv.number, date: inv.date, contact: c.name || '', invId: inv.id, total: inv.total }); return; }
           const sg = suggestByConcept(raw);
-          let suggestedEventId = null, suggestedLabel = '', catWarn = '', why = '';
+          let suggestedEventId = null, suggestedLabel = '', catWarn = '', why = '', options = [];
+          const labelOf = eid => { const sev = store.get('events', eid) || {}; const ln = (store.get('locations', sev.lugar) || {}).name || sev.lugarOtro || ''; return { id: eid, label: '#' + eid + (ln ? ' · ' + ln : '') + (sev.fecha ? ' · ' + sev.fecha : '') }; };
           if (sg && sg.eventId) {
             suggestedEventId = sg.eventId;
             const sev = store.get('events', sg.eventId) || {};
             const lname = (store.get('locations', sev.lugar) || {}).name || sev.lugarOtro || '';
             suggestedLabel = '#' + sg.eventId + (lname ? ' · ' + lname : '') + (sev.fecha ? ' · ' + sev.fecha : '');
             if (sg.pack && sev.tipo && normNm(sg.pack) !== normNm(sev.tipo)) catWarn = 'La factura pone "' + sg.pack + '" pero la boda #' + sg.eventId + ' está como "' + sev.tipo + '".';
+          } else if (sg && sg.options && sg.options.length) {
+            options = sg.options.map(labelOf);   // varias posibles: el admin elige
           } else {
             // Motivo por el que no se pudo sugerir (para que administración lo entienda de un vistazo)
             if (!sg.date) why = 'No detecté la fecha en el concepto';
             else if (sg.nOnDate === 0) why = 'Detecté fecha ' + sg.date + ' pero no hay ninguna boda creada ese día';
             else why = 'Fecha ' + sg.date + ' con ' + sg.nOnDate + ' bodas ese día; el lugar del concepto no coincide con ninguna';
           }
-          sinVincular.push({ number: inv.number, date: inv.date, total: inv.total, paid: inv.paid, pending: inv.pending, status: inv.status, contact: c.name || '', code: c.code || c.vat_number || '', invId: inv.id, suggestedEventId, suggestedLabel, catWarn, why, concept: String(_c || '').slice(0, 160) });
+          sinVincular.push({ number: inv.number, date: inv.date, total: inv.total, paid: inv.paid, pending: inv.pending, status: inv.status, contact: c.name || '', code: c.code || c.vat_number || '', invId: inv.id, suggestedEventId, suggestedLabel, catWarn, why, options, concept: String(_c || '').slice(0, 160) });
         });
       });
       sinVincular.sort((a, b) => String(b.date).localeCompare(String(a.date)));
