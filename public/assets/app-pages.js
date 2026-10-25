@@ -859,12 +859,15 @@ function paneFacturacion(ev) {
   const revRows = isAdmin() ? rowsOf(ev.revRows) : '';
   const plusList = (ev.plus || []).length ? `<ul class="plus-list">${ev.plus.map(p => `<li><span class="plus-amt ${(+p.amount) < 0 ? 'neg' : 'pos'}">${(+p.amount) > 0 ? '+' : ''}${esc(p.amount)} €</span> ${p.userId ? '<b>' + esc(userName(p.userId)) + '</b> · ' : ''}${esc(p.concept || 'Plus')}</li>`).join('')}</ul>` : '';
   const staffOpts = [['', 'General (sin trabajador)']].concat((S.meta.staff || []).map(s => [s.id, s.name]));
+  // El "plus" se asigna solo a los trabajadores que están en ESTE evento (DJ asignado + responsables de servicios).
+  const evWorkerIds = new Set([+ev.djId].concat((ev.services || []).flatMap(s => [+s.resp, +s.resp2])).filter(Boolean));
+  const evStaffOpts = [['', 'Selecciona un usuario']].concat((S.meta.staff || []).filter(u => evWorkerIds.has(+u.id)).map(u => [u.id, u.name]));
   const plusAdd = isAdmin() ? (eventFinished(ev)
     ? `<div class="plus-add"><h4 class="form-sub">Añadir plus a esta boda</h4>
         <div class="plus-add__row">
           ${inp('plus_amount', '', { type: 'number', ph: 'Importe (+/−) €' })}
           ${inp('plus_concept', '', { ph: 'Concepto (opcional)' })}
-          ${sel('plus_user', staffOpts, '')}
+          ${sel('plus_user', evStaffOpts, '')}
           <button type="button" class="btn btn--primary" id="addPlusBtn">Añadir</button>
         </div><p class="hint">El importe puede ser positivo o negativo. Si eliges un trabajador, se suma a su facturación.</p></div>`
     : `<p class="hint" style="margin-top:14px">Los pluses solo pueden añadirse <b>una vez finalizada la boda</b>.</p>`) : '';
