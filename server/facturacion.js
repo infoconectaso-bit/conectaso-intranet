@@ -74,6 +74,7 @@ function workerBase(ev) {
   const dj = String(ev.djId);
   if (dj === '227') return 0;
   if (FIX_STAFF_NO_BASE[dj]) return 0;
+  if (ev.ratesFrozen && ev.ratesFrozen.base != null) return ev.ratesFrozen.base || 0;   // tarifa congelada
   const r = djRate(dj); if (!r) return 0;
   const fr = r.fincas && r.fincas[ev.lugar];
   let base = (fr && fr.boda != null) ? fr.boda : null;
@@ -82,8 +83,9 @@ function workerBase(ev) {
   return base || 0;
 }
 function workerOvertime(ev) {
-  const oh = OVERTIME[ev.djOvertime] || 0; if (!oh) return 0;
+  const oh = OVERTIME[ev.djOvertime] || 0; if (!oh) return 0;   // CANTIDAD de horas: siempre viva (parte tardío)
   const dj = String(ev.djId); if (dj === '227') return 0;
+  if (ev.ratesFrozen && ev.ratesFrozen.he != null) return oh * (ev.ratesFrozen.he || 0);   // tarifa/hora congelada
   const r = djRate(dj); let he = null;
   if (r) { const fr = r.fincas && r.fincas[ev.lugar]; if (fr && fr.he != null) he = fr.he; else { const pk = packKey(ev.tipo, '_he'); if (r.packs && r.packs[pk] != null) he = r.packs[pk]; } }
   if (he == null) { const loc = locById(ev.lugar); if (loc && loc.extraPrice != null && loc.extraPrice !== '') he = parseFloat(loc.extraPrice) || 0; }
@@ -98,11 +100,35 @@ function ceremonyHasMusic(ev) {
 function workerCeremony(ev) {
   const dj = String(ev.djId); if (dj === '227') return 0;
   const performed = ev.djCeremony === true || (ev.djCeremony !== false && ceremonyHasMusic(ev));
-  if (!performed) return 0;
+  if (!performed) return 0;   // "realizada" sigue vivo (música o marca del DJ)
+  if (ev.ratesFrozen && ev.ratesFrozen.ceremonia != null) return ev.ratesFrozen.ceremonia || 0;   // tarifa congelada
   const r = djRate(dj); if (!r) return 0;
   const fr = r.fincas && r.fincas[ev.lugar];
   const c = (fr && fr.ceremonia != null) ? parseFloat(fr.ceremonia) : 0;
   return isNaN(c) ? 0 : c;   // se devuelve una sola vez, aunque se cumplan ambas condiciones
+}
+// Congela las TARIFAS (no los importes) de un evento con las tarifas ACTUALES: base, hora extra
+// (por hora), ceremonia, precios de la finca y precios de servicios de los asignados. Las CANTIDADES
+// (horas extra, ceremonia realizada, servicios, pluses, pagos) siguen vivas. Cambiar luego una tarifa
+// o un precio de masía NO afecta a los eventos ya congelados (no es retroactivo).
+function freezeRates(ev) {
+  const dj = String(ev.djId);
+  const r = djRate(dj) || {};
+  const fr = (r.fincas && r.fincas[ev.lugar]) || {};
+  let base = (fr.boda != null) ? fr.boda : null;
+  if (base == null) { const pk = packKey(ev.tipo); base = (pk && r.packs && r.packs[pk] != null) ? r.packs[pk] : 0; }
+  if (dj === '227' || FIX_STAFF_NO_BASE[dj]) base = 0;
+  if (SUNDAY_ONLY_BASE[dj] && !isSunday(ev.fecha)) base = 0;
+  let he = (fr.he != null) ? fr.he : null;
+  if (he == null) { const pk = packKey(ev.tipo, '_he'); if (r.packs && r.packs[pk] != null) he = r.packs[pk]; }
+  if (he == null) { const loc = locById(ev.lugar); if (loc && loc.extraPrice != null && loc.extraPrice !== '') he = parseFloat(loc.extraPrice) || 0; }
+  if (dj === '227') he = 0;
+  let ceremonia = (fr.ceremonia != null) ? (parseFloat(fr.ceremonia) || 0) : 0; if (isNaN(ceremonia)) ceremonia = 0;
+  const loc = locById(ev.lugar) || {};
+  const finca = { wp: parseFloat(loc.weddingPrice) || 0, cpr: parseFloat(loc.ceremonyPrice) || 0, xp: parseFloat(loc.extraPrice) || 0 };
+  const services = {};
+  (ev.services || []).forEach(s => { [s.resp, s.resp2].forEach(wid => { if (!wid) return; const rr = djRate(wid); if (rr && rr.services && rr.services[s.servicio] != null) services[wid + ':' + s.servicio] = rr.services[s.servicio]; }); });
+  return { base: base || 0, he: he || 0, ceremonia: ceremonia || 0, finca, services, at: bizToday() };
 }
 function workerPlus(ev, wid) { return (ev.plus || []).filter(p => String(p.userId) === String(wid)).reduce((t, p) => t + (parseFloat(p.amount) || 0), 0); }
 function assignedWorkers(ev) {
@@ -129,7 +155,9 @@ function workerEarning(ev, wid) {
     const cer = workerCeremony(ev); if (cer) { lines.push(['Ceremonia', money(cer)]); sub += cer; }
   }
   workerServices(ev, wid).forEach(s => {
-    const rr = djRate(wid); const price = (rr && rr.services && rr.services[s.servicio] != null) ? rr.services[s.servicio] : 0;
+    const fzs = ev.ratesFrozen && ev.ratesFrozen.services;
+    let price = (fzs && fzs[wid + ':' + s.servicio] != null) ? fzs[wid + ':' + s.servicio] : null;   // tarifa congelada
+    if (price == null) { const rr = djRate(wid); price = (rr && rr.services && rr.services[s.servicio] != null) ? rr.services[s.servicio] : 0; }
     lines.push([extraName(s.servicio), money(price)]); sub += price;
   });
   const plus = workerPlus(ev, wid); if (plus) { lines.push(['Plus', money(plus)]); sub += plus; }
@@ -165,7 +193,8 @@ function computeRevenue(ev) {
   const pagoRest = parseFloat(ev.pagoRestaurante) || 0;
   rows.push(['PAGO FINCA', '', 'h']);
   if (isMasia) {
-    const wp = parseFloat(loc.weddingPrice) || 0, cpr = parseFloat(loc.ceremonyPrice) || 0, xp = parseFloat(loc.extraPrice) || 0, oh = OVERTIME[ev.djOvertime] || 0;
+    const fz = ev.ratesFrozen && ev.ratesFrozen.finca;
+    const wp = fz ? (fz.wp || 0) : (parseFloat(loc.weddingPrice) || 0), cpr = fz ? (fz.cpr || 0) : (parseFloat(loc.ceremonyPrice) || 0), xp = fz ? (fz.xp || 0) : (parseFloat(loc.extraPrice) || 0), oh = OVERTIME[ev.djOvertime] || 0;
     if (wp) { rows.push(['Caché de la finca', money(wp)]); fincaTot += wp; }
     if (!ev.ceremoniaFuera && cpr > 0) { rows.push(['Ceremonia en la finca', money(cpr)]); fincaTot += cpr; }
     if (oh > 0 && xp > 0) { const he = oh * xp; rows.push([oh + ' h extra (finca)', money(he)]); fincaTot += he; }
@@ -203,7 +232,8 @@ function eventTotals(ev, skipRefresh) {
   const isMasia = !!(ev.lugar && loc.id);
   let fincaTot = 0, cliTot = 0;
   if (isMasia) {
-    const wp = parseFloat(loc.weddingPrice) || 0, cpr = parseFloat(loc.ceremonyPrice) || 0, xp = parseFloat(loc.extraPrice) || 0, oh = OVERTIME[ev.djOvertime] || 0;
+    const fz = ev.ratesFrozen && ev.ratesFrozen.finca;
+    const wp = fz ? (fz.wp || 0) : (parseFloat(loc.weddingPrice) || 0), cpr = fz ? (fz.cpr || 0) : (parseFloat(loc.ceremonyPrice) || 0), xp = fz ? (fz.xp || 0) : (parseFloat(loc.extraPrice) || 0), oh = OVERTIME[ev.djOvertime] || 0;
     fincaTot += wp;
     if (!ev.ceremoniaFuera && cpr > 0) fincaTot += cpr;
     if (oh > 0) fincaTot += oh * xp;
@@ -272,4 +302,25 @@ function aggregateFor(uid, skipRefresh) {
   return { cobrar: (snap.cobrar || 0) + bonus, cobrado: (snap.cobrado || 0), rest: (snap.rest || 0) + bonus, items };
 }
 
-module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, allBalances, volcadoCutoff, freshStart, HOURLY_RATE, OVERTIME };
+// Congela automáticamente las tarifas de las bodas nuevas ya pasadas con un MARGEN de días
+// (por defecto 3) para dar tiempo a corregir tarifas antes de que se bloqueen. A partir de ahí,
+// cambiar tarifas o precios de masía no las afecta. Las horas extra del parte siguen vivas.
+function freezeRealized(graceDays) {
+  refresh();
+  const CUT = volcadoCutoff();
+  const g = (graceDays == null) ? 3 : graceDays;
+  const lim = new Date(bizToday() + 'T00:00:00'); lim.setDate(lim.getDate() - g);
+  const ymd = lim.getFullYear() + '-' + String(lim.getMonth() + 1).padStart(2, '0') + '-' + String(lim.getDate()).padStart(2, '0');
+  let n = 0;
+  store.all('events').forEach(ev => {
+    if (ev.ratesFrozen) return;
+    if (!(ev.fecha && ev.fecha >= CUT)) return;   // solo bodas nuevas (post-volcado)
+    if (!(ev.fecha <= ymd)) return;               // aún dentro del margen de corrección
+    if (!evRealized(ev)) return;
+    ev.ratesFrozen = freezeRates(ev);
+    store.put('events', ev); n++;
+  });
+  return n;
+}
+
+module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, allBalances, volcadoCutoff, freshStart, freezeRates, freezeRealized, HOURLY_RATE, OVERTIME };

@@ -979,7 +979,9 @@ async function historyView(uid, admin) {
       + `<span style="position:absolute;top:15px;left:50%;transform:translate(-50%,-50%);width:11px;height:11px;border-radius:50%;background:${bord};box-shadow:0 0 0 3px rgba(255,255,255,.65)"></span>`
       + `</div>`;
   };
-  const byDateDesc = (a, b) => String(b.date || '').localeCompare(String(a.date || ''));
+  // Orden cronológico robusto (más recientes primero) válido para TODOS los años:
+  // compara las fechas ISO directamente y manda al final las que no tengan fecha.
+  const byDateDesc = (a, b) => { const da = String(a.date || ''), db = String(b.date || ''); if (!da && !db) return 0; if (!da) return 1; if (!db) return -1; return db < da ? -1 : (db > da ? 1 : 0); };
   const allMov = (H.items || []).filter(i => i.type === 'ev' || i.type === 'adj').concat(locals, (H.items || []).filter(i => i.type === 'pay')).sort(byDateDesc);
   const fyears = [...new Set(allMov.map(i => String(i.date || '').slice(0, 4)).filter(y => /^\d{4}$/.test(y)))].sort().reverse();
   const bal = H.rest - paid;

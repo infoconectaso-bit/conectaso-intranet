@@ -1642,6 +1642,19 @@ async function events(req, res, user, seg, method, url) {
   const ev = store.get('events', id);
   if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 404, 'Evento no encontrado');
 
+  // --- Congelar / descongelar las tarifas del evento (solo admin). Congelar fija las tarifas
+  //     actuales (base, hora extra, ceremonia, finca, servicios); las cantidades siguen vivas. ---
+  if (seg[2] && method === 'POST' && (seg[2] === 'freeze' || seg[2] === 'unfreeze')) {
+    if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
+    fact.prime();
+    if (seg[2] === 'unfreeze') delete ev.ratesFrozen;
+    else ev.ratesFrozen = fact.freezeRates(ev);
+    store.put('events', ev);
+    store.audit(user.id, seg[2] === 'unfreeze' ? 'rates-unfreeze' : 'rates-freeze', 'events', id);
+    const out = perm.sanitizeEvent(user, ev); enrichEvent(out, ev, user);
+    out.factRows = fact.computeFact(ev); out.revRows = fact.computeRevenue(ev);
+    return ok(res, { ok: true, ratesFrozen: ev.ratesFrozen || null, event: out });
+  }
   // --- solicitudes de extras: aceptar (confirmar) / marcar pagado / declinar (solo admin) ---
   if (seg[2] && method === 'POST' && ['extra-confirm', 'extra-pay', 'extra-decline'].includes(seg[2])) {
     if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
@@ -2333,4 +2346,9 @@ server.listen(PORT, HOST, () => {
   };
   setTimeout(runCleanupIfOn, 90 * 1000);              // al arrancar (tras margen)
   setInterval(runCleanupIfOn, 24 * 60 * 60 * 1000);   // y cada 24 h
+  // Congelado automático de tarifas: bloquea las bodas nuevas ya pasadas (con 3 días de margen para
+  // corregir tarifas antes) para que los cambios de tarifa/masía NO sean retroactivos.
+  const runFreeze = () => { try { const n = fact.freezeRealized(); if (n) console.log('[congelado] tarifas congeladas en', n, 'bodas'); } catch (e) { console.error('[congelado] error:', e.message); } };
+  setTimeout(runFreeze, 120 * 1000);                  // al arrancar (tras margen)
+  setInterval(runFreeze, 6 * 60 * 60 * 1000);         // y cada 6 h
 });
