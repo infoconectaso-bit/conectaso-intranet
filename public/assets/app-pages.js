@@ -385,7 +385,7 @@ function eventViewRole(ev) {
     ? `<div class="ev-cli-head"><h1>${esc(ev.conyuges || 'Mi boda')}</h1><div class="ev-cli-sub">${dmy(ev.fecha)}${ev.hora ? ' · ' + ev.hora : ''}</div></div>`
     : pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''));
   shell(`${headHtml}
-    <div class="btn-row" style="margin-bottom:10px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button></div>
+    <div class="btn-row" style="margin-bottom:10px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button> <a class="btn btn--sm" href="#/eventos/${ev.id}/pdf">Resumen PDF</a></div>
     ${intro}${role === 'dj' ? '<div id="evInfoBox" style="margin:2px 0 12px;display:flex;flex-wrap:wrap"></div>' : ''}${progHtml}<form id="evForm" class="${role === 'user' ? 'ev-client' : ''}" data-id="${ev.id}">${tabs}${panes}
     ${canSave ? `<div class="floatbar"><button type="submit" class="btn btn--primary">Guardar</button></div>` : ''}</form>`, role === 'user' ? [tt('Mi boda', 'La meva boda', 'My wedding', 'Mon mariage')] : ['Eventos', '#' + ev.id]);
   wireEventForm(ev, { full: false, role, canEditMusic, canSave });
