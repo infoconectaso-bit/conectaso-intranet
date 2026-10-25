@@ -1355,6 +1355,23 @@ function priceAlerts() {
   return { groups: list, totalCombos: list.reduce((t, g) => t + g.services.length, 0), totalWorkers: list.length };
 }
 function extraNameOf(id) { const e = store.get('extras', id); return (e && e.name) || ('Servicio ' + id); }
+// Reconstruye las tarifas (setting 'djRates') de UN usuario a partir de su ficha (condiciones por
+// finca, tarifas base por tipo y precios de servicios). Hasta ahora 'djRates' solo se construía en
+// el volcado; esto hace que editar la tarifa en la ficha del usuario tenga efecto inmediato.
+function rebuildDjRatesForUser(u) {
+  if (!u || !u.id) return;
+  // Resguardo: si la ficha no trae NINGÚN dato de tarifa, no tocar djRates (evita vaciar por error).
+  const hasPackPrice = ['recomendado', 'fiesta', 'bodorrio', 'tinglado', 'fiesta_precio_extra', 'bodorrio_precio_extra', 'tinglado_precio_extra'].some(k => (u.prices || {})[k] != null && (u.prices || {})[k] !== '');
+  if (!((u.djFincas || []).length || (u.djServices || []).length || hasPackPrice)) return;
+  const num = v => { if (v == null || v === '') return undefined; const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? undefined : n; };
+  const rates = store.setting('djRates') || {};
+  const r = rates[String(u.id)] = { fincas: {}, packs: {}, services: {} };
+  (u.djFincas || []).forEach(f => { if (f.l != null && f.l !== '') r.fincas[f.l] = { boda: num(f.b), he: num(f.h), evento: num(f.e), ceremonia: num(f.c), disco: num(f.d) }; });
+  (u.djServices || []).forEach(s => { if (s.s != null && num(s.p) != null) r.services[s.s] = num(s.p); });
+  const p = u.prices || {};
+  [['recomendado', 'recomendado'], ['fiesta', 'fiesta'], ['bodorrio', 'bodorrio'], ['tinglado', 'tinglado'], ['fiesta_precio_extra', 'fiesta_he'], ['bodorrio_precio_extra', 'bodorrio_he'], ['tinglado_precio_extra', 'tinglado_he']].forEach(a => { const v = num(p[a[0]]); if (v != null) r.packs[a[1]] = v; });
+  store.setSetting('djRates', rates);
+}
 // Aplica los ajustes manuales de tarifas (setting 'djRatesManual') SOBRE el djRates calculado.
 // Se llama tras cualquier build/volcado para que las correcciones a mano no se pierdan.
 function applyManualRates() {
@@ -1642,19 +1659,6 @@ async function events(req, res, user, seg, method, url) {
   const ev = store.get('events', id);
   if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 404, 'Evento no encontrado');
 
-  // --- Congelar / descongelar las tarifas del evento (solo admin). Congelar fija las tarifas
-  //     actuales (base, hora extra, ceremonia, finca, servicios); las cantidades siguen vivas. ---
-  if (seg[2] && method === 'POST' && (seg[2] === 'freeze' || seg[2] === 'unfreeze')) {
-    if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
-    fact.prime();
-    if (seg[2] === 'unfreeze') delete ev.ratesFrozen;
-    else ev.ratesFrozen = fact.freezeRates(ev);
-    store.put('events', ev);
-    store.audit(user.id, seg[2] === 'unfreeze' ? 'rates-unfreeze' : 'rates-freeze', 'events', id);
-    const out = perm.sanitizeEvent(user, ev); enrichEvent(out, ev, user);
-    out.factRows = fact.computeFact(ev); out.revRows = fact.computeRevenue(ev);
-    return ok(res, { ok: true, ratesFrozen: ev.ratesFrozen || null, event: out });
-  }
   // --- solicitudes de extras: aceptar (confirmar) / marcar pagado / declinar (solo admin) ---
   if (seg[2] && method === 'POST' && ['extra-confirm', 'extra-pay', 'extra-decline'].includes(seg[2])) {
     if (user.role !== 'admin') return fail(res, 403, 'Sin acceso');
@@ -1815,6 +1819,11 @@ async function events(req, res, user, seg, method, url) {
     let next;
     try { next = perm.mergeEventUpdate(user, ev, body.event || body); }
     catch (e) { return fail(res, e.status || 400, e.message); }
+    // Congela las tarifas en cuanto una boda realizada se guarda (si aún no lo estaba): refuerza que
+    // un cambio de tarifa posterior no la afecte. No pisa un congelado ya existente.
+    if (!next.ratesFrozen && next.fecha && next.fecha >= fact.volcadoCutoff() && evRealized(next)) {
+      try { fact.prime(); next.ratesFrozen = fact.freezeRates(next); } catch (e) {}
+    }
     store.put('events', next);
     // Reasignar furgoneta ("cambiarla de ubicación"): si el admin lo confirma, se la quitamos a las
     // demás bodas del mismo día que la tuvieran asignada (una furgoneta solo puede estar en un sitio).
@@ -1878,6 +1887,7 @@ async function usersApi(req, res, user, seg, method) {
     if (!body.email) return fail(res, 400, 'El email es obligatorio.');
     if (users.byEmail(body.email)) return fail(res, 409, 'Ya existe un usuario con ese email.');
     const u = users.create({ email: body.email, name: body.name || '', role: body.role || 'user', data: body.data || {} });
+    if (u && ['dj', 'admin'].includes(u.role)) { try { rebuildDjRatesForUser(u); } catch (e) {} }
     const invite = await makeInvite(u);
     store.audit(user.id, 'user-create', 'users', u.id);
     return ok(res, { user: u, invite });
@@ -1888,6 +1898,7 @@ async function usersApi(req, res, user, seg, method) {
     const body = await readBody(req);
     if (body.email && users.byEmail(body.email) && users.byEmail(body.email).id !== id) return fail(res, 409, 'Ese email ya está en uso.');
     const u = users.update(id, body);
+    if (u && ['dj', 'admin'].includes(u.role)) { try { rebuildDjRatesForUser(u); } catch (e) {} }
     store.audit(user.id, 'user-update', 'users', id);
     return ok(res, { user: u });
   }
@@ -1998,6 +2009,21 @@ function finance(req, res, user, seg, method) {
     if (seg[1] === 'pay' && method === 'POST') return addPayment(req, res, user);
     if (seg[1] === 'adjust' && method === 'POST') return addAdjust(req, res, user);
     if (seg[1] === 'adjust' && method === 'DELETE') { const aid = +seg[2]; store.del('adjustments', aid); store.audit(user.id, 'adjust-del', 'adjustments', aid); return ok(res, { ok: true }); }
+    // Bodas realizadas de un DJ (para el selector de "aplicar tarifa a bodas realizadas").
+    if (seg[1] === 'dj-realized' && method === 'GET') {
+      const uid = +seg[2]; fact.prime();
+      const CUT = fact.volcadoCutoff(); const list = [];
+      store.all('events').forEach(ev => {
+        if (!(ev.fecha && ev.fecha >= CUT) || !evRealized(ev)) return;
+        if (fact.assignedWorkers(ev).indexOf(String(uid)) < 0) return;
+        const loc = store.get('locations', ev.lugar) || {};
+        list.push({ id: ev.id, fecha: ev.fecha, lugar: loc.name || ev.lugarOtro || '', amount: fact.workerEarning(ev, uid).amount, frozen: !!ev.ratesFrozen });
+      });
+      list.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+      return ok(res, { events: list });
+    }
+    // Re-aplicar la tarifa actual a bodas concretas (por id).
+    if (seg[1] === 'reapply' && method === 'POST') return reapplyRate(req, res, user);
     return fail(res, 404, 'Ruta no encontrada');
   }
   // DJ: solo su propio balance (histórico + eventos realizados)
@@ -2008,6 +2034,13 @@ function finance(req, res, user, seg, method) {
     }
   }
   return fail(res, 403, 'Sin acceso');
+}
+async function reapplyRate(req, res, user) {
+  const body = await readBody(req);
+  fact.prime();
+  const n = fact.reapplyRateToEvents(body.eventIds || []);
+  store.audit(user.id, 'rate-reapply');
+  return ok(res, { ok: true, n });
 }
 async function addAdjust(req, res, user) {
   const body = await readBody(req);
@@ -2349,6 +2382,6 @@ server.listen(PORT, HOST, () => {
   // Congelado automático de tarifas: bloquea las bodas nuevas ya pasadas (con 3 días de margen para
   // corregir tarifas antes) para que los cambios de tarifa/masía NO sean retroactivos.
   const runFreeze = () => { try { const n = fact.freezeRealized(); if (n) console.log('[congelado] tarifas congeladas en', n, 'bodas'); } catch (e) { console.error('[congelado] error:', e.message); } };
-  setTimeout(runFreeze, 120 * 1000);                  // al arrancar (tras margen)
-  setInterval(runFreeze, 6 * 60 * 60 * 1000);         // y cada 6 h
+  setTimeout(runFreeze, 60 * 1000);                   // al arrancar
+  setInterval(runFreeze, 60 * 60 * 1000);             // y cada hora (congela en cuanto la boda se realiza)
 });

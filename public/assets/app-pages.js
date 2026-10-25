@@ -879,11 +879,6 @@ function paneFacturacion(ev) {
       ? (rows ? `<div class="table-wrap"><table class="dt"><tbody>${rows}</tbody></table></div>` : '<div class="empty">Sin datos de facturación.</div>')
       : '<div class="empty">Disponible a partir de la hora de inicio del evento.</div>'}
     ${eventStarted(ev) && revRows ? `<h4 class="form-sub" style="margin-top:18px">Ingresos y beneficio</h4><div class="table-wrap"><table class="dt"><tbody>${revRows}</tbody></table></div>` : ''}
-    ${isAdmin() && eventStarted(ev) ? `<div style="margin-top:16px;padding:10px 12px;border:2px solid var(--line);border-radius:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      ${ev.ratesFrozen
-        ? `<span style="font-weight:700">🧊 Tarifas congeladas${ev.ratesFrozen.at ? ' · ' + dmy(ev.ratesFrozen.at) : ''}</span><span class="hint" style="margin:0;flex:1 1 180px">Los cambios de tarifa/masía no afectan a esta boda. Las horas extra se siguen sumando con la tarifa congelada.</span><button type="button" class="btn btn--sm" data-refreeze="${ev.id}">Recongelar a tarifa actual</button><button type="button" class="btn btn--sm" data-unfreeze="${ev.id}">Descongelar</button>`
-        : `<span style="font-weight:700">Tarifas en vivo</span><span class="hint" style="margin:0;flex:1 1 180px">Se congelan solas a los 3 días. Si ya son correctas, puedes congelarlas ahora para que no cambien.</span><button type="button" class="btn btn--sm btn--primary" data-refreeze="${ev.id}">🧊 Congelar tarifas ahora</button>`}
-      </div>` : ''}
     ${(ev.plus || []).length ? `<h4 class="form-sub">Pluses</h4>${plusList}` : ''}${plusAdd}
     ${eventFinished(ev) ? `<h4 class="form-sub" style="margin-top:18px">Albarán de trabajo del DJ</h4>
       <div class="form-grid">${fg('Horas extra realizadas', sel('dj_assigned_overtime', [['', 'Selecciona'], 'Sin horas extra', 'Media Hora', '1 Hora', '1 hora y media', '2 Horas', '2 hora y media', '3 Horas', '3 hora y media', '4 Horas', '4 hora y media', '5 Horas'], ev.djOvertime))}${fg('Pedir opinión', sel('ask_for_opinion', [['', '—'], 'Si', 'No'], ev.opinion))}</div>
@@ -1074,17 +1069,6 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   if ((S.user.role === 'user' || S.user.role === 'planner') && el('holdedFacturas')) loadHoldedFacturas(ev);
   // añadir plus (admin, solo boda finalizada)
   function wirePlus() {
-    // Congelar / recongelar / descongelar tarifas del evento (admin)
-    const freezeDo = act => async () => {
-      try {
-        const r = await api('events/' + ev.id + '/' + act, { method: 'POST' });
-        if (r.event) Object.assign(ev, r.event); else { if (r.ratesFrozen) ev.ratesFrozen = r.ratesFrozen; else delete ev.ratesFrozen; }
-        toast(act === 'unfreeze' ? 'Tarifas descongeladas' : 'Tarifas congeladas', 'ok');
-        const pane = form.querySelector('[data-pane="facturacion"]'); if (pane) { pane.innerHTML = paneFacturacion(ev); wirePlus(); }
-      } catch (e) { toast(e.message || 'Error', 'err'); }
-    };
-    const rf = form.querySelector('[data-refreeze]'); if (rf) rf.onclick = freezeDo('freeze');
-    const uf = form.querySelector('[data-unfreeze]'); if (uf) uf.onclick = freezeDo('unfreeze');
     const pb = form.querySelector('#addPlusBtn'); if (!pb) return;
     pb.onclick = async () => {
       const amount = +((form.querySelector('[name=plus_amount]') || {}).value || 0);

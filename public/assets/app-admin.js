@@ -259,6 +259,28 @@ function showMagicLink(r) {
      <input class="control" readonly value="${esc(r.link)}" onclick="this.select()">
      <div class="btn-row" style="margin-top:12px"><a class="btn btn--primary" href="${esc(r.link)}" target="_blank" rel="noopener">Abrir en pestaña nueva</a></div>`);
 }
+// Tras cambiar la tarifa de un DJ: ofrece aplicarla también a bodas ya realizadas (selector de IDs,
+// se pueden marcar varias y/o añadir IDs a mano). Por defecto el cambio solo afecta a las futuras.
+async function offerApplyToRealized(uid, name) {
+  let list = [];
+  try { const r = await api('finance/dj-realized/' + uid); list = r.events || []; } catch (e) {}
+  const rowsHtml = list.length
+    ? list.map(e => `<label style="display:flex;gap:8px;align-items:center;padding:6px 2px;border-bottom:1px solid var(--line)"><input type="checkbox" class="reapply-id" value="${e.id}"> <span>#${e.id} · ${esc(e.lugar || '—')} · ${dmy(e.fecha)} · <b>${fmtEur(e.amount)}</b></span></label>`).join('')
+    : '<p class="hint">Este DJ no tiene bodas realizadas recientes.</p>';
+  modal('¿Aplicar la nueva tarifa a bodas ya realizadas?',
+    `<p class="hint" style="margin-bottom:10px">Por defecto el cambio solo afecta a las bodas <b>futuras</b>. Marca las bodas ya realizadas de <b>${esc(name || '')}</b> a las que también quieras aplicar la nueva tarifa:</p>
+     <div style="max-height:260px;overflow:auto;border:2px solid var(--line);border-radius:8px;padding:2px 10px;margin-bottom:10px">${rowsHtml}</div>
+     <div class="field"><label>Añadir otros IDs de boda (separados por comas)</label><input class="control" id="reapplyExtra" placeholder="Ej: 1660, 1702"></div>
+     <p class="hint">Si cierras sin aplicar, el cambio solo afectará a las bodas futuras.</p>`,
+    { okText: 'Aplicar a las marcadas', onOk: async () => {
+        const ids = [...document.querySelectorAll('.reapply-id:checked')].map(c => +c.value);
+        const extra = String((document.getElementById('reapplyExtra') || {}).value || '').split(/[^0-9]+/).map(x => +x).filter(Boolean);
+        const all = [...new Set(ids.concat(extra))];
+        if (!all.length) { toast('No has marcado ninguna boda', 'err'); return true; }
+        try { const r = await api('facturacion/reapply', { method: 'POST', body: { eventIds: all } }); toast('Tarifa aplicada a ' + r.n + ' boda(s)', 'ok'); }
+        catch (e) { toast(e.message || 'No se pudo aplicar', 'err'); return true; }
+      } });
+}
 function userForm(u, all) {
   const creating = !u.id;
   const roles = [['user', 'Cliente'], ['dj', 'DJ / Técnico'], ['planner', 'Wedding planner'], ['admin', 'Administración']];
@@ -319,9 +341,14 @@ function userForm(u, all) {
       const djFincas = []; $$('[data-finca]', bg).forEach(r => { const g = k => r.querySelector('[data-f="' + k + '"]').value; const l = g('l'); if (!l) return; djFincas.push({ l: +l, b: g('b'), e: g('e'), h: g('h'), d: g('d'), c: g('c') }); });
       const djServices = []; $$('[data-svc]', bg).forEach(r => { const g = k => r.querySelector('[data-s="' + k + '"]').value; const s = g('s'), pp = g('p'); if (!s || pp === '') return; djServices.push({ s: +s, p: pp, h: g('h') || undefined }); });
       const data = { color: d.color, worker_type: +d.worker_type || 0, vehicle_allowed: d.vehicle_allowed, time_tracking: d.time_tracking, prices, djFincas, djServices };
+      // ¿han cambiado las tarifas (condiciones por finca o tarifas base)? Para ofrecer aplicarlas a bodas realizadas.
+      const nrm = v => (v == null || v === '') ? '' : String(v);
+      const packKeys = ['recomendado', 'fiesta', 'bodorrio', 'tinglado', 'fiesta_precio_extra', 'bodorrio_precio_extra', 'tinglado_precio_extra'];
+      const sig = (fx, pr) => JSON.stringify({ f: (fx || []).map(f => [+f.l || 0, nrm(f.b), nrm(f.e), nrm(f.h), nrm(f.d), nrm(f.c)]).sort(), p: packKeys.map(k => nrm(pr[k])) });
+      const ratesChanged = !creating && ['dj', 'admin'].includes(d.role) && sig(u.djFincas, p) !== sig(djFincas, prices);
       try {
         if (creating) { const r = await api('users', { method: 'POST', body: { email: d.mail, name: d.name, role: d.role, data } }); await CS.loadContext(); showInvite(r.invite); }
-        else { await api('users/' + u.id, { method: 'PUT', body: { email: d.mail, name: d.name, role: d.role, data } }); await CS.loadContext(); toast('Guardado', 'ok'); }
+        else { await api('users/' + u.id, { method: 'PUT', body: { email: d.mail, name: d.name, role: d.role, data } }); await CS.loadContext(); toast('Guardado', 'ok'); if (ratesChanged) setTimeout(() => offerApplyToRealized(u.id, d.name || u.name), 80); }
         if (location.hash === '#/usuarios') usuariosPage(); else location.hash = '#/usuarios';
       } catch (e) { toast(e.message, 'err'); return true; }
     } });

@@ -308,7 +308,7 @@ function aggregateFor(uid, skipRefresh) {
 function freezeRealized(graceDays) {
   refresh();
   const CUT = volcadoCutoff();
-  const g = (graceDays == null) ? 3 : graceDays;
+  const g = (graceDays == null) ? 0 : graceDays;   // 0 = se congela en cuanto la boda está realizada
   const lim = new Date(bizToday() + 'T00:00:00'); lim.setDate(lim.getDate() - g);
   const ymd = lim.getFullYear() + '-' + String(lim.getMonth() + 1).padStart(2, '0') + '-' + String(lim.getDate()).padStart(2, '0');
   let n = 0;
@@ -323,4 +323,18 @@ function freezeRealized(graceDays) {
   return n;
 }
 
-module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, allBalances, volcadoCutoff, freshStart, freezeRates, freezeRealized, HOURLY_RATE, OVERTIME };
+// Re-aplica la tarifa ACTUAL a bodas concretas (por id): recalcula su congelado. Se usa cuando el
+// admin cambia la tarifa de un DJ y elige aplicarla a bodas ya realizadas.
+function reapplyRateToEvents(eventIds) {
+  refresh();
+  const set = new Set((eventIds || []).map(x => +x));
+  let n = 0;
+  store.all('events').forEach(ev => {
+    if (!set.has(+ev.id)) return;
+    ev.ratesFrozen = freezeRates(ev);
+    store.put('events', ev); n++;
+  });
+  return n;
+}
+
+module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, allBalances, volcadoCutoff, freshStart, freezeRates, freezeRealized, reapplyRateToEvents, HOURLY_RATE, OVERTIME };
