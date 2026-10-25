@@ -19,6 +19,7 @@ const volcado = require('./volcado');
 const holded = require('./holded');
 const backup = require('./backup');
 const cloudBackup = require('./cloud-backup');
+const gcal = require('./gcal');
 
 const PORT = +(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -191,6 +192,40 @@ async function api(req, res, url) {
   if (seg[0] === 'calendar' && seg[1] && method === 'GET') return serveCalendar(req, res, seg[1]);
 
   if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
+
+  // --- Google Calendar (OAuth + sincronización instantánea) ---
+  if (seg[0] === 'gcal') {
+    const proto = (req.headers['x-forwarded-proto'] === 'https' || req.socket.encrypted) ? 'https' : 'http';
+    const redirectUri = proto + '://' + (req.headers.host || '') + '/api/gcal/callback';
+    if (seg[1] === 'status' && method === 'GET') {
+      const c = gcal.getConfig();
+      return ok(res, { configured: gcal.enabled(), connected: gcal.connected(user.id), redirectUri, config: user.role === 'admin' ? { enabled: !!c.enabled, clientId: c.clientId || '', hasSecret: !!c.clientSecret } : undefined });
+    }
+    if (seg[1] === 'config' && method === 'POST') {
+      if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+      const b = await readBody(req); const cur = gcal.getConfig();
+      store.setSetting('gcalConfig', { enabled: b.enabled !== false, clientId: String(b.clientId != null ? b.clientId : (cur.clientId || '')).trim(), clientSecret: b.clientSecret ? String(b.clientSecret).trim() : (cur.clientSecret || '') });
+      store.audit(user.id, 'gcal-config');
+      return ok(res, { ok: true });
+    }
+    if (seg[1] === 'connect' && method === 'GET') {
+      if (!(user.role === 'dj' || user.role === 'admin')) return fail(res, 403, 'Solo DJ o administración.');
+      if (!gcal.enabled()) return fail(res, 400, 'Google Calendar aún no está configurado.');
+      return ok(res, { url: gcal.authUrl(user.id, redirectUri) });
+    }
+    if (seg[1] === 'callback' && method === 'GET') {
+      const code = url.searchParams.get('code'); const uid = +url.searchParams.get('state') || user.id;
+      try {
+        if (!code) throw new Error('sin code');
+        const tok = await gcal.exchangeCode(code, redirectUri);
+        gcal.saveUserTokens(uid, tok);
+        try { syncUserFutureEvents(uid); } catch (e) {}
+        res.writeHead(302, { Location: '/#/cuenta?gcal=ok' }); return res.end();
+      } catch (e) { res.writeHead(302, { Location: '/#/cuenta?gcal=error' }); return res.end(); }
+    }
+    if (seg[1] === 'disconnect' && method === 'POST') { gcal.clearUserTokens(user.id); return ok(res, { ok: true }); }
+    return fail(res, 404, 'Ruta no encontrada');
+  }
 
   // --- metadatos (catálogos para la interfaz) ---
   if (seg[0] === 'meta' && method === 'GET') return ok(res, meta(user));
@@ -1762,6 +1797,7 @@ async function events(req, res, user, seg, method, url) {
     };
     store.put('events', rec);
     store.audit(user.id, 'event-create', 'events', rec.id);
+    gcalSyncEvent(rec).catch(() => {});
     return ok(res, { event: rec });
   }
   // /api/events/trash  (papelera de eventos borrados; solo admin)
@@ -1985,6 +2021,7 @@ async function events(req, res, user, seg, method, url) {
     try { notifyNewExtraRequests(user, ev, next); } catch (e) { /* no bloquear el guardado */ }
     store.audit(user.id, 'event-update', 'events', id);
     const saved = store.get('events', id);
+    gcalSyncEvent(saved).catch(() => {});   // actualiza la boda en el Google Calendar de los DJs conectados
     const out = perm.sanitizeEvent(user, saved);
     enrichEvent(out, saved, user);
     if (user.role === 'admin') { out.factRows = fact.computeFact(saved); out.revRows = fact.computeRevenue(saved); }
@@ -1994,6 +2031,7 @@ async function events(req, res, user, seg, method, url) {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración puede borrar eventos.');
     // Borrado reversible: el evento se mueve a la papelera (events_trash) en vez de eliminarse.
     // Los archivos subidos NO se tocan, así que al restaurar vuelven con el evento.
+    gcalDeleteEvent(ev).catch(() => {});   // quita la boda del Google Calendar de los DJs conectados
     const trashed = Object.assign({}, ev, { _deletedAt: new Date().toISOString(), _deletedBy: user.id, _deletedByName: (users.get(user.id) || {}).name || '' });
     store.put('events_trash', trashed);
     store.del('events', id);
@@ -2233,6 +2271,27 @@ const toMin = s => { const [h, m] = String(s || '0:0').split(':').map(Number); r
 // Fecha de "hoy" en España (Europe/Madrid) como 'YYYY-MM-DD'. Se usa para no contar
 // como realizados/vencidos los eventos o vacaciones futuros. (Antes se llamaba en varios
 // sitios sin estar definida, lo que hacía fallar resumen, vehículos y las alertas del panel.)
+// --- Sincronización con Google Calendar (nunca bloquea los guardados; si Google falla, se ignora) ---
+function gcalUidsOf(ev) { return [...new Set([+ev.djId].concat((ev.services || []).flatMap(s => [+s.resp, +s.resp2])).filter(Boolean))]; }
+async function gcalSyncEvent(ev) {
+  if (!gcal.enabled()) return;
+  let changed = false;
+  const loc = (store.get('locations', ev.lugar) || {}).name;
+  for (const uid of gcalUidsOf(ev)) { if (!gcal.connected(uid)) continue; try { if (await gcal.upsertForUser(ev, uid, loc)) changed = true; } catch (e) {} }
+  if (changed) { try { const f = store.get('events', ev.id); if (f) { f.gcalIds = ev.gcalIds; store.put('events', f); } } catch (e) {} }
+}
+async function gcalDeleteEvent(ev) {
+  if (!gcal.enabled() || !ev.gcalIds) return;
+  for (const uid of Object.keys(ev.gcalIds)) { if (!gcal.connected(+uid)) continue; try { await gcal.deleteForUser(ev, +uid); } catch (e) {} }
+}
+function syncUserFutureEvents(uid) {
+  if (!gcal.enabled() || !gcal.connected(uid)) return;
+  const today = bizToday();
+  store.all('events').forEach(async ev => {
+    if (!ev.fecha || ev.fecha < today || gcalUidsOf(ev).indexOf(+uid) < 0) return;
+    try { const loc = (store.get('locations', ev.lugar) || {}).name; if (await gcal.upsertForUser(ev, +uid, loc)) { const f = store.get('events', ev.id); if (f) { f.gcalIds = ev.gcalIds; store.put('events', f); } } } catch (e) {}
+  });
+}
 function bizToday() { return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }); }
 const ES_MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 function ymShift(ym, delta) { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
