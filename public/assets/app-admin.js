@@ -849,20 +849,36 @@ on(/^#\/descuadres$/, async () => {
       { t: 'Fecha', get: i => i.date || '', html: i => esc(slash(i.date) || '—') },
       { t: 'Nº', get: i => i.number || '' },
       { t: 'Cliente', get: i => i.contact || '', html: i => `<b>${esc(i.contact || '—')}</b>` },
-      { t: 'NIF/DNI', get: i => i.code || '' },
       { t: 'Base', get: i => i.total || 0, num: true, html: i => eur(i.total) },
-      { t: 'Pagado', get: i => i.paid || 0, num: true, html: i => eur(i.paid) },
       { t: 'Pendiente', get: i => i.pending || 0, num: true, html: i => eur(i.pending) },
-      { t: '', nosort: true, nofilter: true, html: i => `${i.invId ? `<button class="btn btn--icon" data-link-inv="${esc(i.invId)}" title="Vincular a una boda">🔗</button> <a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver / descargar factura">📄</a>` : ''}` },
+      { t: 'Boda sugerida (por el PDF)', nosort: true, nofilter: true, html: i => i.suggestedEventId
+        ? `<button class="btn btn--xs btn--primary" data-link-sug="${esc(i.invId)}" data-ev="${i.suggestedEventId}" title="Vincular a la boda detectada por la fecha y el lugar del concepto">↩ Vincular ${esc(i.suggestedLabel || ('#' + i.suggestedEventId))}</button>${i.catWarn ? `<div class="hint" style="color:#D50000;margin-top:3px">⚠ ${esc(i.catWarn)}</div>` : ''}`
+        : (i.catWarn ? `<span class="hint" style="color:#D50000">⚠ ${esc(i.catWarn)}</span>` : '<span class="muted">—</span>') },
+      { t: '', nosort: true, nofilter: true, html: i => `${i.invId ? `<button class="btn btn--icon" data-link-inv="${esc(i.invId)}" title="Vincular a mano a otra boda">🔗</button> <a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver / descargar factura">📄</a>` : ''}` },
     ];
+    const sw = (r.serviceWarnings || []).map(w => Object.assign({}, w, { svc: (w.services || []).join(', ') }));
+    const swPanel = sw.length ? `
+      <h3 class="form-sub" style="margin-top:24px">⚠ Servicios reservados y pagados sin crear en Servicios (${sw.length})</h3>
+      <p class="hint" style="margin-bottom:10px">Facturas <b>pagadas</b> cuyo concepto menciona un servicio (fotomatón, fuego frío…) que <b>no existe en la pestaña Servicios</b>. Conviene crearlo para gestionarlo bien. Las facturas <b>no pagadas</b> no salen (la reserva aún no se ha hecho).</p>
+      <div class="panel"><div class="panel__body">${table('dtSvcWarn', { rows: sw, order: [0, 'desc'], filters: true, dense: true, len: 50, empty: '', cols: [
+        { t: 'Fecha', get: i => i.date || '', html: i => esc(slash(i.date) || '—') },
+        { t: 'Nº', get: i => i.number || '' },
+        { t: 'Cliente', get: i => i.contact || '', html: i => `<b>${esc(i.contact || '—')}</b>` },
+        { t: 'Servicio detectado', get: i => i.svc, html: i => `<b style="color:#D50000">${esc(i.svc)}</b>` },
+        { t: 'Importe', get: i => i.total || 0, num: true, html: i => eur(i.total) },
+        { t: '', nosort: true, nofilter: true, html: i => `<a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver factura">📄</a>` },
+      ] })}</div></div>` : '';
     shell(`${pageHead('Descuadre facturas / eventos', 'Facturas de Holded que NO están vinculadas a ningún evento (posible falta de vinculación).')}
       <div class="grid-3" style="margin-bottom:14px">
         <div class="stat stat--pink"><div class="k">Facturas sin vincular</div><div class="v">${r.sinVincularN || 0}</div></div>
         <div class="stat stat--blue"><div class="k">Facturas vinculadas a boda</div><div class="v">${r.linkedInv || 0}</div></div>
         <div class="stat"><div class="k">Excluidas (empresas + antiguas)</div><div class="v">${(r.empresaInv || 0) + (r.antiguasInv || 0)}</div></div>
       </div>
-      <p class="hint" style="margin-bottom:12px">Salen facturas a <b>personas</b> (no empresas/fincas) de <b>2026 en adelante</b> que <b>no cuadran con ningún evento</b>. Pulsa <b>🔗</b> para vincular una factura a una boda a mano (desaparecerá de esta lista). Se excluyen a propósito las de <b>empresas/sociedades (SL, CIF…)</b> y las de <b>2024/2025</b>.</p>
-      <div class="panel"><div class="panel__body">${table('dtDescuadres', { rows: sv, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas sin vincular. 🎉' })}</div></div>`, ['Descuadres']);
+      <p class="hint" style="margin-bottom:12px">Salen facturas a <b>personas</b> de <b>2026 en adelante</b> que no cuadran con ningún evento. Cuando el concepto del PDF trae la <b>fecha y el lugar</b>, te propongo la boda y la vinculas con un clic (↩). Si el <b>pack</b> no coincide con la categoría de la boda, sale un aviso. También puedes vincular a mano (🔗).</p>
+      <div class="panel"><div class="panel__body">${table('dtDescuadres', { rows: sv, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas sin vincular. 🎉' })}</div></div>
+      ${swPanel}`, ['Descuadres']);
+    const linkInv = async (invId, id) => { try { const res = await api('holded-descuadres/link', { method: 'POST', body: { invId, eventId: id } }); toast('✅ Factura vinculada' + (res.conyuges ? ' a ' + res.conyuges : ' a la boda #' + id), 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };
+    $$('[data-link-sug]').forEach(b => b.onclick = () => linkInv(b.dataset.linkSug, +b.dataset.ev));
     $$('[data-link-inv]').forEach(b => b.onclick = () => {
       const invId = b.dataset.linkInv;
       modal('Vincular factura a una boda', `<p class="hint" style="margin-bottom:10px">Escribe el <b>número de la boda</b> (evento) al que pertenece esta factura. Lo ves en el listado de eventos o con el buscador.</p><div class="field"><label>Nº de boda</label><input class="control" id="linkEvId" type="number" inputmode="numeric" placeholder="p. ej. 1234"></div>`, {

@@ -724,6 +724,32 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       const isCompany = c => CIF(c.code) || CIF(c.vat_number) || COMPANY_NAME.test(c.name || '') || VENUE_NAME.test(c.name || '');
       const links = store.setting('invoiceLinks') || {};   // vinculaciones manuales factura -> evento
       const yearOf = d => { if (typeof d === 'number') return new Date(d < 1e12 ? d * 1000 : d).getUTCFullYear(); const m = String(d || '').match(/(\d{4})/); return m ? +m[1] : 0; };
+      // --- Emparejado por el CONCEPTO del PDF (fecha + lugar + pack) y detección de servicios ---
+      const locsNorm = store.all('locations').map(l => ({ id: l.id, norm: normNm(l.name || '') })).filter(l => l.norm.length >= 4);
+      const evByDate = {};
+      store.all('events').forEach(e => { if (e.fecha) { const k = String(e.fecha).slice(0, 10); (evByDate[k] = evByDate[k] || []).push(e); } });
+      const extrasNorm = store.all('extras').map(x => normNm(x.name || '')).filter(Boolean);
+      const PACKS = [['fiesta', 'Fiesta'], ['bodorrio', 'Bodorrio'], ['tinglado', 'Tinglado'], ['boda', 'Boda']];
+      const SERVICE_KW = ['fotomaton', 'photocall', 'fuego frio', 'fuegos frios', 'chispa', 'pirotecn', 'nebulizad', 'baja densidad', 'saxo', 'saxofon', 'trompeta', 'percusion', 'violin', 'cantante', 'co2', 'confeti', 'confetti', 'robot led', 'nube', 'humo'];
+      const invConcept = raw => { const p = [raw.desc, raw.description, raw.notes, raw.notesText, raw.concept]; (raw.products || raw.items || raw.lines || []).forEach(it => { if (it) { p.push(it.name); p.push(it.desc || it.description); } }); return p.filter(Boolean).join(' · '); };
+      const parseConceptDate = txt => { let m = txt.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/); if (m) { let y = +m[3]; if (y < 100) y += 2000; return y + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); } m = txt.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/); if (m) return m[1] + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[3]).padStart(2, '0'); return ''; };
+      const suggestByConcept = raw => {
+        const txt = invConcept(raw); if (!txt) return null;
+        const nt = normNm(txt);
+        const date = parseConceptDate(txt);
+        const locHit = locsNorm.find(l => nt.indexOf(l.norm) >= 0);
+        const packHit = PACKS.find(p => new RegExp('\\b' + p[0]).test(nt));
+        let cand = (date && evByDate[date]) ? evByDate[date].slice() : [];
+        if (locHit && cand.length > 1) { const f = cand.filter(e => +e.lugar === +locHit.id); if (f.length) cand = f; }
+        if (!date || cand.length !== 1) return { eventId: null, pack: packHit ? packHit[1] : null };
+        return { eventId: cand[0].id, pack: packHit ? packHit[1] : null };
+      };
+      const conceptUnknownServices = raw => {
+        const nt = normNm(invConcept(raw)); const found = [];
+        SERVICE_KW.forEach(kw => { const k = normNm(kw); if (nt.indexOf(k) >= 0) { const exists = extrasNorm.some(e => e.indexOf(k) >= 0 || k.indexOf(e) >= 0); if (!exists && !found.includes(kw)) found.push(kw); } });
+        return found;
+      };
+      const serviceWarnings = [];
       const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0, antiguasInv = 0;
       Object.values(idx.byId).forEach(c => {
         let ev = null;
@@ -734,16 +760,32 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         const company = isCompany(c);
         (c.invoices || []).forEach(raw => {
           totalInv++;
+          const inv = holded.mapInvoice(raw);
+          // Servicio reservado (fotomatón, fuego frío…) en una factura PAGADA que no existe en Servicios.
+          // Si no está pagada, la reserva aún no se ha hecho, así que no se cuenta.
+          if (inv.pending <= 0.5) {
+            const unknown = conceptUnknownServices(raw);
+            if (unknown.length) serviceWarnings.push({ number: inv.number, date: inv.date, contact: c.name || '', services: unknown, invId: inv.id, total: inv.total });
+          }
           if (ev || links[raw.id]) { linkedInv++; return; }   // vinculada (auto o manual)
           if (company) { empresaInv++; return; }              // factura a empresa/finca: no es un descuadre
-          const inv = holded.mapInvoice(raw);
           const yr = yearOf(inv.date);
           if (yr && yr < 2026) { antiguasInv++; return; }     // 2024/2025 y anteriores: no se muestran
-          sinVincular.push({ number: inv.number, date: inv.date, total: inv.total, paid: inv.paid, pending: inv.pending, status: inv.status, contact: c.name || '', code: c.code || c.vat_number || '', invId: inv.id });
+          const sg = suggestByConcept(raw);
+          let suggestedEventId = null, suggestedLabel = '', catWarn = '';
+          if (sg && sg.eventId) {
+            suggestedEventId = sg.eventId;
+            const sev = store.get('events', sg.eventId) || {};
+            const lname = (store.get('locations', sev.lugar) || {}).name || sev.lugarOtro || '';
+            suggestedLabel = '#' + sg.eventId + (lname ? ' · ' + lname : '') + (sev.fecha ? ' · ' + sev.fecha : '');
+            if (sg.pack && sev.tipo && normNm(sg.pack) !== normNm(sev.tipo)) catWarn = 'La factura pone "' + sg.pack + '" pero la boda #' + sg.eventId + ' está como "' + sev.tipo + '".';
+          }
+          sinVincular.push({ number: inv.number, date: inv.date, total: inv.total, paid: inv.paid, pending: inv.pending, status: inv.status, contact: c.name || '', code: c.code || c.vat_number || '', invId: inv.id, suggestedEventId, suggestedLabel, catWarn });
         });
       });
       sinVincular.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, sinVincularN: sinVincular.length, sinVincular });
+      serviceWarnings.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings });
     } catch (e) { return ok(res, { enabled: true, error: e.message, sinVincular: [] }); }
   }
   // --- VINCULAR una factura de Holded a un evento existente (o desvincular) ---
