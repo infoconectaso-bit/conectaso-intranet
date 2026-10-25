@@ -882,6 +882,7 @@ on(/^#\/descuadres$/, async () => {
       ] })}</div></div>` : '';
     const cs = r.conceptStats || {};
     const csLine = cs.total ? `<p class="hint" style="margin-bottom:12px">📄 Concepto leído de Holded en <b>${cs.withConcept || 0}/${cs.total}</b> facturas · fecha detectada en <b>${cs.withDate || 0}</b>.${cs.sample ? ` <span class="muted">Ejemplo de concepto: "${esc(String(cs.sample).slice(0, 120))}"</span>` : ''}</p>` : '';
+    const sugList = sv.filter(i => i.suggestedEventId && !i.catWarn);
     shell(`${pageHead('Descuadre facturas / eventos', 'Facturas de Holded que NO están vinculadas a ningún evento (posible falta de vinculación).')}
       <div class="grid-3" style="margin-bottom:14px">
         <div class="stat stat--pink"><div class="k">Facturas sin vincular</div><div class="v">${r.sinVincularN || 0}</div></div>
@@ -890,6 +891,7 @@ on(/^#\/descuadres$/, async () => {
       </div>
       <p class="hint" style="margin-bottom:8px">Salen facturas a <b>personas</b> de <b>2026 en adelante</b> que no cuadran con ningún evento. Cuando el concepto trae la <b>fecha y el lugar</b>, te propongo la boda y la vinculas con un clic (↩). Si el <b>pack</b> no coincide con la categoría de la boda, sale un aviso. También puedes vincular a mano (🔗).</p>
       ${csLine}
+      ${sugList.length ? `<div class="btn-row" style="margin-bottom:12px"><button class="btn btn--primary" id="linkAllSug">↩ Vincular todas las sugeridas sin aviso (${sugList.length})</button> <span class="hint">Las que tienen aviso ⚠ se quedan sin vincular para que las revises.</span></div>` : ''}
       <div class="panel"><div class="panel__body">${table('dtDescuadres', { rows: sv, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas sin vincular. 🎉' })}</div></div>
       ${swPanel}
       ${pmPanel}`, ['Descuadres']);
@@ -909,6 +911,16 @@ on(/^#\/descuadres$/, async () => {
       });
     }
     bindTable('dtDescuadres', wireLinks);
+    const lab = el('linkAllSug'); if (lab) lab.onclick = () => {
+      modal('Vincular todas las sugeridas', `<p>Se vincularán <b>${sugList.length}</b> facturas a la boda que propone su concepto (fecha + lugar). Las que tienen aviso ⚠ se dejan sin vincular para que las revises. <b>No cambia ningún importe pagado.</b></p>`, {
+        okText: 'Vincular ' + sugList.length, onOk: async () => {
+          let okN = 0, failN = 0;
+          for (const i of sugList) { try { await api('holded-descuadres/link', { method: 'POST', body: { invId: i.invId, eventId: i.suggestedEventId } }); okN++; } catch (e) { failN++; } }
+          toast('✅ Vinculadas ' + okN + (failN ? ' · ' + failN + ' con error' : ''), 'ok');
+          draw();
+        }
+      });
+    };
   }
   draw();
 });
