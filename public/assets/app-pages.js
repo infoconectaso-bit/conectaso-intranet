@@ -279,10 +279,11 @@ function eventEditorAdmin(ev) {
   const adminTabs = simple
     ? `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="servicios">Servicios</button><button data-tab="facturacion">Facturación</button><button data-tab="archivos">Archivos</button></div>`
     : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="servicios">Servicios</button><button data-tab="ruta">Ruta</button><button data-tab="facturacion">Facturación</button><button data-tab="archivos">Archivos</button></div>`;
-  const headLabel = simple ? `${esc(ev.tipo)} #${ev.id}` : `Boda #${ev.id}`;
+  const lugarName = (ev.lugar && (S.meta.locations || []).find(l => +l.id === +ev.lugar)) ? (S.meta.locations.find(l => +l.id === +ev.lugar).name) : (ev.lugarOtro || '');
+  const headLabel = (simple ? `${esc(ev.tipo)} #${ev.id}` : `Boda #${ev.id}`) + (lugarName ? ` · ${esc(lugarName)}` : '');
   const body = `<form id="evForm" data-id="${ev.id}">
     <div class="page-head"><div><h1 style="font-size:24px">${headLabel}</h1><div class="lead">${esc(ev.conyuges || 'Sin cónyuges')} · ${dmy(ev.fecha)}</div><div class="page-head__accent"></div></div>
-      <div class="btn-row"><a class="btn" href="#/eventos/${ev.id}/pdf">Resumen PDF</a></div></div>
+      <div class="btn-row"><button type="button" class="btn" onclick="history.back()">← Atrás</button> <a class="btn" href="#/eventos/${ev.id}/pdf">Resumen PDF</a></div></div>
     <div id="evInfoBox" style="margin:2px 0 12px;display:flex;flex-wrap:wrap"></div>
     <div class="panel evtop"><div class="panel__body">
       <div class="evtop-top">
@@ -382,6 +383,7 @@ function eventViewRole(ev) {
     ? `<div class="ev-cli-head"><h1>${esc(ev.conyuges || 'Mi boda')}</h1><div class="ev-cli-sub">${dmy(ev.fecha)}${ev.hora ? ' · ' + ev.hora : ''}</div></div>`
     : pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''));
   shell(`${headHtml}
+    <div class="btn-row" style="margin-bottom:10px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button></div>
     ${intro}${role === 'dj' ? '<div id="evInfoBox" style="margin:2px 0 12px;display:flex;flex-wrap:wrap"></div>' : ''}${progHtml}<form id="evForm" class="${role === 'user' ? 'ev-client' : ''}" data-id="${ev.id}">${tabs}${role === 'dj' ? `<div class="panel dj-estado"><div class="panel__body"><div class="field evtop-estado"><label>Estado de contacto</label>${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div><p class="hint" style="margin-top:6px">Marca en qué punto estás con esta boda (contactado, meeting, etc.).</p></div></div>` : ''}${panes}
     ${canSave ? `<div class="floatbar"><button type="submit" class="btn btn--primary">Guardar</button></div>` : ''}</form>`, role === 'user' ? [tt('Mi boda', 'La meva boda', 'My wedding', 'Mon mariage')] : ['Eventos', '#' + ev.id]);
   wireEventForm(ev, { full: false, role, canEditMusic, canSave });

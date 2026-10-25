@@ -1504,8 +1504,9 @@ function serveCalendar(req, res, file) {
     const title = (e.conyuges ? '💍 ' + e.conyuges : (e.tipo || 'Evento') + ' #' + e.id) + (venue ? ' — ' + venue : '');
     const desc = [e.hora ? 'Hora: ' + e.hora : '', e.tipo ? 'Pack: ' + e.tipo : '', venue ? 'Lugar: ' + venue : '', 'Boda #' + e.id].filter(Boolean).join('\n');
     lines.push('BEGIN:VEVENT', 'UID:conecta-' + e.id + '-u' + uid + '@conectaso.es', 'DTSTAMP:' + dtstamp);
-    if (hm) { let eh = +hm[1] + 6; if (eh > 23) eh = 23; lines.push('DTSTART:' + ymd + 'T' + pad(+hm[1]) + hm[2] + '00', 'DTEND:' + ymd + 'T' + pad(eh) + hm[2] + '00'); }
-    else { const d = new Date(+f.slice(0, 4), +f.slice(5, 7) - 1, +f.slice(8, 10) + 1); lines.push('DTSTART;VALUE=DATE:' + ymd, 'DTEND;VALUE=DATE:' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate())); }
+    // Hora de inicio = hora de la ceremonia; SIN hora de fin (por petición). Si no hay hora, día completo.
+    if (hm) lines.push('DTSTART:' + ymd + 'T' + pad(+hm[1]) + hm[2] + '00');
+    else lines.push('DTSTART;VALUE=DATE:' + ymd);
     lines.push('SUMMARY:' + esc(title));
     if (venue) lines.push('LOCATION:' + esc(venue));
     lines.push('DESCRIPTION:' + esc(desc), 'END:VEVENT');
