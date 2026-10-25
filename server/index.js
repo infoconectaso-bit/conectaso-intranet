@@ -727,7 +727,12 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       const links = store.setting('invoiceLinks') || {};   // vinculaciones manuales factura -> evento
       const yearOf = d => { if (typeof d === 'number') return new Date(d < 1e12 ? d * 1000 : d).getUTCFullYear(); const m = String(d || '').match(/(\d{4})/); return m ? +m[1] : 0; };
       // --- Emparejado por el CONCEPTO del PDF (fecha + lugar + pack) y detección de servicios ---
-      const locsNorm = store.all('locations').map(l => ({ id: l.id, norm: normNm(l.name || '') })).filter(l => l.norm.length >= 4);
+      // Palabras clave distintivas de cada lugar (quitando genéricas: hotel, mas, finca…), para casar
+      // aunque el concepto escriba el nombre distinto ("Hotel H10 Imperial" vs "H10 Imperial Tarraco").
+      const STOPLOC = new Set(['hotel', 'mas', 'finca', 'can', 'cal', 'masia', 'restaurant', 'restaurante', 'sala', 'hostal', 'casa', 'villa', 'club', 'espai', 'espacio', 'jardins', 'jardines', 'el', 'la', 'els', 'les', 'los', 'las', 'de', 'del', 'i', 'y', 'les', 'ca']);
+      const tokensOf = s => normNm(s || '').split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOPLOC.has(w));
+      const locTokById = {}; store.all('locations').forEach(l => { locTokById[l.id] = tokensOf(l.name); });
+      const evLocTokens = e => (e.lugar && locTokById[e.lugar] && locTokById[e.lugar].length) ? locTokById[e.lugar] : tokensOf(e.lugarOtro);
       const evByDate = {};
       store.all('events').forEach(e => { if (e.fecha) { const k = String(e.fecha).slice(0, 10); (evByDate[k] = evByDate[k] || []).push(e); } });
       const extrasNorm = store.all('extras').map(x => normNm(x.name || '')).filter(Boolean);
@@ -744,15 +749,21 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         return '';
       };
       const suggestByConcept = raw => {
-        const txt = invConcept(raw); if (!txt) return null;
+        const txt = invConcept(raw); if (!txt) return { eventId: null, pack: null, date: '', nOnDate: 0 };
         const nt = normNm(txt);
         const date = parseConceptDate(txt);
-        const locHit = locsNorm.find(l => nt.indexOf(l.norm) >= 0);
         const packHit = PACKS.find(p => new RegExp('\\b' + p[0]).test(nt));
+        const pack = packHit ? packHit[1] : null;
         let cand = (date && evByDate[date]) ? evByDate[date].slice() : [];
-        if (locHit && cand.length > 1) { const f = cand.filter(e => +e.lugar === +locHit.id); if (f.length) cand = f; }
-        if (!date || cand.length !== 1) return { eventId: null, pack: packHit ? packHit[1] : null };
-        return { eventId: cand[0].id, pack: packHit ? packHit[1] : null };
+        const nOnDate = cand.length;
+        if (cand.length > 1) {
+          // desempatar por cuántas palabras clave del lugar del evento aparecen en el concepto
+          const scored = cand.map(e => ({ e, sc: evLocTokens(e).filter(t => nt.indexOf(t) >= 0).length }));
+          const max = Math.max.apply(null, scored.map(s => s.sc));
+          if (max > 0) { const top = scored.filter(s => s.sc === max); if (top.length === 1) cand = [top[0].e]; }
+        }
+        if (!date || cand.length !== 1) return { eventId: null, pack, date, nOnDate };
+        return { eventId: cand[0].id, pack, date, nOnDate };
       };
       const conceptUnknownServices = raw => {
         const nt = normNm(invConcept(raw)); const found = [];
@@ -798,15 +809,20 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
           const _wd = parseConceptDate(_c);                    // fecha de la boda según el concepto
           if (_wd && _wd < _hoy) { pasadasInv++; return; }     // boda ya pasada: no hace falta vincularla
           const sg = suggestByConcept(raw);
-          let suggestedEventId = null, suggestedLabel = '', catWarn = '';
+          let suggestedEventId = null, suggestedLabel = '', catWarn = '', why = '';
           if (sg && sg.eventId) {
             suggestedEventId = sg.eventId;
             const sev = store.get('events', sg.eventId) || {};
             const lname = (store.get('locations', sev.lugar) || {}).name || sev.lugarOtro || '';
             suggestedLabel = '#' + sg.eventId + (lname ? ' · ' + lname : '') + (sev.fecha ? ' · ' + sev.fecha : '');
             if (sg.pack && sev.tipo && normNm(sg.pack) !== normNm(sev.tipo)) catWarn = 'La factura pone "' + sg.pack + '" pero la boda #' + sg.eventId + ' está como "' + sev.tipo + '".';
+          } else {
+            // Motivo por el que no se pudo sugerir (para que administración lo entienda de un vistazo)
+            if (!sg.date) why = 'No detecté la fecha en el concepto';
+            else if (sg.nOnDate === 0) why = 'Detecté fecha ' + sg.date + ' pero no hay ninguna boda creada ese día';
+            else why = 'Fecha ' + sg.date + ' con ' + sg.nOnDate + ' bodas ese día; el lugar del concepto no coincide con ninguna';
           }
-          sinVincular.push({ number: inv.number, date: inv.date, total: inv.total, paid: inv.paid, pending: inv.pending, status: inv.status, contact: c.name || '', code: c.code || c.vat_number || '', invId: inv.id, suggestedEventId, suggestedLabel, catWarn });
+          sinVincular.push({ number: inv.number, date: inv.date, total: inv.total, paid: inv.paid, pending: inv.pending, status: inv.status, contact: c.name || '', code: c.code || c.vat_number || '', invId: inv.id, suggestedEventId, suggestedLabel, catWarn, why, concept: String(_c || '').slice(0, 160) });
         });
       });
       sinVincular.sort((a, b) => String(b.date).localeCompare(String(a.date)));

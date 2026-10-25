@@ -822,9 +822,9 @@ function enhanceSearchSelects(root) {
     wrap.appendChild(input); wrap.appendChild(menu); wrap.appendChild(select);
     const sync = () => { const o = select.options[select.selectedIndex]; input.value = o ? o.text : ''; };
     const build = (q) => {
-      q = (q || '').toLowerCase().trim(); menu.innerHTML = '';
+      q = deac(q).trim(); menu.innerHTML = '';
       [...select.options].forEach((o, i) => {
-        if (q && !o.text.toLowerCase().includes(q)) return;
+        if (q && !deac(o.text).includes(q)) return;
         const it = document.createElement('div'); it.className = 'ssel__opt' + (i === select.selectedIndex ? ' on' : '');
         it.textContent = o.text; it.dataset.i = i; menu.appendChild(it);
       });

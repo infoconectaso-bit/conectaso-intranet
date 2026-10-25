@@ -8,6 +8,8 @@
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const el = (id) => document.getElementById(id);
+// Normaliza para búsquedas: minúsculas y SIN acentos (así "garcia" encuentra "García").
+const deac = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const app = el('app');
 
@@ -666,9 +668,9 @@ function table(id, cfg) {
 function renderTable(id) {
   const st = TBL[id], cfg = st.cfg;
   let rows = cfg.rows.slice();
-  const txt = (c, r) => String(c.get ? c.get(r) : '').toLowerCase();
-  if (st.q) { const q = st.q.toLowerCase(); rows = rows.filter(r => cfg.cols.some(c => txt(c, r).includes(q))); }
-  Object.entries(st.f).forEach(([ci, v]) => { if (v) rows = rows.filter(r => txt(cfg.cols[ci], r).includes(v.toLowerCase())); });
+  const txt = (c, r) => deac(c.get ? c.get(r) : '');
+  if (st.q) { const q = deac(st.q); rows = rows.filter(r => cfg.cols.some(c => txt(c, r).includes(q))); }
+  Object.entries(st.f).forEach(([ci, v]) => { if (v) rows = rows.filter(r => txt(cfg.cols[ci], r).includes(deac(v))); });
   const [oc, od] = st.order, col = cfg.cols[oc];
   if (col && col.get) rows.sort((a, b) => { const x = col.get(a), y = col.get(b); const r = (typeof x === 'number' && typeof y === 'number') ? x - y : String(x).localeCompare(String(y), 'es', { numeric: true }); return od === 'asc' ? r : -r; });
   const total = rows.length, pages = Math.max(1, Math.ceil(total / st.len));
