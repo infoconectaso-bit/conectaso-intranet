@@ -859,7 +859,7 @@ on(/^#\/descuadres$/, async () => {
     const sw = (r.serviceWarnings || []).map(w => Object.assign({}, w, { svc: (w.services || []).join(', ') }));
     const swPanel = sw.length ? `
       <h3 class="form-sub" style="margin-top:24px">⚠ Servicios reservados y pagados sin crear en Servicios (${sw.length})</h3>
-      <p class="hint" style="margin-bottom:10px">Facturas <b>pagadas</b> cuyo concepto menciona un servicio (fotomatón, fuego frío…) que <b>no existe en la pestaña Servicios</b>. Conviene crearlo para gestionarlo bien. Las facturas <b>no pagadas</b> no salen (la reserva aún no se ha hecho).</p>
+      <p class="hint" style="margin-bottom:10px">Facturas <b>pagadas</b> de <b>bodas por celebrar (a futuro)</b> cuyo concepto menciona un servicio (fotomatón, fuego frío…) que <b>no existe en la pestaña Servicios</b>. Conviene crearlo para gestionarlo bien. Las <b>no pagadas</b> y las de bodas ya pasadas no salen.</p>
       <div class="panel"><div class="panel__body">${table('dtSvcWarn', { rows: sw, order: [0, 'desc'], filters: true, dense: true, len: 50, empty: '', cols: [
         { t: 'Fecha', get: i => i.date || '', html: i => esc(slash(i.date) || '—') },
         { t: 'Nº', get: i => i.number || '' },

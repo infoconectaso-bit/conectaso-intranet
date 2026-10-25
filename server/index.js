@@ -751,6 +751,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       };
       const serviceWarnings = [];
       const payByEvent = {};   // eventId -> suma de bases (sin IVA) de sus facturas vinculadas
+      const _hoy = bizToday();
       let cWithConcept = 0, cWithDate = 0, cSample = '';   // diagnóstico: ¿se está leyendo el concepto de Holded?
       const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0, antiguasInv = 0;
       Object.values(idx.byId).forEach(c => {
@@ -770,7 +771,10 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
           // Si no está pagada, la reserva aún no se ha hecho, así que no se cuenta.
           if (inv.pending <= 0.5) {
             const unknown = conceptUnknownServices(raw);
-            if (unknown.length) serviceWarnings.push({ number: inv.number, date: inv.date, contact: c.name || '', services: unknown, invId: inv.id, total: inv.total });
+            if (unknown.length) {
+              const wdate = parseConceptDate(_c) || inv.date || '';   // fecha de la boda (del concepto) o, si no, la de la factura
+              if (wdate && wdate >= _hoy) serviceWarnings.push({ number: inv.number, date: inv.date, wdate, contact: c.name || '', services: unknown, invId: inv.id, total: inv.total });
+            }
           }
           if (ev || links[raw.id]) {   // vinculada (auto o manual): acumula la base (sin IVA) por evento
             linkedInv++;
@@ -797,7 +801,6 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       serviceWarnings.sort((a, b) => String(b.date).localeCompare(String(a.date)));
       // Descuadre factura base (sin IVA) vs pagado del cliente, por boda vinculada.
       const payMismatches = [];
-      const _hoy = bizToday();
       Object.keys(payByEvent).forEach(evId => {
         const pe = payByEvent[evId]; const ev2 = store.get('events', +evId); if (!ev2) return;
         if (!(ev2.fecha && ev2.fecha >= _hoy)) return;         // solo bodas a futuro (de hoy en adelante)
