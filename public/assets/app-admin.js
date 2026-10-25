@@ -870,14 +870,14 @@ on(/^#\/descuadres$/, async () => {
       ] })}</div></div>` : '';
     const pm = r.payMismatches || [];
     const pmPanel = pm.length ? `
-      <h3 class="form-sub" style="margin-top:24px">⚠ Descuadre factura / pagado (${pm.length})</h3>
-      <p class="hint" style="margin-bottom:10px">Bodas donde la <b>base de las facturas (sin IVA)</b> no coincide con el <b>pagado</b> que tienes apuntado en el evento. Revisa cuál es el correcto.</p>
+      <h3 class="form-sub" style="margin-top:24px">⚠ Descuadre pagado (Holded vs apuntado) (${pm.length})</h3>
+      <p class="hint" style="margin-bottom:10px">Bodas donde <b>lo pagado según Holded</b> no coincide con el <b>pagado apuntado a mano</b> en el evento. <b>Diferencia positiva</b> = han pagado más de lo apuntado (falta apuntarlo). Solo es para <b>verificar</b>: no cambia nada automáticamente.</p>
       <div class="panel"><div class="panel__body">${table('dtPayMis', { rows: pm, order: [0, 'desc'], filters: true, dense: true, len: 50, empty: '', cols: [
         { t: 'Fecha', get: i => i.fecha || '', html: i => esc(slash(i.fecha) || '—') },
         { t: 'Boda', nosort: true, nofilter: true, html: i => `<a href="#/eventos/${i.eventId}" title="${esc(i.conyuges || '')}">#${i.eventId}</a>` },
         { t: 'Lugar', get: i => i.lugar || '', html: i => esc(i.lugar || '—') },
-        { t: 'Base facturas (sin IVA)', get: i => i.base || 0, num: true, html: i => eur(i.base) },
-        { t: 'Pagado (evento)', get: i => i.pagado || 0, num: true, html: i => eur(i.pagado) },
+        { t: 'Pagado en Holded', get: i => i.paidHolded || 0, num: true, html: i => eur(i.paidHolded) },
+        { t: 'Apuntado (evento)', get: i => i.pagado || 0, num: true, html: i => eur(i.pagado) },
         { t: 'Diferencia', get: i => i.diff || 0, num: true, html: i => `<b style="color:#D50000">${(i.diff > 0 ? '+' : '')}${eur(i.diff)}</b>` },
       ] })}</div></div>` : '';
     const cs = r.conceptStats || {};

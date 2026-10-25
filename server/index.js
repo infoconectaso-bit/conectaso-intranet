@@ -775,7 +775,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
           if (ev || links[raw.id]) {   // vinculada (auto o manual): acumula la base (sin IVA) por evento
             linkedInv++;
             const evId = links[raw.id] || (ev && ev.id);
-            if (evId) { const pe = (payByEvent[evId] = payByEvent[evId] || { base: 0, invs: [] }); pe.base += inv.total; if (inv.number) pe.invs.push(inv.number); }
+            if (evId) { const pe = (payByEvent[evId] = payByEvent[evId] || { base: 0, paid: 0, invs: [] }); pe.base += inv.total; pe.paid += inv.paid; if (inv.number) pe.invs.push(inv.number); }
             return;
           }
           if (company) { empresaInv++; return; }              // factura a empresa/finca: no es un descuadre
@@ -799,11 +799,13 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       const payMismatches = [];
       Object.keys(payByEvent).forEach(evId => {
         const pe = payByEvent[evId]; const ev2 = store.get('events', +evId); if (!ev2) return;
-        const pagado = +ev2.pagado || 0; const base = Math.round(pe.base * 100) / 100;
-        const diff = Math.round((base - pagado) * 100) / 100;
+        const pagado = +ev2.pagado || 0;                       // lo que la administrativa apuntó a mano
+        const paidHolded = Math.round(pe.paid * 100) / 100;    // lo realmente pagado según Holded (sin IVA)
+        const base = Math.round(pe.base * 100) / 100;          // base facturada (sin IVA)
+        const diff = Math.round((paidHolded - pagado) * 100) / 100;
         if (Math.abs(diff) > 1) {
           const loc = store.get('locations', ev2.lugar) || {};
-          payMismatches.push({ eventId: +evId, conyuges: ev2.conyuges || '', fecha: ev2.fecha || '', lugar: loc.name || ev2.lugarOtro || '', base, pagado, diff, invs: pe.invs });
+          payMismatches.push({ eventId: +evId, conyuges: ev2.conyuges || '', fecha: ev2.fecha || '', lugar: loc.name || ev2.lugarOtro || '', base, paidHolded, pagado, diff, invs: pe.invs });
         }
       });
       payMismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
