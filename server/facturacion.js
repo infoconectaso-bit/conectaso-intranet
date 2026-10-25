@@ -189,8 +189,9 @@ function aggregateFor(uid, skipRefresh) {
     if (!evRealized(ev)) return;
     if (assignedWorkers(ev).indexOf(String(uid)) < 0) return;
     const e = workerEarning(ev, uid);
-    extraItems.push({ type: 'ev', evId: ev.id, title: 'Evento ' + ev.id + ' · ' + (ev.tipo || ''), date: ev.fecha, amount: e.amount,
-      body: ['Fecha del evento: ' + (ev.fecha || '')].concat(e.lines.map(l => l[0] + ': ' + l[1])) });
+    const locN = (locById(ev.lugar) || {}).name || ev.lugarOtro || '';
+    extraItems.push({ type: 'ev', evId: ev.id, lugar: locN, title: 'Boda #' + ev.id + ' · ' + (ev.tipo || ''), date: ev.fecha, amount: e.amount,
+      body: ['Fecha del evento: ' + (ev.fecha || ''), 'Lugar: ' + (locN || '—')].concat(e.lines.map(l => l[0] + ': ' + l[1])) });
     extra += e.amount;
   });
   // Ajustes manuales del trabajador (gasolina, comidas…): positivos o negativos, no ligados a un evento.

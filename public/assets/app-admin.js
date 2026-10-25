@@ -967,12 +967,12 @@ async function historyView(uid, admin) {
   { let run = H.rest; locals.slice().reverse().forEach(it => { run -= it.amount; it.bal = run; }); }
   const card = i => {
     if (i.type === 'adj') return `<li class="tl${i.amount < 0 ? ' r' : ''}"><span class="ind"></span><div class="card"><h5>${esc(i.title)}${admin ? ` <button class="btn btn--icon" data-del-adj="${i.adjId}" title="Quitar ajuste" style="float:right">🗑</button>` : ''}</h5><div class="b">${(i.body || []).map(b => `<p>${esc(b)}</p>`).join('')}</div><div class="when">${dmy(i.date)} · <b style="color:${i.amount < 0 ? '#D50000' : '#0B8043'}">${i.amount > 0 ? '+' : ''}${e2(i.amount)}</b></div></div></li>`;
-    if (i.type === 'ev') return `<li class="tl"><span class="ind"></span><div class="card"><h5>${i.evId && admin ? `<a href="#/eventos/${i.evId}">${esc(i.title)}</a>` : esc(i.title)}</h5><div class="b">${(i.body || []).map((b, k) => { const mt = b.match(/^([^:]+):\s*(.*)$/); return (k === 2 ? '<hr style="border:0;border-top:1px solid #eee">' : '') + (mt ? `<p><b>${esc(mt[1])}:</b> ${esc(mt[2])}</p>` : `<p>${esc(b)}</p>`); }).join('')}</div><div class="when">${dmy(i.date)}</div></div></li>`;
+    if (i.type === 'ev') return `<li class="tl"><span class="ind"></span><div class="card"><h5>${i.evId && admin ? `<a href="#/eventos/${i.evId}">${esc(i.title)}</a>` : esc(i.title)}</h5><div class="b">${(i.body || []).map((b, k) => { const mt = b.match(/^([^:]+):\s*(.*)$/); return (k === 2 ? '<hr style="border:0;border-top:1px solid #eee">' : '') + (mt ? `<p><b>${esc(mt[1])}:</b> ${esc(mt[2])}</p>` : `<p>${esc(b)}</p>`); }).join('')}</div><div class="when">${i.lugar ? '📍 ' + esc(i.lugar) + ' · ' : ''}${dmy(i.date)}</div></div></li>`;
     return `<li class="tl r"><span class="ind"></span><div class="card"><h5>Pago realizado</h5><div class="b"><p><b>Fecha:</b> ${dmy(i.date)}</p><p><b>Cantidad:</b> ${e2(i.amount)}</p><p><b>Descripción:</b> ${esc(i.description || '-')}</p></div><div class="when">${dmy(i.date)} · ${fmtEur(i.bal)}</div></div></li>`;
   };
-  const timelineAll = locals.map(card).concat((H.items || []).map(card)).join('');
-  const genItems = (H.items || []).filter(i => i.type === 'ev');
-  const payItems = locals.concat((H.items || []).filter(i => i.type === 'pay'));
+  const byDateDesc = (a, b) => String(b.date || '').localeCompare(String(a.date || ''));
+  const genItems = (H.items || []).filter(i => i.type === 'ev' || i.type === 'adj').sort(byDateDesc);
+  const payItems = locals.concat((H.items || []).filter(i => i.type === 'pay')).sort(byDateDesc);
   const bal = H.rest - paid;
   // Admin ve el total; el trabajador NO ve su histórico total, solo su saldo, sus importes generados y sus pagos.
   const statsHtml = admin
@@ -981,10 +981,10 @@ async function historyView(uid, admin) {
         <div class="stat stat--pink"><div class="k">Pendiente</div><div class="v">${e2(H.rest - paid)}</div></div></div>`
     : `<div class="grid-2"><div class="stat"><div class="k">Total que te he pagado</div><div class="v">${e2(H.cobrado + paid)}</div></div>
         <div class="stat stat--pink"><div class="k">${bal >= 0 ? 'Pendiente (te debo)' : 'Me debes'}</div><div class="v">${e2(Math.abs(bal))}</div></div></div>`;
-  const bodyLists = admin
-    ? `<ul class="timeline">${timelineAll || '<div class="empty">Sin movimientos.</div>'}</ul>`
-    : `<div class="panel"><div class="panel__head"><h3>💶 Importes generados</h3></div><div class="panel__body"><ul class="timeline">${genItems.map(card).join('') || '<div class="empty">Sin importes generados.</div>'}</ul></div>
-       <div class="panel"><div class="panel__head"><h3>🧾 Historial de pagos</h3></div><div class="panel__body"><ul class="timeline">${payItems.map(card).join('') || '<div class="empty">Sin pagos registrados.</div>'}</ul></div>`;
+  const bodyLists = `<div class="grid-2">
+      <div class="panel"><div class="panel__head"><h3>💶 Generado</h3></div><div class="panel__body"><ul class="timeline">${genItems.map(card).join('') || '<div class="empty">Sin importes generados.</div>'}</ul></div></div>
+      <div class="panel"><div class="panel__head"><h3>🧾 Pagos realizados</h3></div><div class="panel__body"><ul class="timeline">${payItems.map(card).join('') || '<div class="empty">Sin pagos registrados.</div>'}</ul></div></div>
+    </div>`;
   shell(`${pageHead(admin ? 'Histórico · ' + userName(uid) : 'Mis pagos', admin ? 'Eventos realizados y pagos.' : 'Tu saldo, tus importes generados y tus pagos.')}
     ${statsHtml}
     ${admin ? `<div class="panel"><div class="panel__head"><h3>Registrar pago</h3></div><div class="panel__body"><form id="payForm" class="btn-row" style="align-items:flex-end">
