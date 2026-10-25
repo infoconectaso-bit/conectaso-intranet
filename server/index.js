@@ -730,7 +730,8 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       // Palabras clave distintivas de cada lugar (quitando genéricas: hotel, mas, finca…), para casar
       // aunque el concepto escriba el nombre distinto ("Hotel H10 Imperial" vs "H10 Imperial Tarraco").
       const STOPLOC = new Set(['hotel', 'mas', 'finca', 'can', 'cal', 'masia', 'restaurant', 'restaurante', 'sala', 'hostal', 'casa', 'villa', 'club', 'espai', 'espacio', 'jardins', 'jardines', 'el', 'la', 'els', 'les', 'los', 'las', 'de', 'del', 'i', 'y', 'les', 'ca']);
-      const tokensOf = s => normNm(s || '').split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOPLOC.has(w));
+      const softv = w => String(w).replace(/v/g, 'b');   // b/v se confunden mucho en nombres (Rivas = Ribas)
+      const tokensOf = s => normNm(s || '').split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOPLOC.has(w)).map(softv);
       const locTokById = {}; store.all('locations').forEach(l => { locTokById[l.id] = tokensOf(l.name); });
       const evLocTokens = e => (e.lugar && locTokById[e.lugar] && locTokById[e.lugar].length) ? locTokById[e.lugar] : tokensOf(e.lugarOtro);
       const evByDate = {};
@@ -757,8 +758,9 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         let cand = (date && evByDate[date]) ? evByDate[date].slice() : [];
         const nOnDate = cand.length;
         if (cand.length > 1) {
-          // desempatar por cuántas palabras clave del lugar del evento aparecen en el concepto
-          const scored = cand.map(e => ({ e, sc: evLocTokens(e).filter(t => nt.indexOf(t) >= 0).length }));
+          // desempatar por cuántas palabras clave del lugar del evento aparecen en el concepto (ignorando b/v)
+          const ntv = softv(nt);
+          const scored = cand.map(e => ({ e, sc: evLocTokens(e).filter(t => ntv.indexOf(t) >= 0).length }));
           const max = Math.max.apply(null, scored.map(s => s.sc));
           if (max > 0) { const top = scored.filter(s => s.sc === max); if (top.length === 1) cand = [top[0].e]; }
         }
