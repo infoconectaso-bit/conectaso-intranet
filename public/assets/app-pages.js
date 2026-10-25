@@ -1434,17 +1434,22 @@ on(/^#\/parte\/(\d+)$/, async m => {
   const nowISO = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + 'T' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
   const realized = !!(ev.fecha) && (ev.fecha + 'T' + hhmm) <= nowISO;
   const titulo = ev.conyuges || ('Boda #' + ev.id);
+  const backBtn = `<div class="btn-row" style="margin-bottom:10px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button></div>`;
   if (!realized) {
     shell(`${pageHead('Parte de trabajo', esc(titulo))}
+      ${backBtn}
       <div class="panel"><div class="panel__body">
         <div class="alert alert--warn">Todavía no puedes rellenar el parte. Podrás hacerlo <b>cuando se haya celebrado la boda</b> (${esc(slash(ev.fecha))}${ev.hora ? ' · ' + esc(ev.hora) : ''}).</div>
       </div></div>`, ['Parte de trabajo']);
     return;
   }
+  const cerVal = ev.djCeremony === true ? 'Si' : (ev.djCeremony === false ? 'No' : '');
   shell(`${pageHead('Parte de trabajo', esc(titulo))}
+    ${backBtn}
     <div class="panel"><div class="panel__body">
       <p class="hint" style="margin-bottom:14px">Rellena tu parte de esta boda y guarda. No hace falta que revises el resto del evento.</p>
       <form id="parteForm" class="form-grid">
+        ${fg('¿Realizaste la ceremonia?', sel('djCeremony', [['', '—'], 'Si', 'No'], cerVal))}
         ${fg('¿Pedir opinión a los novios?', sel('opinion', [['', '—'], 'Si', 'No'], ev.opinion))}
         ${fg('Horas extra realizadas', sel('djOvertime', OVERTIME_OPTS, ev.djOvertime))}
         ${fg('Observaciones', ta('obsDj', ev.obsDj, 'Lo que quieras dejar anotado de la boda'))}
@@ -1453,7 +1458,9 @@ on(/^#\/parte\/(\d+)$/, async m => {
     </div></div>`, ['Parte de trabajo']);
   el('parteSave').onclick = async () => {
     const f = el('parteForm');
+    const cer = f.querySelector('[name=djCeremony]').value;
     const body = { opinion: f.querySelector('[name=opinion]').value, djOvertime: f.querySelector('[name=djOvertime]').value, obsDj: f.querySelector('[name=obsDj]').value };
+    if (cer === 'Si' || cer === 'No') body.djCeremony = (cer === 'Si');
     try { await api('events/' + ev.id, { method: 'PUT', body }); toast('Parte guardado · ¡gracias!', 'ok'); }
     catch (e) { toast(e.message || 'No se pudo guardar', 'err'); }
   };

@@ -78,9 +78,9 @@ function mergeEventUpdate(user, current, incoming) {
     // El DJ (y admin) puede editar la MÚSICA y el ESTADO de contacto SIEMPRE, incluso en los
     // últimos 7 días. El PARTE (observaciones, horas extra, opinión) solo tras celebrarse la boda.
     const realized = evRealized(current);
-    if (!realized && ['obsDj', 'djOvertime', 'opinion'].some(k => incoming[k] !== undefined))
+    if (!realized && ['obsDj', 'djOvertime', 'opinion', 'djCeremony'].some(k => incoming[k] !== undefined))
       throw httpError(403, 'Podrás rellenar el parte de trabajo cuando se haya celebrado la boda.');
-    allowed = ['estado', 'music', 'optionals', 'disco', 'labels'].concat(realized ? ['obsDj', 'djOvertime', 'opinion'] : []);
+    allowed = ['estado', 'music', 'optionals', 'disco', 'labels'].concat(realized ? ['obsDj', 'djOvertime', 'opinion', 'djCeremony'] : []);
   }
   else throw httpError(403, 'Tu perfil solo puede consultar este evento.');
   const next = Object.assign({}, current);

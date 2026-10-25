@@ -965,14 +965,16 @@ async function historyView(uid, admin) {
   // fusionar eventos del histórico (snapshot) + pagos locales nuevos
   const locals = pays.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(p => ({ type: 'pay', date: p.date, amount: +p.amount, description: p.description, bal: 0 }));
   { let run = H.rest; locals.slice().reverse().forEach(it => { run -= it.amount; it.bal = run; }); }
+  const dy = i => ` data-year="${String(i.date || '').slice(0, 4)}"`;
+  // Lista en zigzag ("Z"): lo GENERADO a la izquierda (tl), lo PAGADO a la derecha (tl r), por fecha.
   const card = i => {
-    if (i.type === 'adj') return `<li class="tl${i.amount < 0 ? ' r' : ''}"><span class="ind"></span><div class="card"><h5>${esc(i.title)}${admin ? ` <button class="btn btn--icon" data-del-adj="${i.adjId}" title="Quitar ajuste" style="float:right">🗑</button>` : ''}</h5><div class="b">${(i.body || []).map(b => `<p>${esc(b)}</p>`).join('')}</div><div class="when">${dmy(i.date)} · <b style="color:${i.amount < 0 ? '#D50000' : '#0B8043'}">${i.amount > 0 ? '+' : ''}${e2(i.amount)}</b></div></div></li>`;
-    if (i.type === 'ev') return `<li class="tl"><span class="ind"></span><div class="card"><h5>${i.evId && admin ? `<a href="#/eventos/${i.evId}">${esc(i.title)}</a>` : esc(i.title)}</h5><div class="b">${(i.body || []).map((b, k) => { const mt = b.match(/^([^:]+):\s*(.*)$/); return (k === 2 ? '<hr style="border:0;border-top:1px solid #eee">' : '') + (mt ? `<p><b>${esc(mt[1])}:</b> ${esc(mt[2])}</p>` : `<p>${esc(b)}</p>`); }).join('')}</div><div class="when">${i.lugar ? '📍 ' + esc(i.lugar) + ' · ' : ''}${dmy(i.date)}</div></div></li>`;
-    return `<li class="tl r"><span class="ind"></span><div class="card"><h5>Pago realizado</h5><div class="b"><p><b>Fecha:</b> ${dmy(i.date)}</p><p><b>Cantidad:</b> ${e2(i.amount)}</p><p><b>Descripción:</b> ${esc(i.description || '-')}</p></div><div class="when">${dmy(i.date)} · ${fmtEur(i.bal)}</div></div></li>`;
+    if (i.type === 'adj') return `<li class="tl"${dy(i)}><span class="ind"></span><div class="card"><h5>${esc(i.title)}${admin ? ` <button class="btn btn--icon" data-del-adj="${i.adjId}" title="Quitar ajuste" style="float:right">🗑</button>` : ''}</h5><div class="b">${(i.body || []).map(b => `<p>${esc(b)}</p>`).join('')}</div><div class="when">${dmy(i.date)} · <b style="color:${i.amount < 0 ? '#D50000' : '#0B8043'}">${i.amount > 0 ? '+' : ''}${e2(i.amount)}</b></div></div></li>`;
+    if (i.type === 'ev') return `<li class="tl"${dy(i)}><span class="ind"></span><div class="card"><h5>${i.evId && admin ? `<a href="#/eventos/${i.evId}">${esc(i.title)}</a>` : esc(i.title)}</h5><div class="b">${(i.body || []).map((b, k) => { const mt = b.match(/^([^:]+):\s*(.*)$/); return (k === 2 ? '<hr style="border:0;border-top:1px solid #eee">' : '') + (mt ? `<p><b>${esc(mt[1])}:</b> ${esc(mt[2])}</p>` : `<p>${esc(b)}</p>`); }).join('')}</div><div class="when">${i.lugar ? '📍 ' + esc(i.lugar) + ' · ' : ''}${dmy(i.date)}</div></div></li>`;
+    return `<li class="tl r"${dy(i)}><span class="ind"></span><div class="card"><h5>Pago realizado</h5><div class="b"><p><b>Fecha:</b> ${dmy(i.date)}</p><p><b>Cantidad:</b> ${e2(i.amount)}</p><p><b>Descripción:</b> ${esc(i.description || '-')}</p></div><div class="when">${dmy(i.date)} · ${fmtEur(i.bal)}</div></div></li>`;
   };
   const byDateDesc = (a, b) => String(b.date || '').localeCompare(String(a.date || ''));
-  const genItems = (H.items || []).filter(i => i.type === 'ev' || i.type === 'adj').sort(byDateDesc);
-  const payItems = locals.concat((H.items || []).filter(i => i.type === 'pay')).sort(byDateDesc);
+  const allMov = (H.items || []).filter(i => i.type === 'ev' || i.type === 'adj').concat(locals, (H.items || []).filter(i => i.type === 'pay')).sort(byDateDesc);
+  const fyears = [...new Set(allMov.map(i => String(i.date || '').slice(0, 4)).filter(y => /^\d{4}$/.test(y)))].sort().reverse();
   const bal = H.rest - paid;
   // Admin ve el total; el trabajador NO ve su histórico total, solo su saldo, sus importes generados y sus pagos.
   const statsHtml = admin
@@ -981,10 +983,9 @@ async function historyView(uid, admin) {
         <div class="stat stat--pink"><div class="k">Pendiente</div><div class="v">${e2(H.rest - paid)}</div></div></div>`
     : `<div class="grid-2"><div class="stat"><div class="k">Total que te he pagado</div><div class="v">${e2(H.cobrado + paid)}</div></div>
         <div class="stat stat--pink"><div class="k">${bal >= 0 ? 'Pendiente (te debo)' : 'Me debes'}</div><div class="v">${e2(Math.abs(bal))}</div></div></div>`;
-  const bodyLists = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start">
-      <div class="panel" style="min-width:0"><div class="panel__head"><h3>💶 Generado</h3></div><div class="panel__body"><ul class="timeline">${genItems.map(card).join('') || '<div class="empty">Sin importes generados.</div>'}</ul></div></div>
-      <div class="panel" style="min-width:0"><div class="panel__head"><h3>🧾 Pagos realizados</h3></div><div class="panel__body"><ul class="timeline">${payItems.map(card).join('') || '<div class="empty">Sin pagos registrados.</div>'}</ul></div></div>
-    </div>`;
+  const yearBtns = fyears.length > 1 ? `<div class="btn-row ff-years" style="margin:4px 0 12px;flex-wrap:wrap;gap:6px"><button class="btn btn--sm btn--primary" data-fy="all">Todos</button>${fyears.map(y => `<button class="btn btn--sm" data-fy="${y}">${y}</button>`).join('')}</div>` : '';
+  const legend = '<p class="hint" style="margin:2px 0 10px">💶 <b>Izquierda</b>: lo que genera · 🧾 <b>derecha</b>: lo que le pagas · ordenado por fecha.</p>';
+  const bodyLists = `${legend}${yearBtns}<div class="panel"><div class="panel__body"><ul class="timeline">${allMov.map(card).join('') || '<div class="empty">Sin movimientos.</div>'}</ul></div></div>`;
   shell(`${pageHead(admin ? 'Histórico · ' + userName(uid) : 'Mis pagos', admin ? 'Eventos realizados y pagos.' : 'Tu saldo, tus importes generados y tus pagos.')}
     ${statsHtml}
     ${admin ? `<div class="panel"><div class="panel__head"><h3>Registrar pago</h3></div><div class="panel__body"><form id="payForm" class="btn-row" style="align-items:flex-end">
@@ -1005,6 +1006,11 @@ async function historyView(uid, admin) {
     el('adjForm').onsubmit = async e => { e.preventDefault(); const d = collectForm(e.target); try { await api('finance/adjust', { method: 'POST', body: { userId: uid, amount: d.amount, date: d.date, concept: d.concept } }); toast('Ajuste añadido', 'ok'); historyView(uid, admin); } catch (x) { toast(x.message || 'Error', 'err'); } };
     $$('[data-del-adj]').forEach(b => b.onclick = () => modal('Quitar ajuste', '¿Eliminar este ajuste del saldo?', { okText: 'Eliminar', danger: true, onOk: async () => { await api('finance/adjust/' + b.dataset.delAdj, { method: 'DELETE' }); toast('Ajuste eliminado', 'ok'); historyView(uid, admin); } }));
   }
+  $$('.ff-years [data-fy]').forEach(b => b.onclick = () => {
+    const y = b.dataset.fy;
+    $$('.ff-years [data-fy]').forEach(x => x.classList.toggle('btn--primary', x.dataset.fy === y));
+    $$('.timeline > li').forEach(li => { li.style.display = (y === 'all' || li.getAttribute('data-year') === y) ? '' : 'none'; });
+  });
 }
 
 /* beneficios (admin) — protegida con contraseña fija, solo administración */

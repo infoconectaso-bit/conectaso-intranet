@@ -56,6 +56,16 @@ function workerOvertime(ev) {
   if (he == null) { const loc = locById(ev.lugar); if (loc && loc.extraPrice != null && loc.extraPrice !== '') he = parseFloat(loc.extraPrice) || 0; }
   return oh * (he || 0);
 }
+// Cobro de la ceremonia al DJ: solo si marcó que la realizó (ev.djCeremony) y su tarifa de ceremonia
+// en esa finca está configurada. Es parte de los importes de la masía.
+function workerCeremony(ev) {
+  if (!ev.djCeremony) return 0;
+  const dj = String(ev.djId); if (dj === '227') return 0;
+  const r = djRate(dj); if (!r) return 0;
+  const fr = r.fincas && r.fincas[ev.lugar];
+  const c = (fr && fr.ceremonia != null) ? parseFloat(fr.ceremonia) : 0;
+  return isNaN(c) ? 0 : c;
+}
 function workerPlus(ev, wid) { return (ev.plus || []).filter(p => String(p.userId) === String(wid)).reduce((t, p) => t + (parseFloat(p.amount) || 0), 0); }
 function assignedWorkers(ev) {
   const ids = []; if (ev.djId) ids.push(String(ev.djId));
@@ -78,6 +88,7 @@ function workerEarning(ev, wid) {
   if (isDj) {
     const base = workerBase(ev); lines.push(['Base' + (loc.name ? (' · ' + loc.name) : ''), money(base)]); sub += base;
     const ot = workerOvertime(ev); if (ot) { lines.push([(ev.djOvertime || '') + ' h extra', money(ot)]); sub += ot; }
+    const cer = workerCeremony(ev); if (cer) { lines.push(['Ceremonia', money(cer)]); sub += cer; }
   }
   workerServices(ev, wid).forEach(s => {
     const rr = djRate(wid); const price = (rr && rr.services && rr.services[s.servicio] != null) ? rr.services[s.servicio] : 0;
