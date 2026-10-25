@@ -82,6 +82,10 @@ html.night-dim .empty,html.night-dim .cli-hint{background:#221c15}
 html.night-dim .form-sub,html.night-dim .btn,html.night-dim .mtab,html.night-dim .yrchip,html.night-dim .cmt.open > .cmt-btn,html.night-dim .edituser-lbl,html.night-dim .tyc-body strong{color:var(--ink)}
 /* elementos con fondo de COLOR claro (azul/amarillo/pastel): mantienen texto oscuro */
 html.night-dim .btn--blue,html.night-dim .btn--yellow,html.night-dim .nav a.active,html.night-dim .yrchip.on,html.night-dim .progress > div,html.night-dim .tag,html.night-dim .ex-badge,html.night-dim .pay-circle{color:#1a140a}
+/* Tarjetas de estadística con fondo de COLOR claro (azul/amarillo): mantienen su fondo pastel,
+   así que el texto debe ser OSCURO también en modo noche (si no, queda claro sobre claro = ilegible). */
+html.night-dim .stat--blue,html.night-dim .stat--yellow,html.night-dim .stat--blue .v,html.night-dim .stat--yellow .v{color:#1a140a}
+html.night-dim .stat--blue .k,html.night-dim .stat--yellow .k{color:#1a140acc}
 /* avisos con fondo pastel claro fijo: texto oscuro también en modo noche para que se lean */
 html.night-dim .alert,html.night-dim .alert b,html.night-dim .alert strong,html.night-dim .pdf-notice,html.night-dim .pdf-notice b,html.night-dim .pdf-notice strong{color:#1a140a}
 html.night-dim .btn--dark{color:#efe9df}
