@@ -965,12 +965,16 @@ async function historyView(uid, admin) {
   // fusionar eventos del histórico (snapshot) + pagos locales nuevos
   const locals = pays.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(p => ({ type: 'pay', date: p.date, amount: +p.amount, description: p.description, bal: 0 }));
   { let run = H.rest; locals.slice().reverse().forEach(it => { run -= it.amount; it.bal = run; }); }
-  const dy = i => ` data-year="${String(i.date || '').slice(0, 4)}"`;
-  // Lista en zigzag ("Z"): lo GENERADO a la izquierda (tl), lo PAGADO a la derecha (tl r), por fecha.
+  // Lista en "Z" estilo burbuja: GENERADO pegado a la IZQUIERDA, PAGOS a la DERECHA. Funciona en móvil.
   const card = i => {
-    if (i.type === 'adj') return `<li class="tl"${dy(i)}><span class="ind"></span><div class="card"><h5>${esc(i.title)}${admin ? ` <button class="btn btn--icon" data-del-adj="${i.adjId}" title="Quitar ajuste" style="float:right">🗑</button>` : ''}</h5><div class="b">${(i.body || []).map(b => `<p>${esc(b)}</p>`).join('')}</div><div class="when">${dmy(i.date)} · <b style="color:${i.amount < 0 ? '#D50000' : '#0B8043'}">${i.amount > 0 ? '+' : ''}${e2(i.amount)}</b></div></div></li>`;
-    if (i.type === 'ev') return `<li class="tl"${dy(i)}><span class="ind"></span><div class="card"><h5>${i.evId && admin ? `<a href="#/eventos/${i.evId}">${esc(i.title)}</a>` : esc(i.title)}</h5><div class="b">${(i.body || []).map((b, k) => { const mt = b.match(/^([^:]+):\s*(.*)$/); return (k === 2 ? '<hr style="border:0;border-top:1px solid #eee">' : '') + (mt ? `<p><b>${esc(mt[1])}:</b> ${esc(mt[2])}</p>` : `<p>${esc(b)}</p>`); }).join('')}</div><div class="when">${i.lugar ? '📍 ' + esc(i.lugar) + ' · ' : ''}${dmy(i.date)}</div></div></li>`;
-    return `<li class="tl r"${dy(i)}><span class="ind"></span><div class="card"><h5>Pago realizado</h5><div class="b"><p><b>Fecha:</b> ${dmy(i.date)}</p><p><b>Cantidad:</b> ${e2(i.amount)}</p><p><b>Descripción:</b> ${esc(i.description || '-')}</p></div><div class="when">${dmy(i.date)} · ${fmtEur(i.bal)}</div></div></li>`;
+    const left = (i.type !== 'pay');
+    const bg = left ? 'rgba(11,128,67,.07)' : 'rgba(232,44,136,.10)';
+    const bord = left ? '#0B8043' : '#E82C88';
+    let inner;
+    if (i.type === 'adj') inner = `<div style="font-weight:700">${esc(i.title)}${admin ? ` <button class="btn btn--icon" data-del-adj="${i.adjId}" title="Quitar ajuste">🗑</button>` : ''}</div>${(i.body || []).map(b => `<div>${esc(b)}</div>`).join('')}<div style="font-size:12px;color:#667;margin-top:3px">${dmy(i.date)} · <b style="color:${i.amount < 0 ? '#D50000' : '#0B8043'}">${i.amount > 0 ? '+' : ''}${e2(i.amount)}</b></div>`;
+    else if (i.type === 'ev') inner = `<div style="font-weight:700">${i.evId && admin ? `<a href="#/eventos/${i.evId}">${esc(i.title)}</a>` : esc(i.title)}</div>${(i.body || []).map(b => { const mt = b.match(/^([^:]+):\s*(.*)$/); return mt ? `<div><b>${esc(mt[1])}:</b> ${esc(mt[2])}</div>` : `<div>${esc(b)}</div>`; }).join('')}<div style="font-size:12px;color:#667;margin-top:3px">${i.lugar ? '📍 ' + esc(i.lugar) + ' · ' : ''}${dmy(i.date)}</div>`;
+    else inner = `<div style="font-weight:700">🧾 Pago realizado</div><div><b>Cantidad:</b> ${e2(i.amount)}</div>${i.description ? `<div><b>Concepto:</b> ${esc(i.description)}</div>` : ''}<div style="font-size:12px;color:#667;margin-top:3px">${dmy(i.date)} · saldo ${fmtEur(i.bal)}</div>`;
+    return `<div data-year="${String(i.date || '').slice(0, 4)}" style="display:flex;justify-content:${left ? 'flex-start' : 'flex-end'};margin-bottom:9px"><div style="max-width:85%;min-width:0;background:${bg};border-${left ? 'left' : 'right'}:3px solid ${bord};border-radius:10px;padding:9px 12px;font-size:14px;line-height:1.35">${inner}</div></div>`;
   };
   const byDateDesc = (a, b) => String(b.date || '').localeCompare(String(a.date || ''));
   const allMov = (H.items || []).filter(i => i.type === 'ev' || i.type === 'adj').concat(locals, (H.items || []).filter(i => i.type === 'pay')).sort(byDateDesc);
@@ -985,7 +989,7 @@ async function historyView(uid, admin) {
         <div class="stat stat--pink"><div class="k">${bal >= 0 ? 'Pendiente (te debo)' : 'Me debes'}</div><div class="v">${e2(Math.abs(bal))}</div></div></div>`;
   const yearBtns = fyears.length > 1 ? `<div class="btn-row ff-years" style="margin:4px 0 12px;flex-wrap:wrap;gap:6px"><button class="btn btn--sm btn--primary" data-fy="all">Todos</button>${fyears.map(y => `<button class="btn btn--sm" data-fy="${y}">${y}</button>`).join('')}</div>` : '';
   const legend = '<p class="hint" style="margin:2px 0 10px">💶 <b>Izquierda</b>: lo que genera · 🧾 <b>derecha</b>: lo que le pagas · ordenado por fecha.</p>';
-  const bodyLists = `${legend}${yearBtns}<div class="panel"><div class="panel__body"><ul class="timeline">${allMov.map(card).join('') || '<div class="empty">Sin movimientos.</div>'}</ul></div></div>`;
+  const bodyLists = `${legend}${yearBtns}<div class="panel"><div class="panel__body"><div class="ff-list">${allMov.map(card).join('') || '<div class="empty">Sin movimientos.</div>'}</div></div></div>`;
   shell(`${pageHead(admin ? 'Histórico · ' + userName(uid) : 'Mis pagos', admin ? 'Eventos realizados y pagos.' : 'Tu saldo, tus importes generados y tus pagos.')}
     ${statsHtml}
     ${admin ? `<div class="panel"><div class="panel__head"><h3>Registrar pago</h3></div><div class="panel__body"><form id="payForm" class="btn-row" style="align-items:flex-end">
@@ -1009,7 +1013,7 @@ async function historyView(uid, admin) {
   $$('.ff-years [data-fy]').forEach(b => b.onclick = () => {
     const y = b.dataset.fy;
     $$('.ff-years [data-fy]').forEach(x => x.classList.toggle('btn--primary', x.dataset.fy === y));
-    $$('.timeline > li').forEach(li => { li.style.display = (y === 'all' || li.getAttribute('data-year') === y) ? '' : 'none'; });
+    $$('.ff-list > [data-year]').forEach(li => { li.style.display = (y === 'all' || li.getAttribute('data-year') === y) ? '' : 'none'; });
   });
 }
 
