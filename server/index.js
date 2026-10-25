@@ -2276,7 +2276,7 @@ function gcalUidsOf(ev) { return [...new Set([+ev.djId].concat((ev.services || [
 async function gcalSyncEvent(ev) {
   if (!gcal.enabled()) return;
   let changed = false;
-  const loc = (store.get('locations', ev.lugar) || {}).name;
+  const loc = store.get('locations', ev.lugar) || null;
   for (const uid of gcalUidsOf(ev)) { if (!gcal.connected(uid)) continue; try { if (await gcal.upsertForUser(ev, uid, loc)) changed = true; } catch (e) {} }
   if (changed) { try { const f = store.get('events', ev.id); if (f) { f.gcalIds = ev.gcalIds; store.put('events', f); } } catch (e) {} }
 }
@@ -2289,7 +2289,7 @@ function syncUserFutureEvents(uid) {
   const today = bizToday();
   store.all('events').forEach(async ev => {
     if (!ev.fecha || ev.fecha < today || gcalUidsOf(ev).indexOf(+uid) < 0) return;
-    try { const loc = (store.get('locations', ev.lugar) || {}).name; if (await gcal.upsertForUser(ev, +uid, loc)) { const f = store.get('events', ev.id); if (f) { f.gcalIds = ev.gcalIds; store.put('events', f); } } } catch (e) {}
+    try { const loc = store.get('locations', ev.lugar) || null; if (await gcal.upsertForUser(ev, +uid, loc)) { const f = store.get('events', ev.id); if (f) { f.gcalIds = ev.gcalIds; store.put('events', f); } } } catch (e) {}
   });
 }
 function bizToday() { return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }); }

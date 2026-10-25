@@ -95,13 +95,29 @@ async function validToken(uid) {
   return r.access_token;
 }
 
+// --- Colores: mapea el color (hex) de la masía en la intranet al color de Google Calendar ---
+// Google solo admite 11 colores fijos para eventos; elegimos el más parecido al de la masía.
+// Hex de referencia = los colores tal y como se ven en Google Calendar (paleta vistosa).
+const GCAL_COLORS = { 1: '7986CB', 2: '33B679', 3: '8E24AA', 4: 'E67C73', 5: 'F6BF26', 6: 'F4511E', 7: '039BE5', 8: '616161', 9: '3F51B5', 10: '0B8043', 11: 'D50000' };
+function nearestColorId(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || '').trim()); if (!m) return null;
+  const n = parseInt(m[1], 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  let best = null, bd = Infinity;
+  for (const id in GCAL_COLORS) { const c = parseInt(GCAL_COLORS[id], 16); const dr = r - ((c >> 16) & 255), dg = g - ((c >> 8) & 255), db = b - (c & 255); const d = dr * dr + dg * dg + db * db; if (d < bd) { bd = d; best = id; } }
+  return best;
+}
+
 // --- Mapea una boda de la intranet a un evento de Google Calendar ---
 function pad(n) { return String(n).padStart(2, '0'); }
-function eventBody(ev, locName) {
+function eventBody(ev, loc) {
+  // loc puede ser el registro de la localización {name,colorHex} o, por compatibilidad, solo el nombre.
+  const locName = loc && typeof loc === 'object' ? loc.name : loc;
+  const colorHex = loc && typeof loc === 'object' ? loc.colorHex : null;
   const hm = /^(\d{1,2}):(\d{2})/.exec(ev.hora || '');
   const summary = (ev.tipo || 'Boda') + (ev.conyuges ? ' · ' + ev.conyuges : '') + ' #' + ev.id;
   const ymd = String(ev.fecha || '').slice(0, 10);
   const body = { summary, location: locName || ev.lugarOtro || '', description: 'Conecta So · Boda #' + ev.id + (ev.conyuges ? ' · ' + ev.conyuges : ''), source: { title: 'Conecta So', url: 'https://intranet.conectaso.es/#/eventos/' + ev.id } };
+  const cid = nearestColorId(colorHex); if (cid) body.colorId = String(cid);
   if (hm) {
     const start = ymd + 'T' + pad(+hm[1]) + ':' + hm[2] + ':00';
     // Inicio = hora de la ceremonia. Damos 1 h de duración por defecto (Google exige fin).
@@ -118,11 +134,11 @@ function eventBody(ev, locName) {
 
 /** Crea o actualiza la boda en el calendario del DJ. Guarda el id del evento de Google en ev.gcalIds[uid].
  * Devuelve true si hizo algo. NO lanza hacia fuera (el llamador no debe romperse si Google falla). */
-async function upsertForUser(ev, uid, locName) {
+async function upsertForUser(ev, uid, loc) {
   if (!enabled() || !connected(uid)) return false;
   const token = await validToken(uid);
   const headers = { Authorization: 'Bearer ' + token };
-  const body = eventBody(ev, locName);
+  const body = eventBody(ev, loc);
   const gid = ev.gcalIds && ev.gcalIds[uid];
   let resp;
   if (gid) {
