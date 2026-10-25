@@ -434,15 +434,30 @@ async function api(req, res, url) {
         const u = users.get(e.userId); if (u && u.email) evByKey['e:' + normE(u.email)] = ev;
       });
       const today = bizToday();
-      const out = list.map(inv => {
+      const ignored = new Set((store.setting('impagosIgnored') || []).map(String));   // impagos "obviados" a mano
+      const ignoradas = [];
+      const out = [];
+      list.forEach(inv => {
+        if (ignored.has(String(inv.id))) { ignoradas.push({ id: inv.id, number: inv.number, contactName: inv.contactName || '', pending: inv.pending }); return; }
         let evp = null;
         (inv.contactEmails || []).forEach(em => { if (!evp) evp = evByKey['e:' + normE(em)]; });
         if (!evp && inv.contactCode) evp = evByKey['n:' + normN(inv.contactCode)];
         if (!evp && inv.contactName) evp = evByKey['m:' + normNm(inv.contactName)];
-        return Object.assign({}, inv, { event: evp || null, overdue: !!(inv.dueDate && inv.dueDate < today) });
+        out.push(Object.assign({}, inv, { event: evp || null, overdue: !!(inv.dueDate && inv.dueDate < today) }));
       });
-      return ok(res, { enabled: true, count: out.length, invoices: out });
+      return ok(res, { enabled: true, count: out.length, invoices: out, ignoradas });
     } catch (e) { return ok(res, { enabled: true, error: e.message, invoices: [] }); }
+  }
+  // --- OBVIAR / RESTAURAR un impago (p.ej. ya pagado pero Holded lo marca pendiente) ---
+  if (seg[0] === 'holded-unpaid' && seg[1] === 'ignore' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const b = await readBody(req);
+    const invId = String(b.invId || '').trim(); if (!invId) return fail(res, 400, 'Falta la factura.');
+    const l = new Set((store.setting('impagosIgnored') || []).map(String));
+    if (b.ignore === false) l.delete(invId); else l.add(invId);
+    store.setSetting('impagosIgnored', [...l]);
+    store.audit(user.id, 'impago-ignore');
+    return ok(res, { ok: true });
   }
   // --- CUADRE (admin): compara lo apuntado en cada evento (pagado / total cliente) con las facturas de Holded ---
   if (seg[0] === 'holded-cuadre' && method === 'GET') {

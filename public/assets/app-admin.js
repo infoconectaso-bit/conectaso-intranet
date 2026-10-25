@@ -817,25 +817,39 @@ const NOM_MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio
 // IMPAGOS: facturas de Holded con importe pendiente, para localizar y cobrar sin ir a Holded.
 on(/^#\/impagos$/, async () => {
   if (!isAdmin()) { location.hash = '#/'; return; }
-  loading(['Impagos']);
-  const r = await api('holded-unpaid').catch(() => ({ invoices: [] }));
-  if (r.enabled === false) { shell(`${pageHead('Impagos', 'Facturas pendientes de cobro.')}<div class="empty">La integración de Holded no está activada.</div>`, ['Impagos']); return; }
-  const invs = r.invoices || [];
   const eur = n => (Math.round((+n || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-  const totalPend = invs.reduce((s, i) => s + (+i.pending || 0), 0);
-  const overdueN = invs.filter(i => i.overdue).length;
-  const cols = [
-    { t: 'Vence', get: i => i.dueDate || i.date || '', html: i => `<span style="${i.overdue ? 'color:var(--danger,#D50000);font-weight:700' : ''}">${esc(slash(i.dueDate || i.date) || '—')}${i.overdue ? ' ⚠' : ''}</span>` },
-    { t: 'Nº', get: i => i.number || '' },
-    { t: 'Cliente', get: i => i.contactName || '', html: i => `<b>${esc(i.contactName || '—')}</b>` },
-    { t: 'Concepto', get: i => i.desc || '' },
-    { t: 'Total', get: i => i.total || 0, num: true, html: i => eur(i.total) },
-    { t: 'Pendiente', get: i => i.pending || 0, num: true, html: i => `<b>${eur(i.pending)}</b>` },
-    { t: 'Boda', nosort: true, nofilter: true, html: i => i.event ? `<a href="#/eventos/${i.event.id}" title="${esc(i.event.conyuges || '')}${i.event.fecha ? ' · ' + slash(i.event.fecha) : ''}">#${i.event.id}</a>` : '<span class="muted">—</span>' },
-    { t: '', nosort: true, nofilter: true, html: i => `<a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.id)}" target="_blank" rel="noopener" title="Ver / descargar factura">📄</a>` },
-  ];
-  shell(`${pageHead('Impagos', `${invs.length} factura(s) pendiente(s)${overdueN ? ` · ${overdueN} vencida(s)` : ''} · ${eur(totalPend)} por cobrar`)}
-    <div class="panel"><div class="panel__body">${table('dtImpagos', { rows: invs, order: [0, 'asc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas pendientes. 🎉' })}</div></div>`, ['Impagos']);
+  const ignoreImp = async (invId, ignore) => { try { await api('holded-unpaid/ignore', { method: 'POST', body: { invId, ignore } }); toast(ignore ? 'Quitada de impagos' : 'Restaurada a impagos', 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };
+  async function draw() {
+    loading(['Impagos']);
+    const r = await api('holded-unpaid').catch(() => ({ invoices: [] }));
+    if (r.enabled === false) { shell(`${pageHead('Impagos', 'Facturas pendientes de cobro.')}<div class="empty">La integración de Holded no está activada.</div>`, ['Impagos']); return; }
+    const invs = r.invoices || [];
+    const totalPend = invs.reduce((s, i) => s + (+i.pending || 0), 0);
+    const overdueN = invs.filter(i => i.overdue).length;
+    const cols = [
+      { t: 'Vence', get: i => i.dueDate || i.date || '', html: i => `<span style="${i.overdue ? 'color:var(--danger,#D50000);font-weight:700' : ''}">${esc(slash(i.dueDate || i.date) || '—')}${i.overdue ? ' ⚠' : ''}</span>` },
+      { t: 'Nº', get: i => i.number || '' },
+      { t: 'Cliente', get: i => i.contactName || '', html: i => `<b>${esc(i.contactName || '—')}</b>` },
+      { t: 'Concepto', get: i => i.desc || '' },
+      { t: 'Total', get: i => i.total || 0, num: true, html: i => eur(i.total) },
+      { t: 'Pendiente', get: i => i.pending || 0, num: true, html: i => `<b>${eur(i.pending)}</b>` },
+      { t: 'Boda', nosort: true, nofilter: true, html: i => i.event ? `<a href="#/eventos/${i.event.id}" title="${esc(i.event.conyuges || '')}${i.event.fecha ? ' · ' + slash(i.event.fecha) : ''}">#${i.event.id}</a>` : '<span class="muted">—</span>' },
+      { t: '', nosort: true, nofilter: true, html: i => `<a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.id)}" target="_blank" rel="noopener" title="Ver / descargar factura">📄</a> <button class="btn btn--icon" data-ignore-imp="${esc(i.id)}" title="Quitar de impagos (ya pagada / error en Holded)">🚫</button>` },
+    ];
+    const ign = r.ignoradas || [];
+    const igPanel = ign.length ? `<details style="margin-top:18px"><summary class="hint" style="cursor:pointer">🚫 Quitadas de impagos (${ign.length}) — ver / restaurar</summary><div class="panel" style="margin-top:8px"><div class="panel__body">${table('dtImpIgn', { rows: ign, order: [0, 'asc'], filters: false, dense: true, len: 50, empty: '', cols: [
+      { t: 'Nº', get: i => i.number || '' },
+      { t: 'Cliente', get: i => i.contactName || '', html: i => `<b>${esc(i.contactName || '—')}</b>` },
+      { t: 'Pendiente', get: i => i.pending || 0, num: true, html: i => eur(i.pending) },
+      { t: '', nosort: true, nofilter: true, html: i => `<button class="btn btn--xs" data-restore-imp="${esc(i.id)}">↩ Restaurar</button>` },
+    ] })}</div></div></details>` : '';
+    shell(`${pageHead('Impagos', `${invs.length} factura(s) pendiente(s)${overdueN ? ` · ${overdueN} vencida(s)` : ''} · ${eur(totalPend)} por cobrar`)}
+      <div class="panel"><div class="panel__body">${table('dtImpagos', { rows: invs, order: [0, 'asc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas pendientes. 🎉' })}</div></div>
+      ${igPanel}`, ['Impagos']);
+    bindTable('dtImpagos', () => { $$('[data-ignore-imp]').forEach(b => b.onclick = () => ignoreImp(b.dataset.ignoreImp, true)); });
+    bindTable('dtImpIgn', () => { $$('[data-restore-imp]').forEach(b => b.onclick = () => ignoreImp(b.dataset.restoreImp, false)); });
+  }
+  draw();
 });
 on(/^#\/descuadres$/, async () => {
   if (!isAdmin()) { location.hash = '#/'; return; }
