@@ -750,6 +750,8 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         return found;
       };
       const serviceWarnings = [];
+      const payByEvent = {};   // eventId -> suma de bases (sin IVA) de sus facturas vinculadas
+      let cWithConcept = 0, cWithDate = 0, cSample = '';   // diagnóstico: ¿se está leyendo el concepto de Holded?
       const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0, antiguasInv = 0;
       Object.values(idx.byId).forEach(c => {
         let ev = null;
@@ -761,13 +763,21 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         (c.invoices || []).forEach(raw => {
           totalInv++;
           const inv = holded.mapInvoice(raw);
+          // Diagnóstico: ¿se lee el concepto de Holded y trae fecha?
+          const _c = invConcept(raw);
+          if (_c) { cWithConcept++; if (!cSample) cSample = _c.slice(0, 180); if (parseConceptDate(_c)) cWithDate++; }
           // Servicio reservado (fotomatón, fuego frío…) en una factura PAGADA que no existe en Servicios.
           // Si no está pagada, la reserva aún no se ha hecho, así que no se cuenta.
           if (inv.pending <= 0.5) {
             const unknown = conceptUnknownServices(raw);
             if (unknown.length) serviceWarnings.push({ number: inv.number, date: inv.date, contact: c.name || '', services: unknown, invId: inv.id, total: inv.total });
           }
-          if (ev || links[raw.id]) { linkedInv++; return; }   // vinculada (auto o manual)
+          if (ev || links[raw.id]) {   // vinculada (auto o manual): acumula la base (sin IVA) por evento
+            linkedInv++;
+            const evId = links[raw.id] || (ev && ev.id);
+            if (evId) { const pe = (payByEvent[evId] = payByEvent[evId] || { base: 0, invs: [] }); pe.base += inv.total; if (inv.number) pe.invs.push(inv.number); }
+            return;
+          }
           if (company) { empresaInv++; return; }              // factura a empresa/finca: no es un descuadre
           const yr = yearOf(inv.date);
           if (yr && yr < 2026) { antiguasInv++; return; }     // 2024/2025 y anteriores: no se muestran
@@ -785,7 +795,19 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       });
       sinVincular.sort((a, b) => String(b.date).localeCompare(String(a.date)));
       serviceWarnings.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings });
+      // Descuadre factura base (sin IVA) vs pagado del cliente, por boda vinculada.
+      const payMismatches = [];
+      Object.keys(payByEvent).forEach(evId => {
+        const pe = payByEvent[evId]; const ev2 = store.get('events', +evId); if (!ev2) return;
+        const pagado = +ev2.pagado || 0; const base = Math.round(pe.base * 100) / 100;
+        const diff = Math.round((base - pagado) * 100) / 100;
+        if (Math.abs(diff) > 1) {
+          const loc = store.get('locations', ev2.lugar) || {};
+          payMismatches.push({ eventId: +evId, conyuges: ev2.conyuges || '', fecha: ev2.fecha || '', lugar: loc.name || ev2.lugarOtro || '', base, pagado, diff, invs: pe.invs });
+        }
+      });
+      payMismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings, payMismatches, conceptStats: { total: totalInv, withConcept: cWithConcept, withDate: cWithDate, sample: cSample } });
     } catch (e) { return ok(res, { enabled: true, error: e.message, sinVincular: [] }); }
   }
   // --- VINCULAR una factura de Holded a un evento existente (o desvincular) ---
@@ -2030,9 +2052,9 @@ function finance(req, res, user, seg, method) {
       // Saldo pendiente REAL de cada trabajador (histórico + eventos realizados + ajustes − pagos),
       // en vivo y en una sola pasada. Antes dependía de la colección 'workers' (podía estar vacía).
       const bals = fact.allBalances();
-      const _fs = fact.freshStart(), _cut = fact.volcadoCutoff();
+      const _fs = fact.freshStart();
       const workers = Object.keys(bals).filter(id => +id).map(id => {
-        const b = bals[id]; const pays = store.byOwner('payments', +id).filter(p => !_fs || (p.date && p.date >= _cut));
+        const b = bals[id]; const pays = _fs ? [] : store.byOwner('payments', +id);
         const paid = pays.reduce((t, p) => t + (+p.amount || 0), 0);
         let last = b.last; pays.forEach(p => { if (p.date && p.date > last) last = p.date; });
         return { id: +id, name: userName(+id), pend: Math.round((b.rest - paid) * 100) / 100, last };
@@ -2045,8 +2067,7 @@ function finance(req, res, user, seg, method) {
       const id = +seg[2];
       // facturación en vivo: histórico + eventos ya realizados (incluye precios recién puestos)
       const h = fact.aggregateFor(id);
-      const payFilt = p => !fact.freshStart() || (p.date && p.date >= fact.volcadoCutoff());
-      if (method === 'GET') return ok(res, { history: h, payments: store.byOwner('payments', id).filter(payFilt) });
+      if (method === 'GET') return ok(res, { history: h, payments: fact.freshStart() ? [] : store.byOwner('payments', id) });
     }
     if (seg[1] === 'pay' && method === 'POST') return addPayment(req, res, user);
     if (seg[1] === 'adjust' && method === 'POST') return addAdjust(req, res, user);
@@ -2071,8 +2092,7 @@ function finance(req, res, user, seg, method) {
   // DJ: solo su propio balance (histórico + eventos realizados)
   if (user.role === 'dj') {
     if (seg[1] === 'me' && method === 'GET') {
-      const payFilt = p => !fact.freshStart() || (p.date && p.date >= fact.volcadoCutoff());
-      return ok(res, { history: fact.aggregateFor(user.id), payments: store.byOwner('payments', user.id).filter(payFilt) });
+      return ok(res, { history: fact.aggregateFor(user.id), payments: fact.freshStart() ? [] : store.byOwner('payments', user.id) });
     }
   }
   return fail(res, 403, 'Sin acceso');

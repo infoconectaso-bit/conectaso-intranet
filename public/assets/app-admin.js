@@ -868,15 +868,31 @@ on(/^#\/descuadres$/, async () => {
         { t: 'Importe', get: i => i.total || 0, num: true, html: i => eur(i.total) },
         { t: '', nosort: true, nofilter: true, html: i => `<a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver factura">📄</a>` },
       ] })}</div></div>` : '';
+    const pm = r.payMismatches || [];
+    const pmPanel = pm.length ? `
+      <h3 class="form-sub" style="margin-top:24px">⚠ Descuadre factura / pagado (${pm.length})</h3>
+      <p class="hint" style="margin-bottom:10px">Bodas donde la <b>base de las facturas (sin IVA)</b> no coincide con el <b>pagado</b> que tienes apuntado en el evento. Revisa cuál es el correcto.</p>
+      <div class="panel"><div class="panel__body">${table('dtPayMis', { rows: pm, order: [0, 'desc'], filters: true, dense: true, len: 50, empty: '', cols: [
+        { t: 'Fecha', get: i => i.fecha || '', html: i => esc(slash(i.fecha) || '—') },
+        { t: 'Boda', nosort: true, nofilter: true, html: i => `<a href="#/eventos/${i.eventId}" title="${esc(i.conyuges || '')}">#${i.eventId}</a>` },
+        { t: 'Lugar', get: i => i.lugar || '', html: i => esc(i.lugar || '—') },
+        { t: 'Base facturas (sin IVA)', get: i => i.base || 0, num: true, html: i => eur(i.base) },
+        { t: 'Pagado (evento)', get: i => i.pagado || 0, num: true, html: i => eur(i.pagado) },
+        { t: 'Diferencia', get: i => i.diff || 0, num: true, html: i => `<b style="color:#D50000">${(i.diff > 0 ? '+' : '')}${eur(i.diff)}</b>` },
+      ] })}</div></div>` : '';
+    const cs = r.conceptStats || {};
+    const csLine = cs.total ? `<p class="hint" style="margin-bottom:12px">📄 Concepto leído de Holded en <b>${cs.withConcept || 0}/${cs.total}</b> facturas · fecha detectada en <b>${cs.withDate || 0}</b>.${cs.sample ? ` <span class="muted">Ejemplo de concepto: "${esc(String(cs.sample).slice(0, 120))}"</span>` : ''}</p>` : '';
     shell(`${pageHead('Descuadre facturas / eventos', 'Facturas de Holded que NO están vinculadas a ningún evento (posible falta de vinculación).')}
       <div class="grid-3" style="margin-bottom:14px">
         <div class="stat stat--pink"><div class="k">Facturas sin vincular</div><div class="v">${r.sinVincularN || 0}</div></div>
         <div class="stat stat--blue"><div class="k">Facturas vinculadas a boda</div><div class="v">${r.linkedInv || 0}</div></div>
         <div class="stat"><div class="k">Excluidas (empresas + antiguas)</div><div class="v">${(r.empresaInv || 0) + (r.antiguasInv || 0)}</div></div>
       </div>
-      <p class="hint" style="margin-bottom:12px">Salen facturas a <b>personas</b> de <b>2026 en adelante</b> que no cuadran con ningún evento. Cuando el concepto del PDF trae la <b>fecha y el lugar</b>, te propongo la boda y la vinculas con un clic (↩). Si el <b>pack</b> no coincide con la categoría de la boda, sale un aviso. También puedes vincular a mano (🔗).</p>
+      <p class="hint" style="margin-bottom:8px">Salen facturas a <b>personas</b> de <b>2026 en adelante</b> que no cuadran con ningún evento. Cuando el concepto trae la <b>fecha y el lugar</b>, te propongo la boda y la vinculas con un clic (↩). Si el <b>pack</b> no coincide con la categoría de la boda, sale un aviso. También puedes vincular a mano (🔗).</p>
+      ${csLine}
       <div class="panel"><div class="panel__body">${table('dtDescuadres', { rows: sv, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas sin vincular. 🎉' })}</div></div>
-      ${swPanel}`, ['Descuadres']);
+      ${swPanel}
+      ${pmPanel}`, ['Descuadres']);
     const linkInv = async (invId, id) => { try { const res = await api('holded-descuadres/link', { method: 'POST', body: { invId, eventId: id } }); toast('✅ Factura vinculada' + (res.conyuges ? ' a ' + res.conyuges : ' a la boda #' + id), 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };
     $$('[data-link-sug]').forEach(b => b.onclick = () => linkInv(b.dataset.linkSug, +b.dataset.ev));
     $$('[data-link-inv]').forEach(b => b.onclick = () => {

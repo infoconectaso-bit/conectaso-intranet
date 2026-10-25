@@ -259,7 +259,7 @@ function allBalances() {
     if (!(ev.fecha && ev.fecha >= CUT) || !evRealized(ev)) return;
     assignedWorkers(ev).forEach(wid => { const b = get(wid); b.rest += workerEarning(ev, wid).amount; if (ev.fecha > b.last) b.last = ev.fecha; });
   });
-  store.all('adjustments').forEach(a => { if (FS && a.date && a.date < CUT) return; const b = get(a.userId); b.rest += (parseFloat(a.amount) || 0); if (a.date && a.date > b.last) b.last = a.date; });
+  store.all('adjustments').forEach(a => { if (FS) return; const b = get(a.userId); b.rest += (parseFloat(a.amount) || 0); if (a.date && a.date > b.last) b.last = a.date; });
   return out;
 }
 /** Rellena ev.factRows y ev.revRows (solo para vista de admin). No persiste. */
@@ -290,7 +290,7 @@ function aggregateFor(uid, skipRefresh) {
   const adjItems = []; let adj = 0;
   store.all('adjustments').forEach(a => {
     if (+a.userId !== +uid) return;
-    if (FS && a.date && a.date < CUT) return;   // arranque limpio: ignora ajustes anteriores al volcado
+    if (FS) return;   // arranque limpio: solo cuenta lo GENERADO esta semana (ni ajustes ni pagos viejos)
     const amt = parseFloat(a.amount) || 0;
     adjItems.push({ type: 'adj', adjId: a.id, title: 'Ajuste · ' + (a.concept || 'Plus'), date: a.date || '', amount: amt,
       body: ['Ajuste manual de administración', a.concept ? ('Concepto: ' + a.concept) : '', 'Importe: ' + (amt > 0 ? '+' : '') + amt + ' €'].filter(Boolean) });
