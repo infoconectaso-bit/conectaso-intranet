@@ -721,7 +721,9 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       const CIF = s => /^[A-W]\d{7}[0-9A-J]$/.test(normN(s));
       const COMPANY_NAME = /(,?\s*s\.?\s?[laup]\.?\s?[un]?\.?|s\.?\s?c\.?\s?p?\.?|c\.?\s?b\.?|\bcoop)\s*$/i;
       const VENUE_NAME = /\b(hotel|restaurant|masia|mas |colonies|colonias|ajuntament|ayuntamiento|diputaci|consell|consorci|generalitat|consejo|patronat|fundaci|catering|gastronom|finca|celler|castell|hospitality|sinso|edelweiss|broquetas|boella|nou coberts|vents)/i;
-      const isCompany = c => CIF(c.code) || CIF(c.vat_number) || COMPANY_NAME.test(c.name || '') || VENUE_NAME.test(c.name || '');
+      // Sufijos/denominaciones de empresa (también internacionales): Imax Corporation, X Inc, Y Ltd, Z GmbH…
+      const COMPANY_WORDS = /\b(corporation|corporaci|incorporat|\binc\b|\bcorp\b|\bllc\b|\bltd\b|\bgmbh\b|\bsa\b|\bspa\b|\bsrl\b|\bbv\b|\bag\b|limited|enterprise|holding|company|solutions|technologies|systems)\b/i;
+      const isCompany = c => CIF(c.code) || CIF(c.vat_number) || COMPANY_NAME.test(c.name || '') || VENUE_NAME.test(c.name || '') || COMPANY_WORDS.test(c.name || '');
       const links = store.setting('invoiceLinks') || {};   // vinculaciones manuales factura -> evento
       const yearOf = d => { if (typeof d === 'number') return new Date(d < 1e12 ? d * 1000 : d).getUTCFullYear(); const m = String(d || '').match(/(\d{4})/); return m ? +m[1] : 0; };
       // --- Emparejado por el CONCEPTO del PDF (fecha + lugar + pack) y detección de servicios ---
@@ -1852,8 +1854,20 @@ async function events(req, res, user, seg, method, url) {
       // Un novio solo ve facturas conciliadas por email o NIF (identificadores únicos), nunca solo por
       // nombre (posible homónimo). Admin incluye también las coincidencias por nombre.
       const r = await holded.invoicesForClient({ emails, nifs, names }, force, { includeName: user.role === 'admin' });
-      const totals = r.invoices.reduce((a, i) => ({ total: a.total + i.total, paid: a.paid + i.paid, pending: a.pending + i.pending }), { total: 0, paid: 0, pending: 0 });
-      return ok(res, { enabled: true, matchedBy: r.matchedBy, contact: r.contact, contacts: user.role === 'admin' ? r.contacts : undefined, invoices: r.invoices, totals, indexInfo: user.role === 'admin' ? r.indexInfo : undefined });
+      let invoices = r.invoices;
+      // Añade las facturas vinculadas A MANO a esta boda (invoiceLinks) aunque el contacto no coincida.
+      const links = store.setting('invoiceLinks') || {};
+      const linkedIds = Object.keys(links).filter(k => +links[k] === +id);
+      if (linkedIds.length) {
+        try {
+          const extra = await holded.invoicesByIds(linkedIds, force);
+          const have = new Set(invoices.map(i => String(i.id)));
+          extra.forEach(i => { if (!have.has(String(i.id))) { i.linked = true; invoices = invoices.concat(i); } });
+          invoices.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+        } catch (e) {}
+      }
+      const totals = invoices.reduce((a, i) => ({ total: a.total + i.total, paid: a.paid + i.paid, pending: a.pending + i.pending }), { total: 0, paid: 0, pending: 0 });
+      return ok(res, { enabled: true, matchedBy: r.matchedBy, contact: r.contact, contacts: user.role === 'admin' ? r.contacts : undefined, invoices, totals, indexInfo: user.role === 'admin' ? r.indexInfo : undefined });
     } catch (e) { return ok(res, { enabled: true, error: e.message, invoices: [] }); }
   }
 
@@ -1871,7 +1885,9 @@ async function events(req, res, user, seg, method, url) {
     if (ev.conyuges) String(ev.conyuges).split(/\s+y\s+|&/i).forEach(n => { const t = n.trim(); if (t) names.push(t); });
     try {
       const r = await holded.invoicesForClient({ emails, nifs, names });
-      if (!r.invoices.some(i => i.id === invId)) return fail(res, 403, 'Esa factura no pertenece a esta boda.');
+      const links = store.setting('invoiceLinks') || {};
+      const isLinked = +links[invId] === +id;   // factura vinculada a mano a esta boda
+      if (!isLinked && !r.invoices.some(i => i.id === invId)) return fail(res, 403, 'Esa factura no pertenece a esta boda.');
       const buf = await holded.getInvoicePdf(invId);
       res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="factura-${invId}.pdf"`, 'Content-Length': buf.length });
       return res.end(buf);
