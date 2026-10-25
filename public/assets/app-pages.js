@@ -287,12 +287,14 @@ function eventEditorAdmin(ev) {
     <div id="evInfoBox" style="margin:2px 0 12px;display:flex;flex-wrap:wrap"></div>
     <div class="panel evtop"><div class="panel__body">
       <div class="evtop-top">
-        <div class="field evtop-method"><label>Método de pago</label>
-          <div class="radset">
-            <label class="chk chk--radio"><input type="radio" name="payment_method" value="Efectivo" ${ev.metodo === 'Efectivo' ? 'checked' : ''}> <span>Efectivo</span></label>
-            <label class="chk chk--radio"><input type="radio" name="payment_method" value="Transferencia" ${ev.metodo === 'Transferencia' ? 'checked' : ''}> <span>Transferencia</span></label>
-          </div></div>
-        <div class="field evtop-estado"><label>Estado</label>${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div>
+        <div style="display:flex;gap:12px;flex-wrap:nowrap;align-items:flex-start">
+          <div class="field evtop-method" style="margin:0"><label>Método de pago</label>
+            <div class="radset">
+              <label class="chk chk--radio"><input type="radio" name="payment_method" value="Efectivo" ${ev.metodo === 'Efectivo' ? 'checked' : ''}> <span>Efectivo</span></label>
+              <label class="chk chk--radio"><input type="radio" name="payment_method" value="Transferencia" ${ev.metodo === 'Transferencia' ? 'checked' : ''}> <span>Transferencia</span></label>
+            </div></div>
+          <div class="field evtop-estado" style="margin:0;min-width:130px;flex:0 0 auto"><label>Estado</label>${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div>
+        </div>
         <div class="field evtop-prog"><label>Progreso</label><div class="progress progress--green"><div id="progBar" style="width:${prog}%">${prog}%</div></div></div>
       </div>
       <div class="evtop-pay">
