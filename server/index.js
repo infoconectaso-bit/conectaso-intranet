@@ -774,7 +774,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       const payByEvent = {};   // eventId -> suma de bases (sin IVA) de sus facturas vinculadas
       const _hoy = bizToday();
       let cWithConcept = 0, cWithDate = 0, cSample = '';   // diagnóstico: ¿se está leyendo el concepto de Holded?
-      const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0, antiguasInv = 0, pasadasInv = 0;
+      const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0, antiguasInv = 0, pasadasInv = 0, sinPagarInv = 0;
       Object.values(idx.byId).forEach(c => {
         let ev = null;
         (c.emails || []).forEach(em => { if (!ev) ev = evByKey['e:' + normE(em)]; });
@@ -808,6 +808,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
           if (yr && yr < 2026) { antiguasInv++; return; }     // 2024/2025 y anteriores: no se muestran
           const _wd = parseConceptDate(_c);                    // fecha de la boda según el concepto
           if (_wd && _wd < _hoy) { pasadasInv++; return; }     // boda ya pasada: no hace falta vincularla
+          if (inv.paid <= 0.5) { sinPagarInv++; return; }      // sin ningún pago: reserva no confirmada, aún no hay evento
           const sg = suggestByConcept(raw);
           let suggestedEventId = null, suggestedLabel = '', catWarn = '', why = '';
           if (sg && sg.eventId) {
@@ -842,7 +843,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         }
       });
       payMismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
-      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, pasadasInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings, payMismatches, conceptStats: { total: totalInv, withConcept: cWithConcept, withDate: cWithDate, sample: cSample } });
+      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, pasadasInv, sinPagarInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings, payMismatches, conceptStats: { total: totalInv, withConcept: cWithConcept, withDate: cWithDate, sample: cSample } });
     } catch (e) { return ok(res, { enabled: true, error: e.message, sinVincular: [] }); }
   }
   // --- VINCULAR una factura de Holded a un evento existente (o desvincular) ---
