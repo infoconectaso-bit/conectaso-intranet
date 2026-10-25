@@ -981,9 +981,9 @@ async function historyView(uid, admin) {
         <div class="stat stat--pink"><div class="k">Pendiente</div><div class="v">${e2(H.rest - paid)}</div></div></div>`
     : `<div class="grid-2"><div class="stat"><div class="k">Total que te he pagado</div><div class="v">${e2(H.cobrado + paid)}</div></div>
         <div class="stat stat--pink"><div class="k">${bal >= 0 ? 'Pendiente (te debo)' : 'Me debes'}</div><div class="v">${e2(Math.abs(bal))}</div></div></div>`;
-  const bodyLists = `<div class="grid-2">
-      <div class="panel"><div class="panel__head"><h3>💶 Generado</h3></div><div class="panel__body"><ul class="timeline">${genItems.map(card).join('') || '<div class="empty">Sin importes generados.</div>'}</ul></div></div>
-      <div class="panel"><div class="panel__head"><h3>🧾 Pagos realizados</h3></div><div class="panel__body"><ul class="timeline">${payItems.map(card).join('') || '<div class="empty">Sin pagos registrados.</div>'}</ul></div></div>
+  const bodyLists = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start">
+      <div class="panel" style="min-width:0"><div class="panel__head"><h3>💶 Generado</h3></div><div class="panel__body"><ul class="timeline">${genItems.map(card).join('') || '<div class="empty">Sin importes generados.</div>'}</ul></div></div>
+      <div class="panel" style="min-width:0"><div class="panel__head"><h3>🧾 Pagos realizados</h3></div><div class="panel__body"><ul class="timeline">${payItems.map(card).join('') || '<div class="empty">Sin pagos registrados.</div>'}</ul></div></div>
     </div>`;
   shell(`${pageHead(admin ? 'Histórico · ' + userName(uid) : 'Mis pagos', admin ? 'Eventos realizados y pagos.' : 'Tu saldo, tus importes generados y tus pagos.')}
     ${statsHtml}
