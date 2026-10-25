@@ -722,7 +722,9 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       const COMPANY_NAME = /(,?\s*s\.?\s?[laup]\.?\s?[un]?\.?|s\.?\s?c\.?\s?p?\.?|c\.?\s?b\.?|\bcoop)\s*$/i;
       const VENUE_NAME = /\b(hotel|restaurant|masia|mas |colonies|colonias|ajuntament|catering|gastronom|finca|celler|castell|hospitality|sinso|edelweiss|broquetas|boella|nou coberts|vents)/i;
       const isCompany = c => CIF(c.code) || CIF(c.vat_number) || COMPANY_NAME.test(c.name || '') || VENUE_NAME.test(c.name || '');
-      const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0;
+      const links = store.setting('invoiceLinks') || {};   // vinculaciones manuales factura -> evento
+      const yearOf = d => { if (typeof d === 'number') return new Date(d < 1e12 ? d * 1000 : d).getUTCFullYear(); const m = String(d || '').match(/(\d{4})/); return m ? +m[1] : 0; };
+      const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0, antiguasInv = 0;
       Object.values(idx.byId).forEach(c => {
         let ev = null;
         (c.emails || []).forEach(em => { if (!ev) ev = evByKey['e:' + normE(em)]; });
@@ -732,15 +734,33 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         const company = isCompany(c);
         (c.invoices || []).forEach(raw => {
           totalInv++;
-          if (ev) { linkedInv++; return; }
+          if (ev || links[raw.id]) { linkedInv++; return; }   // vinculada (auto o manual)
           if (company) { empresaInv++; return; }              // factura a empresa/finca: no es un descuadre
           const inv = holded.mapInvoice(raw);
+          const yr = yearOf(inv.date);
+          if (yr && yr < 2026) { antiguasInv++; return; }     // 2024/2025 y anteriores: no se muestran
           sinVincular.push({ number: inv.number, date: inv.date, total: inv.total, paid: inv.paid, pending: inv.pending, status: inv.status, contact: c.name || '', code: c.code || c.vat_number || '', invId: inv.id });
         });
       });
       sinVincular.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, sinVincularN: sinVincular.length, sinVincular });
+      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, sinVincularN: sinVincular.length, sinVincular });
     } catch (e) { return ok(res, { enabled: true, error: e.message, sinVincular: [] }); }
+  }
+  // --- VINCULAR una factura de Holded a un evento existente (o desvincular) ---
+  if (seg[0] === 'holded-descuadres' && seg[1] === 'link' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const b = await readBody(req);
+    const invId = String(b.invId || '').trim();
+    if (!invId) return fail(res, 400, 'Falta la factura.');
+    const links = store.setting('invoiceLinks') || {};
+    if (b.eventId) {
+      const ev = store.get('events', +b.eventId);
+      if (!ev) return fail(res, 404, 'No existe una boda con ese número.');
+      links[invId] = +b.eventId;
+    } else delete links[invId];
+    store.setSetting('invoiceLinks', links);
+    store.audit(user.id, 'invoice-link', 'events', b.eventId ? +b.eventId : null);
+    return ok(res, { ok: true, eventId: b.eventId ? +b.eventId : null, conyuges: b.eventId ? ((store.get('events', +b.eventId) || {}).conyuges || '') : '' });
   }
   // --- ANÁLISIS (admin): ventas por masía/pack, horas extra por masía/DJ, facturación masías y económico ---
   if (seg[0] === 'analisis' && method === 'GET') {

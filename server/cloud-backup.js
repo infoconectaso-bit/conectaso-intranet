@@ -95,8 +95,13 @@ async function listRemote(prefix = PREFIX, re = RE) {
     const query = { 'list-type': '2', 'prefix': prefix, 'max-keys': '1000' };
     if (token) query['continuation-token'] = token;
     const xml = await s3('GET', '', { query });
-    const keys = [...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map(m => m[1]);
-    keys.forEach(k => { const m = re.exec(k); if (m) out.push({ key: k, time: new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() }); });
+    const blocks = xml.match(/<Contents>[\s\S]*?<\/Contents>/g) || [];
+    blocks.forEach(bl => {
+      const k = (bl.match(/<Key>([^<]+)<\/Key>/) || [])[1]; if (!k) return;
+      const m = re.exec(k); if (!m) return;
+      const size = +((bl.match(/<Size>(\d+)<\/Size>/) || [])[1] || 0);
+      out.push({ key: k, time: new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime(), size });
+    });
     const t = /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(xml);
     const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
     token = truncated && t ? t[1] : null;
@@ -206,10 +211,13 @@ async function test() {
 async function statusAsync() {
   const base = { configured: enabled(), lastOk, lastError, filesOk: lastFilesOk, filesError: lastFilesError };
   if (!enabled()) return base;
-  try { const r = await listRemote(); base.remoteCount = r.length; base.remoteLast = r[0] ? new Date(r[0].time).toISOString() : null; }
+  let bytes = 0;
+  try { const r = await listRemote(); base.remoteCount = r.length; base.remoteLast = r[0] ? new Date(r[0].time).toISOString() : null; bytes += r.reduce((s, x) => s + (x.size || 0), 0); }
   catch (e) { base.reachError = e.message; }
-  try { const fr = await listRemote(FILES_PREFIX, FILE_RE); base.filesCount = fr.length; base.filesLast = fr[0] ? new Date(fr[0].time).toISOString() : null; }
+  try { const fr = await listRemote(FILES_PREFIX, FILE_RE); base.filesCount = fr.length; base.filesLast = fr[0] ? new Date(fr[0].time).toISOString() : null; bytes += fr.reduce((s, x) => s + (x.size || 0), 0); }
   catch (e) { if (!base.reachError) base.reachError = e.message; }
+  base.bytes = bytes;
+  base.freeLimit = 10 * 1024 * 1024 * 1024;   // 10 GB gratis de Backblaze B2
   return base;
 }
 

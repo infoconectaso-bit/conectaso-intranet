@@ -812,29 +812,42 @@ on(/^#\/impagos$/, async () => {
 });
 on(/^#\/descuadres$/, async () => {
   if (!isAdmin()) { location.hash = '#/'; return; }
-  loading(['Descuadres']);
-  const r = await api('holded-descuadres').catch(() => ({ sinVincular: [] }));
-  if (r.enabled === false) { shell(`${pageHead('Descuadre facturas', 'Facturas de Holded sin vincular a un evento.')}<div class="empty">La integración de Holded no está activada.</div>`, ['Descuadres']); return; }
   const eur = n => (Math.round((+n || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-  const sv = r.sinVincular || [];
-  const cols = [
-    { t: 'Fecha', get: i => i.date || '', html: i => esc(slash(i.date) || '—') },
-    { t: 'Nº', get: i => i.number || '' },
-    { t: 'Cliente', get: i => i.contact || '', html: i => `<b>${esc(i.contact || '—')}</b>` },
-    { t: 'NIF/DNI', get: i => i.code || '' },
-    { t: 'Base', get: i => i.total || 0, num: true, html: i => eur(i.total) },
-    { t: 'Pagado', get: i => i.paid || 0, num: true, html: i => eur(i.paid) },
-    { t: 'Pendiente', get: i => i.pending || 0, num: true, html: i => eur(i.pending) },
-    { t: '', nosort: true, nofilter: true, html: i => i.invId ? `<a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver / descargar factura">📄</a>` : '' },
-  ];
-  shell(`${pageHead('Descuadre facturas / eventos', 'Facturas de Holded que NO están vinculadas a ningún evento (posible falta de vinculación).')}
-    <div class="grid-3" style="margin-bottom:14px">
-      <div class="stat stat--pink"><div class="k">Facturas sin vincular</div><div class="v">${r.sinVincularN || 0}</div></div>
-      <div class="stat stat--blue"><div class="k">Facturas vinculadas a boda</div><div class="v">${r.linkedInv || 0}</div></div>
-      <div class="stat"><div class="k">Facturas a empresas/fincas</div><div class="v">${r.empresaInv || 0}</div></div>
-    </div>
-    <p class="hint" style="margin-bottom:12px">Aquí salen facturas a <b>personas</b> (no a empresas/fincas) que <b>no cuadran con ningún evento</b>. Suele significar que falta vincularlas: revisa si el <b>email o DNI</b> de la pareja en el evento coincide con el de Holded. Las facturas a fincas/sociedades (CIF de empresa) se excluyen a propósito.</p>
-    <div class="panel"><div class="panel__body">${table('dtDescuadres', { rows: sv, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas sin vincular. 🎉' })}</div></div>`, ['Descuadres']);
+  async function draw() {
+    loading(['Descuadres']);
+    const r = await api('holded-descuadres').catch(() => ({ sinVincular: [] }));
+    if (r.enabled === false) { shell(`${pageHead('Descuadre facturas', 'Facturas de Holded sin vincular a un evento.')}<div class="empty">La integración de Holded no está activada.</div>`, ['Descuadres']); return; }
+    const sv = r.sinVincular || [];
+    const cols = [
+      { t: 'Fecha', get: i => i.date || '', html: i => esc(slash(i.date) || '—') },
+      { t: 'Nº', get: i => i.number || '' },
+      { t: 'Cliente', get: i => i.contact || '', html: i => `<b>${esc(i.contact || '—')}</b>` },
+      { t: 'NIF/DNI', get: i => i.code || '' },
+      { t: 'Base', get: i => i.total || 0, num: true, html: i => eur(i.total) },
+      { t: 'Pagado', get: i => i.paid || 0, num: true, html: i => eur(i.paid) },
+      { t: 'Pendiente', get: i => i.pending || 0, num: true, html: i => eur(i.pending) },
+      { t: '', nosort: true, nofilter: true, html: i => `${i.invId ? `<button class="btn btn--icon" data-link-inv="${esc(i.invId)}" title="Vincular a una boda">🔗</button> <a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver / descargar factura">📄</a>` : ''}` },
+    ];
+    shell(`${pageHead('Descuadre facturas / eventos', 'Facturas de Holded que NO están vinculadas a ningún evento (posible falta de vinculación).')}
+      <div class="grid-3" style="margin-bottom:14px">
+        <div class="stat stat--pink"><div class="k">Facturas sin vincular</div><div class="v">${r.sinVincularN || 0}</div></div>
+        <div class="stat stat--blue"><div class="k">Facturas vinculadas a boda</div><div class="v">${r.linkedInv || 0}</div></div>
+        <div class="stat"><div class="k">Excluidas (empresas + antiguas)</div><div class="v">${(r.empresaInv || 0) + (r.antiguasInv || 0)}</div></div>
+      </div>
+      <p class="hint" style="margin-bottom:12px">Salen facturas a <b>personas</b> (no empresas/fincas) de <b>2026 en adelante</b> que <b>no cuadran con ningún evento</b>. Pulsa <b>🔗</b> para vincular una factura a una boda a mano (desaparecerá de esta lista). Se excluyen a propósito las de <b>empresas/sociedades (SL, CIF…)</b> y las de <b>2024/2025</b>.</p>
+      <div class="panel"><div class="panel__body">${table('dtDescuadres', { rows: sv, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas sin vincular. 🎉' })}</div></div>`, ['Descuadres']);
+    $$('[data-link-inv]').forEach(b => b.onclick = () => {
+      const invId = b.dataset.linkInv;
+      modal('Vincular factura a una boda', `<p class="hint" style="margin-bottom:10px">Escribe el <b>número de la boda</b> (evento) al que pertenece esta factura. Lo ves en el listado de eventos o con el buscador.</p><div class="field"><label>Nº de boda</label><input class="control" id="linkEvId" type="number" inputmode="numeric" placeholder="p. ej. 1234"></div>`, {
+        okText: 'Vincular', onOk: async () => {
+          const id = +(el('linkEvId') || {}).value; if (!id) { toast('Pon un número de boda', 'err'); return true; }
+          try { const res = await api('holded-descuadres/link', { method: 'POST', body: { invId, eventId: id } }); toast('✅ Factura vinculada' + (res.conyuges ? ' a ' + res.conyuges : ' a la boda #' + id), 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); return true; }
+          draw();
+        }
+      });
+    });
+  }
+  draw();
 });
 
 on(/^#\/nominas$/, async () => {
@@ -925,7 +938,14 @@ on(/^#\/cobros$/, async () => {
 on(/^#\/facturacion$/, async () => {
   if (!requireAdmin()) return; loading(['Facturación']);
   const { workers } = await api('finance/workers');
+  const totalPend = (workers || []).reduce((t, w) => t + (+w.pend || 0), 0);
+  const nPend = (workers || []).filter(w => (+w.pend || 0) > 0).length;
   shell(`${pageHead('Facturación del equipo', 'Pendiente de pago por trabajador.')}
+    <div class="grid-3" style="margin-bottom:14px">
+      <div class="stat stat--pink"><div class="k">Total pendiente de pago</div><div class="v">${fmtEur(totalPend)}</div></div>
+      <div class="stat stat--blue"><div class="k">Trabajadores con pendiente</div><div class="v">${nPend}</div></div>
+      <div class="stat"><div class="k">Trabajadores en la lista</div><div class="v">${(workers || []).length}</div></div>
+    </div>
     <div class="panel"><div class="panel__body">${table('dtWork', { rows: workers, order: [2, 'desc'], filters: true, cols: [
       { t: 'Id', get: w => w.id }, { t: 'Nombre', get: w => w.name, html: w => `<a href="#/facturacion/${w.id}">${esc(w.name)}</a>` },
       { t: 'Pendiente de pago', get: w => w.pend, html: w => fmtEur(w.pend) },
@@ -1162,7 +1182,7 @@ on(/^#\/beneficios$/, async () => {
 on(/^#\/backups$/, async () => {
   if (!requireAdmin()) return;
   loading(['Copias de seguridad']);
-  const fmtSize = b => { b = +b || 0; if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(0) + ' KB'; return (b / 1048576).toFixed(1) + ' MB'; };
+  const fmtSize = b => { b = +b || 0; if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(0) + ' KB'; if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB'; return (b / 1073741824).toFixed(2) + ' GB'; };
   const fmtDate = s => { try { return new Date(s).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return s; } };
   async function render() {
     const r = await api('backups').catch(() => ({ backups: [] }));
@@ -1182,6 +1202,16 @@ on(/^#\/backups$/, async () => {
     else if (cloud.reachError) cloudBanner = `<div class="banner banner--err" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FDECEA;color:#B71C1C;border:1px solid #F5C6CB"><b>⚠ No se pudo contactar con la nube.</b> ${esc(cloud.reachError)}. Revisa el endpoint, la región y las claves.</div>`;
     else if (cloud.lastError && (!cloud.lastOk || new Date(cloud.lastError.date) > new Date(cloud.lastOk.date))) cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FFF8E1;color:#8a6d00;border:1px solid #FFE49A"><b>⚠ La última subida a la nube falló</b> (${fmtDate(cloud.lastError.date)}). ${esc(cloud.lastError.message || '')}</div>`;
     else cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Copia en la nube activa. ${cloud.remoteCount != null ? cloud.remoteCount + ' copias de la base de datos' : ''}${cloud.remoteLast ? ' (última: ' + fmtDate(cloud.remoteLast) + ')' : ''}${cloud.filesCount != null ? ' · ' + cloud.filesCount + ' copias de archivos' : ''}${cloud.filesLast ? ' (última: ' + fmtDate(cloud.filesLast) + ')' : ''}.</div>`;
+    let storageBar = '';
+    if (cfg.enabled && cloud.bytes != null && cloud.freeLimit) {
+      const pct = Math.min(100, Math.round(cloud.bytes / cloud.freeLimit * 100));
+      const col = pct >= 90 ? '#B71C1C' : (pct >= 70 ? '#C77700' : '#1B5E20');
+      storageBar = `<div style="max-width:560px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>Almacenamiento usado en la nube</span><span><b>${fmtSize(cloud.bytes)}</b> de 10 GB gratis · ${pct}%</span></div>
+        <div style="height:12px;border-radius:999px;background:rgba(0,0,0,.08);overflow:hidden"><div style="height:100%;width:${Math.max(2, pct)}%;background:${col};transition:width .3s"></div></div>
+        ${pct >= 80 ? '<p class="hint" style="color:#B71C1C;margin-top:6px">⚠ Te acercas al límite gratuito de 10 GB. Revisa el ciclo de vida del bucket (que borre versiones antiguas) o valora ampliar.</p>' : ''}
+      </div>`;
+    }
     const rows = list.map(b => `<tr><td><b>${esc(b.name)}</b></td><td>${fmtDate(b.date)}</td><td style="text-align:right">${fmtSize(b.size)}</td><td style="text-align:right"><a class="btn btn--sm" href="/api/backups/download?name=${encodeURIComponent(b.name)}" download>⬇ Descargar</a></td></tr>`).join('');
     shell(`${pageHead('Copias de seguridad', 'Copias automáticas de la base de datos (bodas, usuarios, tarifas…).')}
       ${banner}
@@ -1197,6 +1227,7 @@ on(/^#\/backups$/, async () => {
       <h2 style="margin:26px 0 6px">☁️ Copia en la nube (fuera del servidor)</h2>
       <p class="hint" style="margin-bottom:12px">Segunda copia automática en <b>Backblaze B2</b> (región Europa). Si el servidor se estropeara, los datos seguirían a salvo aquí. Cada copia local (cada 5 min) se sube también a la nube, y las antiguas se borran solas. La clave secreta se guarda <b>solo en tu servidor</b>; no se muestra una vez guardada.</p>
       ${cloudBanner}
+      ${storageBar}
       <div class="card" style="padding:16px;border:1px solid var(--line,#e5e7eb);border-radius:12px;max-width:560px">
         <div style="display:grid;gap:10px">
           <label>Endpoint (Punto final)<input id="cbEndpoint" class="inp" value="${esc(cfg.endpoint || '')}" placeholder="s3.eu-central-003.backblazeb2.com"></label>
@@ -1343,9 +1374,10 @@ async function mantenimientoPage() {
   shell(`${pageHead('Mantenimiento', admin ? 'Partes de avería del equipo.' : 'Crea un parte cuando algo falle (con fotos).', `<button class="btn btn--primary" id="newMant">+ Nuevo parte</button>`)}
     <h3 class="form-sub" style="margin:4px 0 10px">Pendientes (${pend.length})</h3>
     ${pend.length ? pend.map(m => card(m, false)).join('') : '<div class="empty">No hay partes pendientes.</div>'}
-    <h3 class="form-sub" style="margin:20px 0 10px">Completados (${done.length})</h3>
-    ${done.length ? done.map(m => card(m, true)).join('') : '<div class="empty">Sin partes completados.</div>'}`, ['Mantenimiento']);
+    <div class="btn-row" style="margin:22px 0 10px"><button class="btn btn--sm" id="toggleDone">✅ Ver completados (${done.length})</button></div>
+    <div id="doneWrap" style="display:none">${done.length ? done.map(m => card(m, true)).join('') : '<div class="empty">Sin partes completados.</div>'}</div>`, ['Mantenimiento']);
   el('newMant').onclick = () => mantForm();
+  { const td = el('toggleDone'); if (td) td.onclick = () => { const w = el('doneWrap'); const open = w.style.display !== 'none'; w.style.display = open ? 'none' : 'block'; td.textContent = (open ? '✅ Ver completados (' : '🔽 Ocultar completados (') + done.length + ')'; }; }
   if (admin) {
     $$('[data-urg]').forEach(s => s.onchange = async () => { const m = items.find(x => x.id == s.dataset.urg); await coll.save('maintenance', Object.assign({}, m, { urgency: s.value })); toast('Urgencia actualizada', 'ok'); mantenimientoPage(); });
     $$('[data-fix]').forEach(b => b.onclick = async () => { const m = items.find(x => x.id == b.dataset.fix); await coll.save('maintenance', Object.assign({}, m, { status: 'completado' })); toast('Parte marcado como arreglado', 'ok'); mantenimientoPage(); });
