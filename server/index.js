@@ -2121,12 +2121,14 @@ function finance(req, res, user, seg, method) {
       // en vivo y en una sola pasada. Antes dependía de la colección 'workers' (podía estar vacía).
       const bals = fact.allBalances();
       const _fs = fact.freshStart();
+      // Trabajadores que NUNCA salen en facturación equipo: DJ Gallego (#850) + los que configure el setting.
+      const hideW = new Set([850].concat(store.setting('facturacionHideWorkers') || []).map(Number));
       const workers = Object.keys(bals).filter(id => +id).map(id => {
         const b = bals[id]; const pays = _fs ? [] : store.byOwner('payments', +id);
         const paid = pays.reduce((t, p) => t + (+p.amount || 0), 0);
         let last = b.last; pays.forEach(p => { if (p.date && p.date > last) last = p.date; });
         return { id: +id, name: userName(+id), pend: Math.round((b.rest - paid) * 100) / 100, last };
-      }).filter(w => w.pend !== 0 || w.last);
+      }).filter(w => !hideW.has(w.id) && (w.pend !== 0 || w.last));
       workers.sort((a, b) => b.pend - a.pend);
       return ok(res, { workers });
     }
