@@ -17,9 +17,13 @@ const mail = require('./mail');
 
 const PREFIX = 'conectaso/';                 // carpeta dentro del bucket (base de datos)
 const FILES_PREFIX = 'conectaso-archivos/';  // carpeta dentro del bucket (archivos subidos: nóminas, planos…)
-// Retención en la nube (ajustada a "recuperar en 1-2 días"; con 10 GB gratis sobra de margen):
-const DB_DAYS = 2;        // base de datos: todas las de las últimas 6 h + 1 copia/día durante 2 días
-const FILES_KEEP = 2;     // archivos (paquete con TODA la carpeta): solo las 2 copias completas más recientes
+// Retención en la nube. La base de datos es pequeña (~14 MB), así que guardamos bastante historial.
+// Los archivos (paquete con TODA la carpeta) son pesados: se SOBRESCRIBE siempre el mismo nombre,
+// así en la nube solo queda la última copia (y el ajuste "keep only last version" del bucket la mantiene
+// sola, sin acumular) — ni siquiera hace falta que la app borre nada para que deje de crecer.
+// BBDD: se sube a una ranura por DÍA DEL MES (conectaso-db-dNN.db) que se sobrescribe → ~1 mes de
+// historial diario, autolimitado (máx. 31 copias de ~14 MB ≈ 0,4 GB), sin depender de borrar nada.
+const FILES_FIXED = 'conectaso-archivos-actual.tar';  // nombre FIJO del paquete de archivos (se sobrescribe)
 const UPLOADS = path.join(DATA_DIR, 'uploads');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
 let lastFilesOk = null;                       // { date, skipped? }
@@ -135,13 +139,48 @@ async function pruneRemote(prefix = PREFIX, re = RE, allDays = 1, dailyDays = 30
   lastPrune = { prefix, candidates: toDelete.length, deleted, failed, error: firstErr, date: new Date().toISOString() };
   return lastPrune;
 }
-// Limpieza inmediata de las DOS carpetas (base de datos + archivos). Se llama al arrancar el servidor
-// para liberar espacio enseguida tras un despliegue, sin esperar al ciclo horario.
+// Borra TODOS los paquetes de archivos con nombre de fecha (esquema anterior). El paquete fijo
+// (FILES_FIXED) no coincide con FILE_RE, así que se conserva. Devuelve cuántos borró/fallaron.
+async function deleteLegacyFilesTars() {
+  const files = await listRemote(FILES_PREFIX, FILE_RE);   // solo los antiguos (con fecha) coinciden
+  let deleted = 0, failed = 0, firstErr = null;
+  for (const f of files) { try { await s3('DELETE', f.key); deleted++; } catch (e) { failed++; if (!firstErr) firstErr = e.message; } }
+  lastPrune = { prefix: FILES_PREFIX, candidates: files.length, deleted, failed, error: firstErr, date: new Date().toISOString() };
+  return lastPrune;
+}
+// Borra las copias de BBDD del esquema anterior (conectaso-YYYYMMDD-HHMMSS.db). Las ranuras nuevas
+// (conectaso-db-dNN.db) NO coinciden con RE, así que se conservan. Devuelve cuántas borró/fallaron.
+async function deleteLegacyDbSnapshots() {
+  const files = await listRemote(PREFIX, RE);              // solo los antiguos (con fecha) coinciden
+  let deleted = 0, failed = 0, firstErr = null;
+  for (const f of files) { try { await s3('DELETE', f.key); deleted++; } catch (e) { failed++; if (!firstErr) firstErr = e.message; } }
+  lastPrune = { prefix: PREFIX, candidates: files.length, deleted, failed, error: firstErr, date: new Date().toISOString() };
+  return lastPrune;
+}
+// Cuenta los objetos .db bajo PREFIX (ranuras + lo que quede) y la fecha de la más reciente.
+async function countDb() {
+  let count = 0, last = null, bytes = 0, token = null;
+  do {
+    const query = { 'list-type': '2', 'prefix': PREFIX, 'max-keys': '1000' };
+    if (token) query['continuation-token'] = token;
+    const xml = await s3('GET', '', { query });
+    (xml.match(/<Contents>[\s\S]*?<\/Contents>/g) || []).forEach(bl => {
+      const k = (bl.match(/<Key>([^<]+)<\/Key>/) || [])[1]; if (!k || !/\.db$/.test(k)) return;
+      count++; bytes += +((bl.match(/<Size>(\d+)<\/Size>/) || [])[1] || 0);
+      const lm = (bl.match(/<LastModified>([^<]+)<\/LastModified>/) || [])[1]; if (lm && (!last || lm > last)) last = lm;
+    });
+    const t = /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(xml);
+    token = /<IsTruncated>true<\/IsTruncated>/.test(xml) && t ? t[1] : null;
+  } while (token);
+  return { count, last, bytes };
+}
+// Limpieza inmediata de las DOS carpetas (base de datos + archivos antiguos). Se llama al arrancar el
+// servidor para liberar espacio enseguida tras un despliegue, sin esperar al ciclo horario.
 async function pruneAll() {
   if (!enabled()) return null;
   pruneCheck = Date.now(); filesPruneCheck = Date.now();
-  const dbRes = await pruneRemote(PREFIX, RE, 0.25, DB_DAYS).catch(e => ({ error: e.message }));
-  const fRes = await pruneRemote(FILES_PREFIX, FILE_RE, 0, 0, FILES_KEEP).catch(e => ({ error: e.message }));
+  const dbRes = await deleteLegacyDbSnapshots().catch(e => ({ error: e.message }));
+  const fRes = await deleteLegacyFilesTars().catch(e => ({ error: e.message }));
   return { db: dbRes, files: fRes };
 }
 // Tamaño TOTAL del bucket (todos los objetos), para que coincida con lo que muestra Backblaze.
@@ -185,8 +224,8 @@ async function syncFiles() {
     if (sig === '0:0:0') return;                         // no hay nada subido todavía
     if (store.setting('filesBackupSig') === sig) { lastFilesOk = { date: new Date().toISOString(), skipped: true }; return; } // sin cambios
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
-    const name = 'conectaso-archivos-' + stamp() + '.tar';
-    const tmp = path.join(BACKUP_DIR, name);
+    const name = FILES_FIXED;                            // nombre fijo: sobrescribe la copia anterior en la nube
+    const tmp = path.join(BACKUP_DIR, 'conectaso-archivos.tmp.tar');
     await makeTar(tmp);
     try {
       await uploadFile(tmp, FILES_PREFIX + name);
@@ -195,7 +234,8 @@ async function syncFiles() {
     } finally {
       try { fs.unlinkSync(tmp); } catch (e) {}           // el tar local es redundante (los archivos ya están en disco)
     }
-    if (Date.now() - filesPruneCheck > 60 * 60 * 1000) { filesPruneCheck = Date.now(); try { await pruneRemote(FILES_PREFIX, FILE_RE, 0, 0, FILES_KEEP); } catch (e) {} }
+    // Borra los paquetes antiguos con nombre de fecha (esquema anterior); el fijo ya no se acumula.
+    if (Date.now() - filesPruneCheck > 60 * 60 * 1000) { filesPruneCheck = Date.now(); try { await deleteLegacyFilesTars(); } catch (e) {} }
   } catch (e) {
     lastFilesError = { message: e.message, date: new Date().toISOString() };
     console.error('[cloud-backup] fallo al subir archivos:', e.message);
@@ -204,12 +244,21 @@ async function syncFiles() {
 }
 
 // Se llama tras cada snapshot local correcto. No lanza: registra y avisa. No bloquea el backup local.
+// La BBDD se sube a una RANURA POR DÍA DEL MES (conectaso-db-dNN.db) que se sobrescribe: así hay ~1 mes
+// de historial diario en la nube y el nº de copias se autolimita solo (con "keep only last version" del
+// bucket), SIN depender de que la app borre nada. La subida se limita a ~1/hora (la copia local va cada
+// 10 min y es la de recuperación rápida; la nube es la copia externa de seguridad).
+let lastCloudDb = 0;
 async function syncSnapshot(localPath, name) {
   if (!enabled()) return;
   try {
-    await uploadFile(localPath, PREFIX + name);
-    // Limpiamos en la nube como mucho una vez cada hora para no gastar peticiones de más.
-    if (Date.now() - pruneCheck > 60 * 60 * 1000) { pruneCheck = Date.now(); try { await pruneRemote(PREFIX, RE, 0.25, DB_DAYS); } catch (e) {} }
+    const now = Date.now();
+    if (now - lastCloudDb < 55 * 60 * 1000) return;     // como mucho una subida a la nube por hora
+    lastCloudDb = now;
+    const dd = String(new Date().getDate()).padStart(2, '0');
+    await uploadFile(localPath, PREFIX + 'conectaso-db-d' + dd + '.db');
+    // De vez en cuando, borra las copias del esquema anterior (con fecha y hora en el nombre).
+    if (now - pruneCheck > 60 * 60 * 1000) { pruneCheck = now; try { await deleteLegacyDbSnapshots(); } catch (e) {} }
   } catch (e) {
     lastError = { message: e.message, date: new Date().toISOString() };
     console.error('[cloud-backup] fallo al subir:', e.message);
@@ -249,10 +298,14 @@ async function test() {
 async function statusAsync() {
   const base = { configured: enabled(), lastOk, lastError, filesOk: lastFilesOk, filesError: lastFilesError };
   if (!enabled()) return base;
-  try { const r = await listRemote(); base.remoteCount = r.length; base.remoteLast = r[0] ? new Date(r[0].time).toISOString() : null; }
+  try { const d = await countDb(); base.remoteCount = d.count; base.remoteLast = d.last; }
   catch (e) { base.reachError = e.message; }
-  try { const fr = await listRemote(FILES_PREFIX, FILE_RE); base.filesCount = fr.length; base.filesLast = fr[0] ? new Date(fr[0].time).toISOString() : null; }
-  catch (e) { if (!base.reachError) base.reachError = e.message; }
+  try {
+    const xml = await s3('GET', '', { query: { 'list-type': '2', 'prefix': FILES_PREFIX + FILES_FIXED, 'max-keys': '1' } });
+    const bl = (xml.match(/<Contents>[\s\S]*?<\/Contents>/) || [])[0];
+    base.filesCount = bl ? 1 : 0;
+    base.filesLast = bl ? ((bl.match(/<LastModified>([^<]+)<\/LastModified>/) || [])[1] || (lastFilesOk && lastFilesOk.date) || null) : (lastFilesOk && lastFilesOk.date) || null;
+  } catch (e) { if (!base.reachError) base.reachError = e.message; }
   // Tamaño TOTAL del bucket (todos los objetos) para que coincida con lo que ves en Backblaze.
   try { const b = await bucketBytes(); base.bytes = b.bytes; base.objects = b.count; } catch (e) { if (!base.reachError) base.reachError = e.message; }
   base.freeLimit = 10 * 1024 * 1024 * 1024;   // 10 GB gratis de Backblaze B2
@@ -260,4 +313,4 @@ async function statusAsync() {
   return base;
 }
 
-module.exports = { enabled, uploadFile, syncSnapshot, syncFiles, test, listRemote, pruneRemote, pruneAll, statusAsync, PREFIX, FILES_PREFIX };
+module.exports = { enabled, uploadFile, syncSnapshot, syncFiles, test, listRemote, pruneRemote, deleteLegacyFilesTars, pruneAll, statusAsync, PREFIX, FILES_PREFIX };
