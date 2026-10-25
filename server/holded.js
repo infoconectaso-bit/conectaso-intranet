@@ -112,7 +112,7 @@ async function getInvoicePdf(id) {
 // todo a Holded en cada apertura de evento. TTL corto (se puede forzar refresco).
 // ---------------------------------------------------------------------------
 let _idx = null, _idxAt = 0, _idxRefreshing = null;
-const IDX_TTL = 10 * 60 * 1000;
+const IDX_TTL = 5 * 60 * 1000;
 const normEmail = s => String(s || '').trim().toLowerCase();
 const normNif = s => String(s || '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
 const normName = s => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');

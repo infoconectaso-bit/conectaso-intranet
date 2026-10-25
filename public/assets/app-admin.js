@@ -894,17 +894,21 @@ on(/^#\/descuadres$/, async () => {
       ${swPanel}
       ${pmPanel}`, ['Descuadres']);
     const linkInv = async (invId, id) => { try { const res = await api('holded-descuadres/link', { method: 'POST', body: { invId, eventId: id } }); toast('✅ Factura vinculada' + (res.conyuges ? ' a ' + res.conyuges : ' a la boda #' + id), 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };
-    $$('[data-link-sug]').forEach(b => b.onclick = () => linkInv(b.dataset.linkSug, +b.dataset.ev));
-    $$('[data-link-inv]').forEach(b => b.onclick = () => {
-      const invId = b.dataset.linkInv;
-      modal('Vincular factura a una boda', `<p class="hint" style="margin-bottom:10px">Escribe el <b>número de la boda</b> (evento) al que pertenece esta factura. Lo ves en el listado de eventos o con el buscador.</p><div class="field"><label>Nº de boda</label><input class="control" id="linkEvId" type="number" inputmode="numeric" placeholder="p. ej. 1234"></div>`, {
-        okText: 'Vincular', onOk: async () => {
-          const id = +(el('linkEvId') || {}).value; if (!id) { toast('Pon un número de boda', 'err'); return true; }
-          try { const res = await api('holded-descuadres/link', { method: 'POST', body: { invId, eventId: id } }); toast('✅ Factura vinculada' + (res.conyuges ? ' a ' + res.conyuges : ' a la boda #' + id), 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); return true; }
-          draw();
-        }
+    // Se re-enganchan tras cada orden/filtro/paginación de la tabla (si no, al re-dibujarse se perdían los clicks).
+    function wireLinks() {
+      $$('[data-link-sug]').forEach(b => b.onclick = () => linkInv(b.dataset.linkSug, +b.dataset.ev));
+      $$('[data-link-inv]').forEach(b => b.onclick = () => {
+        const invId = b.dataset.linkInv;
+        modal('Vincular factura a una boda', `<p class="hint" style="margin-bottom:10px">Escribe el <b>número de la boda</b> (evento) al que pertenece esta factura. Lo ves en el listado de eventos o con el buscador.</p><div class="field"><label>Nº de boda</label><input class="control" id="linkEvId" type="number" inputmode="numeric" placeholder="p. ej. 1234"></div>`, {
+          okText: 'Vincular', onOk: async () => {
+            const id = +(el('linkEvId') || {}).value; if (!id) { toast('Pon un número de boda', 'err'); return true; }
+            try { const res = await api('holded-descuadres/link', { method: 'POST', body: { invId, eventId: id } }); toast('✅ Factura vinculada' + (res.conyuges ? ' a ' + res.conyuges : ' a la boda #' + id), 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); return true; }
+            draw();
+          }
+        });
       });
-    });
+    }
+    bindTable('dtDescuadres', wireLinks);
   }
   draw();
 });
