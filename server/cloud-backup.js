@@ -17,6 +17,9 @@ const mail = require('./mail');
 
 const PREFIX = 'conectaso/';                 // carpeta dentro del bucket (base de datos)
 const FILES_PREFIX = 'conectaso-archivos/';  // carpeta dentro del bucket (archivos subidos: nóminas, planos…)
+// Retención en la nube (ajustada a "recuperar en 1-2 días"; con 10 GB gratis sobra de margen):
+const DB_DAYS = 2;        // base de datos: todas las de las últimas 6 h + 1 copia/día durante 2 días
+const FILES_KEEP = 2;     // archivos (paquete con TODA la carpeta): solo las 2 copias completas más recientes
 const UPLOADS = path.join(DATA_DIR, 'uploads');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
 let lastFilesOk = null;                       // { date, skipped? }
@@ -111,15 +114,35 @@ async function listRemote(prefix = PREFIX, re = RE) {
 
 // Limpieza remota: todas las de <allDays> días; 1/día hasta <dailyDays> días; el resto se borra.
 // Si keepN > 0, se ignoran las fechas y se conservan solo las <keepN> más recientes (por nº).
+// Registra el resultado en lastPrune (cuántas borró / cuántas fallaron) para poder diagnosticar
+// si la clave de Backblaze NO tiene permiso de borrado (en ese caso 'failed' saldría > 0).
+let lastPrune = null;   // { prefix, candidates, deleted, failed, error, date }
 async function pruneRemote(prefix = PREFIX, re = RE, allDays = 1, dailyDays = 30, keepN = 0) {
   const files = await listRemote(prefix, re);   // ya vienen de más reciente a más antigua
-  if (keepN > 0) { for (const f of files.slice(keepN)) { try { await s3('DELETE', f.key); } catch (e) {} } return; }
-  const now = Date.now(), DAY = 86400000, keep = new Set(), daily = {};
-  files.forEach(f => {
-    if (now - f.time <= allDays * DAY) { keep.add(f.key); return; }
-    if (now - f.time <= dailyDays * DAY) { const d = new Date(f.time).toISOString().slice(0, 10); if (!daily[d]) { daily[d] = 1; keep.add(f.key); } return; }
-  });
-  for (const f of files) { if (!keep.has(f.key)) { try { await s3('DELETE', f.key); } catch (e) {} } }
+  let toDelete;
+  if (keepN > 0) {
+    toDelete = files.slice(keepN);
+  } else {
+    const now = Date.now(), DAY = 86400000, keep = new Set(), daily = {};
+    files.forEach(f => {
+      if (now - f.time <= allDays * DAY) { keep.add(f.key); return; }
+      if (now - f.time <= dailyDays * DAY) { const d = new Date(f.time).toISOString().slice(0, 10); if (!daily[d]) { daily[d] = 1; keep.add(f.key); } return; }
+    });
+    toDelete = files.filter(f => !keep.has(f.key));
+  }
+  let deleted = 0, failed = 0, firstErr = null;
+  for (const f of toDelete) { try { await s3('DELETE', f.key); deleted++; } catch (e) { failed++; if (!firstErr) firstErr = e.message; } }
+  lastPrune = { prefix, candidates: toDelete.length, deleted, failed, error: firstErr, date: new Date().toISOString() };
+  return lastPrune;
+}
+// Limpieza inmediata de las DOS carpetas (base de datos + archivos). Se llama al arrancar el servidor
+// para liberar espacio enseguida tras un despliegue, sin esperar al ciclo horario.
+async function pruneAll() {
+  if (!enabled()) return null;
+  pruneCheck = Date.now(); filesPruneCheck = Date.now();
+  const dbRes = await pruneRemote(PREFIX, RE, 0.25, DB_DAYS).catch(e => ({ error: e.message }));
+  const fRes = await pruneRemote(FILES_PREFIX, FILE_RE, 0, 0, FILES_KEEP).catch(e => ({ error: e.message }));
+  return { db: dbRes, files: fRes };
 }
 // Tamaño TOTAL del bucket (todos los objetos), para que coincida con lo que muestra Backblaze.
 async function bucketBytes() {
@@ -172,7 +195,7 @@ async function syncFiles() {
     } finally {
       try { fs.unlinkSync(tmp); } catch (e) {}           // el tar local es redundante (los archivos ya están en disco)
     }
-    if (Date.now() - filesPruneCheck > 6 * 60 * 60 * 1000) { filesPruneCheck = Date.now(); try { await pruneRemote(FILES_PREFIX, FILE_RE, 0, 0, 8); } catch (e) {} }
+    if (Date.now() - filesPruneCheck > 60 * 60 * 1000) { filesPruneCheck = Date.now(); try { await pruneRemote(FILES_PREFIX, FILE_RE, 0, 0, FILES_KEEP); } catch (e) {} }
   } catch (e) {
     lastFilesError = { message: e.message, date: new Date().toISOString() };
     console.error('[cloud-backup] fallo al subir archivos:', e.message);
@@ -185,8 +208,8 @@ async function syncSnapshot(localPath, name) {
   if (!enabled()) return;
   try {
     await uploadFile(localPath, PREFIX + name);
-    // Limpiamos en la nube como mucho una vez cada ~6 h para no gastar peticiones de más.
-    if (Date.now() - pruneCheck > 6 * 60 * 60 * 1000) { pruneCheck = Date.now(); try { await pruneRemote(PREFIX, RE, 0.25, 60); } catch (e) {} }
+    // Limpiamos en la nube como mucho una vez cada hora para no gastar peticiones de más.
+    if (Date.now() - pruneCheck > 60 * 60 * 1000) { pruneCheck = Date.now(); try { await pruneRemote(PREFIX, RE, 0.25, DB_DAYS); } catch (e) {} }
   } catch (e) {
     lastError = { message: e.message, date: new Date().toISOString() };
     console.error('[cloud-backup] fallo al subir:', e.message);
@@ -233,7 +256,8 @@ async function statusAsync() {
   // Tamaño TOTAL del bucket (todos los objetos) para que coincida con lo que ves en Backblaze.
   try { const b = await bucketBytes(); base.bytes = b.bytes; base.objects = b.count; } catch (e) { if (!base.reachError) base.reachError = e.message; }
   base.freeLimit = 10 * 1024 * 1024 * 1024;   // 10 GB gratis de Backblaze B2
+  base.lastPrune = lastPrune;                 // resultado de la última limpieza (deleted/failed)
   return base;
 }
 
-module.exports = { enabled, uploadFile, syncSnapshot, syncFiles, test, listRemote, pruneRemote, statusAsync, PREFIX, FILES_PREFIX };
+module.exports = { enabled, uploadFile, syncSnapshot, syncFiles, test, listRemote, pruneRemote, pruneAll, statusAsync, PREFIX, FILES_PREFIX };

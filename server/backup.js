@@ -106,10 +106,13 @@ function list() { return listFiles().map(f => ({ name: f.name, size: f.size, dat
 function fileFor(name) { if (!RE.test(String(name || ''))) return null; const p = path.join(BACKUP_DIR, name); return fs.existsSync(p) ? p : null; }
 
 let timer = null;
-const INTERVAL_MIN = 7;   // cada cuántos minutos se hace copia (local + subida a la nube)
+const INTERVAL_MIN = 10;   // cada cuántos minutos se hace copia (local + subida a la nube)
 function start() {
   if (timer) return;
   setTimeout(() => { safeSnapshot('startup'); }, 30000);
+  // Limpieza inmediata en la nube al arrancar: borra las copias sobrantes enseguida tras un despliegue,
+  // sin esperar al ciclo horario (así el espacio baja cuanto antes y no se llega al límite de 10 GB).
+  setTimeout(() => { try { const cloud = require('./cloud-backup'); if (cloud.enabled()) cloud.pruneAll().then(r => { if (r) console.log('[cloud-backup] limpieza al arrancar:', JSON.stringify(r)); }).catch(() => {}); } catch (e) {} }, 90000);
   timer = setInterval(() => { safeSnapshot('auto'); }, INTERVAL_MIN * 60 * 1000);
   console.log('[backup] copias automáticas activas (cada ' + INTERVAL_MIN + ' min). Carpeta:', BACKUP_DIR);
 }
