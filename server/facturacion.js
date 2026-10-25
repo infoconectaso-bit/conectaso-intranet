@@ -41,6 +41,12 @@ function volcadoCutoff() {
   return c;
 }
 
+// "Arranque limpio" de facturación: ignora el saldo del histórico congelado (que traía
+// pendientes antiguos ya pagados por fuera) y cuenta SOLO desde el corte del volcado en
+// adelante (bodas nuevas, ajustes y pagos con fecha >= corte). Así administración revisa
+// partiendo de cero hasta el volcado general. Reversible: poner el setting a false.
+function freshStart() { const v = store.setting('facturacionFreshStart'); return v == null ? true : !!v; }
+
 const money = n => (Math.round((+n || 0) * 100) / 100).toFixed(2) + ' €';
 const OVERTIME = { 'Media Hora': 0.5, '1 Hora': 1, '1 hora y media': 1.5, '2 Horas': 2, '2 hora y media': 2.5, '3 Horas': 3, '3 hora y media': 3.5, '4 Horas': 4, '4 hora y media': 4.5, '5 Horas': 5 };
 const FIX_STAFF_NO_BASE = { '227': true, '276': true };
@@ -215,14 +221,15 @@ function eventTotals(ev, skipRefresh) {
 function allBalances() {
   refresh();
   const CUT = volcadoCutoff();
+  const FS = freshStart();
   const out = {};
   const get = id => out[id] || (out[id] = { rest: 0, last: '' });
-  store.all('history').forEach(h => { const b = get(h.id); b.rest += (h.rest || 0); (h.items || []).forEach(i => { if (i.date && i.date > b.last) b.last = i.date; }); });
+  if (!FS) store.all('history').forEach(h => { const b = get(h.id); b.rest += (h.rest || 0); (h.items || []).forEach(i => { if (i.date && i.date > b.last) b.last = i.date; }); });
   store.all('events').forEach(ev => {
     if (!(ev.fecha && ev.fecha >= CUT) || !evRealized(ev)) return;
     assignedWorkers(ev).forEach(wid => { const b = get(wid); b.rest += workerEarning(ev, wid).amount; if (ev.fecha > b.last) b.last = ev.fecha; });
   });
-  store.all('adjustments').forEach(a => { const b = get(a.userId); b.rest += (parseFloat(a.amount) || 0); if (a.date && a.date > b.last) b.last = a.date; });
+  store.all('adjustments').forEach(a => { if (FS && a.date && a.date < CUT) return; const b = get(a.userId); b.rest += (parseFloat(a.amount) || 0); if (a.date && a.date > b.last) b.last = a.date; });
   return out;
 }
 /** Rellena ev.factRows y ev.revRows (solo para vista de admin). No persiste. */
@@ -235,8 +242,9 @@ function withFacturacion(ev) {
 function aggregateFor(uid, skipRefresh) {
   if (!skipRefresh) refresh();
   const CUT = volcadoCutoff();
-  const histById = {}; store.all('history').forEach(h => { histById[h.id] = h; });
-  const snap = histById[uid] || { cobrar: 0, cobrado: 0, rest: 0, items: [] };
+  const FS = freshStart();
+  const histById = {}; if (!FS) store.all('history').forEach(h => { histById[h.id] = h; });
+  const snap = (FS ? null : histById[uid]) || { cobrar: 0, cobrado: 0, rest: 0, items: [] };
   const extraItems = []; let extra = 0;
   store.all('events').forEach(ev => {
     if (!(ev.fecha && ev.fecha >= CUT)) return;
@@ -252,6 +260,7 @@ function aggregateFor(uid, skipRefresh) {
   const adjItems = []; let adj = 0;
   store.all('adjustments').forEach(a => {
     if (+a.userId !== +uid) return;
+    if (FS && a.date && a.date < CUT) return;   // arranque limpio: ignora ajustes anteriores al volcado
     const amt = parseFloat(a.amount) || 0;
     adjItems.push({ type: 'adj', adjId: a.id, title: 'Ajuste · ' + (a.concept || 'Plus'), date: a.date || '', amount: amt,
       body: ['Ajuste manual de administración', a.concept ? ('Concepto: ' + a.concept) : '', 'Importe: ' + (amt > 0 ? '+' : '') + amt + ' €'].filter(Boolean) });
@@ -263,4 +272,4 @@ function aggregateFor(uid, skipRefresh) {
   return { cobrar: (snap.cobrar || 0) + bonus, cobrado: (snap.cobrado || 0), rest: (snap.rest || 0) + bonus, items };
 }
 
-module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, allBalances, HOURLY_RATE, OVERTIME };
+module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, allBalances, volcadoCutoff, freshStart, HOURLY_RATE, OVERTIME };

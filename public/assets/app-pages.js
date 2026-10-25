@@ -283,8 +283,7 @@ function eventEditorAdmin(ev) {
   const headLabel = (simple ? `${esc(ev.tipo)} #${ev.id}` : `Boda #${ev.id}`) + (lugarName ? ` · ${esc(lugarName)}` : '');
   const body = `<form id="evForm" data-id="${ev.id}">
     <div class="page-head"><div><h1 style="font-size:24px">${headLabel}</h1><div class="lead">${esc(ev.conyuges || 'Sin cónyuges')} · ${dmy(ev.fecha)}</div><div class="page-head__accent"></div></div>
-      <div class="btn-row"><button type="button" class="btn" onclick="history.back()">← Atrás</button> <a class="btn" href="#/eventos/${ev.id}/pdf">Resumen PDF</a></div></div>
-    <div id="evInfoBox" style="margin:2px 0 12px;display:flex;flex-wrap:wrap"></div>
+      <div class="btn-row" style="align-items:center;flex-wrap:wrap;gap:8px"><button type="button" class="btn" onclick="history.back()">← Atrás</button> <a class="btn" href="#/eventos/${ev.id}/pdf">Resumen PDF</a><div id="evInfoBox" style="display:flex;flex-wrap:wrap;gap:6px"></div></div></div>
     <div class="panel evtop"><div class="panel__body">
       <div class="evtop-top">
         <div style="display:flex;gap:12px;flex-wrap:nowrap;align-items:flex-start">

@@ -1964,8 +1964,9 @@ function finance(req, res, user, seg, method) {
       // Saldo pendiente REAL de cada trabajador (histórico + eventos realizados + ajustes − pagos),
       // en vivo y en una sola pasada. Antes dependía de la colección 'workers' (podía estar vacía).
       const bals = fact.allBalances();
+      const _fs = fact.freshStart(), _cut = fact.volcadoCutoff();
       const workers = Object.keys(bals).filter(id => +id).map(id => {
-        const b = bals[id]; const pays = store.byOwner('payments', +id);
+        const b = bals[id]; const pays = store.byOwner('payments', +id).filter(p => !_fs || (p.date && p.date >= _cut));
         const paid = pays.reduce((t, p) => t + (+p.amount || 0), 0);
         let last = b.last; pays.forEach(p => { if (p.date && p.date > last) last = p.date; });
         return { id: +id, name: userName(+id), pend: Math.round((b.rest - paid) * 100) / 100, last };
@@ -1978,7 +1979,8 @@ function finance(req, res, user, seg, method) {
       const id = +seg[2];
       // facturación en vivo: histórico + eventos ya realizados (incluye precios recién puestos)
       const h = fact.aggregateFor(id);
-      if (method === 'GET') return ok(res, { history: h, payments: store.byOwner('payments', id) });
+      const payFilt = p => !fact.freshStart() || (p.date && p.date >= fact.volcadoCutoff());
+      if (method === 'GET') return ok(res, { history: h, payments: store.byOwner('payments', id).filter(payFilt) });
     }
     if (seg[1] === 'pay' && method === 'POST') return addPayment(req, res, user);
     if (seg[1] === 'adjust' && method === 'POST') return addAdjust(req, res, user);
@@ -1988,7 +1990,8 @@ function finance(req, res, user, seg, method) {
   // DJ: solo su propio balance (histórico + eventos realizados)
   if (user.role === 'dj') {
     if (seg[1] === 'me' && method === 'GET') {
-      return ok(res, { history: fact.aggregateFor(user.id), payments: store.byOwner('payments', user.id) });
+      const payFilt = p => !fact.freshStart() || (p.date && p.date >= fact.volcadoCutoff());
+      return ok(res, { history: fact.aggregateFor(user.id), payments: store.byOwner('payments', user.id).filter(payFilt) });
     }
   }
   return fail(res, 403, 'Sin acceso');

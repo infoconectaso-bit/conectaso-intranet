@@ -419,8 +419,9 @@ table.dt--dense .row-actions{flex-wrap:nowrap}
 .evtop-estado{flex:0 1 240px;min-width:170px}
 .evtop-prog{flex:1 1 220px;min-width:180px}
 .evtop-top .radset{gap:8px 18px;padding:6px 0 2px}
-.evtop-pay{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:14px}
-@media(max-width:560px){.evtop-pay{grid-template-columns:1fr}}
+.evtop-pay{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin-top:12px}
+.evtop-pay .control{padding:8px 11px;font-size:14px}
+@media(max-width:380px){.evtop-pay{grid-template-columns:1fr 1fr}}
 /* pestañas con el toggle de edición cliente a la derecha */
 .tabs-row{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;border-bottom:2px solid var(--onyx);margin-bottom:20px}
 .tabs-row .tabs{border-bottom:0;margin-bottom:0}
