@@ -772,6 +772,8 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       };
       const serviceWarnings = [];
       const payByEvent = {};   // eventId -> suma de bases (sin IVA) de sus facturas vinculadas
+      const ignored = new Set((store.setting('invoiceIgnored') || []).map(String));   // facturas "obviadas" a mano
+      const ignoradas = [];
       const _hoy = bizToday();
       let cWithConcept = 0, cWithDate = 0, cSample = '';   // diagnóstico: ¿se está leyendo el concepto de Holded?
       const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0, antiguasInv = 0, pasadasInv = 0, sinPagarInv = 0;
@@ -809,6 +811,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
           const _wd = parseConceptDate(_c);                    // fecha de la boda según el concepto
           if (_wd && _wd < _hoy) { pasadasInv++; return; }     // boda ya pasada: no hace falta vincularla
           if (inv.paid <= 0.5) { sinPagarInv++; return; }      // sin ningún pago: reserva no confirmada, aún no hay evento
+          if (ignored.has(String(inv.id))) { ignoradas.push({ number: inv.number, date: inv.date, contact: c.name || '', invId: inv.id, total: inv.total }); return; }
           const sg = suggestByConcept(raw);
           let suggestedEventId = null, suggestedLabel = '', catWarn = '', why = '';
           if (sg && sg.eventId) {
@@ -843,7 +846,8 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         }
       });
       payMismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
-      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, pasadasInv, sinPagarInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings, payMismatches, conceptStats: { total: totalInv, withConcept: cWithConcept, withDate: cWithDate, sample: cSample } });
+      ignoradas.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, pasadasInv, sinPagarInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings, payMismatches, ignoradas, conceptStats: { total: totalInv, withConcept: cWithConcept, withDate: cWithDate, sample: cSample } });
     } catch (e) { return ok(res, { enabled: true, error: e.message, sinVincular: [] }); }
   }
   // --- VINCULAR una factura de Holded a un evento existente (o desvincular) ---
@@ -861,6 +865,18 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
     store.setSetting('invoiceLinks', links);
     store.audit(user.id, 'invoice-link', 'events', b.eventId ? +b.eventId : null);
     return ok(res, { ok: true, eventId: b.eventId ? +b.eventId : null, conyuges: b.eventId ? ((store.get('events', +b.eventId) || {}).conyuges || '') : '' });
+  }
+  // --- OBVIAR / RESTAURAR una factura de la lista de sin vincular (no hace falta vincularla) ---
+  if (seg[0] === 'holded-descuadres' && seg[1] === 'ignore' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const b = await readBody(req);
+    const invId = String(b.invId || '').trim();
+    if (!invId) return fail(res, 400, 'Falta la factura.');
+    const list = new Set((store.setting('invoiceIgnored') || []).map(String));
+    if (b.ignore === false) list.delete(invId); else list.add(invId);
+    store.setSetting('invoiceIgnored', [...list]);
+    store.audit(user.id, 'invoice-ignore');
+    return ok(res, { ok: true, ignored: b.ignore !== false });
   }
   // --- ANÁLISIS (admin): ventas por masía/pack, horas extra por masía/DJ, facturación masías y económico ---
   if (seg[0] === 'analisis' && method === 'GET') {

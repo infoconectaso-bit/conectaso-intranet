@@ -854,7 +854,7 @@ on(/^#\/descuadres$/, async () => {
       { t: 'Boda sugerida (por el PDF)', nosort: true, nofilter: true, html: i => i.suggestedEventId
         ? `<button class="btn btn--xs btn--primary" data-link-sug="${esc(i.invId)}" data-ev="${i.suggestedEventId}" title="Vincular a la boda detectada por la fecha y el lugar del concepto">↩ Vincular ${esc(i.suggestedLabel || ('#' + i.suggestedEventId))}</button>${i.catWarn ? `<div class="hint" style="color:#D50000;margin-top:3px">⚠ ${esc(i.catWarn)}</div>` : ''}`
         : (i.catWarn ? `<span class="hint" style="color:#D50000">⚠ ${esc(i.catWarn)}</span>` : `<span class="hint" title="${esc(i.concept || '')}">${i.why ? esc(i.why) : '—'}</span>`) },
-      { t: '', nosort: true, nofilter: true, html: i => `${i.invId ? `<button class="btn btn--icon" data-link-inv="${esc(i.invId)}" title="Vincular a mano a otra boda">🔗</button> <a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver / descargar factura">📄</a>` : ''}` },
+      { t: '', nosort: true, nofilter: true, html: i => `${i.invId ? `<button class="btn btn--icon" data-link-inv="${esc(i.invId)}" title="Vincular a mano a otra boda">🔗</button> <a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver / descargar factura">📄</a> <button class="btn btn--icon" data-ignore-inv="${esc(i.invId)}" title="Obviar (quitar de la lista)">🚫</button>` : ''}` },
     ];
     const sw = (r.serviceWarnings || []).map(w => Object.assign({}, w, { svc: (w.services || []).join(', ') }));
     const swPanel = sw.length ? `
@@ -882,6 +882,14 @@ on(/^#\/descuadres$/, async () => {
       ] })}</div></div>` : '';
     const cs = r.conceptStats || {};
     const csLine = cs.total ? `<p class="hint" style="margin-bottom:12px">📄 Concepto leído de Holded en <b>${cs.withConcept || 0}/${cs.total}</b> facturas · fecha detectada en <b>${cs.withDate || 0}</b>.${cs.sample ? ` <span class="muted">Ejemplo de concepto: "${esc(String(cs.sample).slice(0, 120))}"</span>` : ''}</p>` : '';
+    const ig = r.ignoradas || [];
+    const igPanel = ig.length ? `<details style="margin-top:18px"><summary class="hint" style="cursor:pointer">🚫 Obviadas (${ig.length}) — ver / restaurar</summary><div class="panel" style="margin-top:8px"><div class="panel__body">${table('dtIgnoradas', { rows: ig, order: [0, 'desc'], filters: false, dense: true, len: 50, empty: '', cols: [
+      { t: 'Fecha', get: i => i.date || '', html: i => esc(slash(i.date) || '—') },
+      { t: 'Nº', get: i => i.number || '' },
+      { t: 'Cliente', get: i => i.contact || '', html: i => `<b>${esc(i.contact || '—')}</b>` },
+      { t: 'Importe', get: i => i.total || 0, num: true, html: i => eur(i.total) },
+      { t: '', nosort: true, nofilter: true, html: i => `<button class="btn btn--xs" data-restore-inv="${esc(i.invId)}">↩ Restaurar</button> <a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver factura">📄</a>` },
+    ] })}</div></div></details>` : '';
     const sugList = sv.filter(i => i.suggestedEventId && !i.catWarn);
     shell(`${pageHead('Descuadre facturas / eventos', 'Facturas de Holded que NO están vinculadas a ningún evento (posible falta de vinculación).')}
       <div class="grid-3" style="margin-bottom:14px">
@@ -894,11 +902,14 @@ on(/^#\/descuadres$/, async () => {
       ${sugList.length ? `<div class="btn-row" style="margin-bottom:12px"><button class="btn btn--primary" id="linkAllSug">↩ Vincular todas las sugeridas sin aviso (${sugList.length})</button> <span class="hint">Las que tienen aviso ⚠ se quedan sin vincular para que las revises.</span></div>` : ''}
       <div class="panel"><div class="panel__body">${table('dtDescuadres', { rows: sv, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas sin vincular. 🎉' })}</div></div>
       ${swPanel}
-      ${pmPanel}`, ['Descuadres']);
+      ${pmPanel}
+      ${igPanel}`, ['Descuadres']);
     const linkInv = async (invId, id) => { try { const res = await api('holded-descuadres/link', { method: 'POST', body: { invId, eventId: id } }); toast('✅ Factura vinculada' + (res.conyuges ? ' a ' + res.conyuges : ' a la boda #' + id), 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };
     // Se re-enganchan tras cada orden/filtro/paginación de la tabla (si no, al re-dibujarse se perdían los clicks).
+    const ignoreInv = async (invId, ignore) => { try { await api('holded-descuadres/ignore', { method: 'POST', body: { invId, ignore } }); toast(ignore ? 'Factura obviada' : 'Factura restaurada', 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };
     function wireLinks() {
       $$('[data-link-sug]').forEach(b => b.onclick = () => linkInv(b.dataset.linkSug, +b.dataset.ev));
+      $$('[data-ignore-inv]').forEach(b => b.onclick = () => ignoreInv(b.dataset.ignoreInv, true));
       $$('[data-link-inv]').forEach(b => b.onclick = () => {
         const invId = b.dataset.linkInv;
         modal('Vincular factura a una boda', `<p class="hint" style="margin-bottom:10px">Escribe el <b>número de la boda</b> (evento) al que pertenece esta factura. Lo ves en el listado de eventos o con el buscador.</p><div class="field"><label>Nº de boda</label><input class="control" id="linkEvId" type="number" inputmode="numeric" placeholder="p. ej. 1234"></div>`, {
@@ -911,6 +922,7 @@ on(/^#\/descuadres$/, async () => {
       });
     }
     bindTable('dtDescuadres', wireLinks);
+    bindTable('dtIgnoradas', () => { $$('[data-restore-inv]').forEach(b => b.onclick = () => ignoreInv(b.dataset.restoreInv, false)); });
     const lab = el('linkAllSug'); if (lab) lab.onclick = () => {
       modal('Vincular todas las sugeridas', `<p>Se vincularán <b>${sugList.length}</b> facturas a la boda que propone su concepto (fecha + lugar). Las que tienen aviso ⚠ se dejan sin vincular para que las revises. <b>No cambia ningún importe pagado.</b></p>`, {
         okText: 'Vincular ' + sugList.length, onOk: async () => {
