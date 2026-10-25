@@ -720,7 +720,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       // contiene palabras de negocio: hotel, restaurant, masía, catering, sociedad, etc.).
       const CIF = s => /^[A-W]\d{7}[0-9A-J]$/.test(normN(s));
       const COMPANY_NAME = /(,?\s*s\.?\s?[laup]\.?\s?[un]?\.?|s\.?\s?c\.?\s?p?\.?|c\.?\s?b\.?|\bcoop)\s*$/i;
-      const VENUE_NAME = /\b(hotel|restaurant|masia|mas |colonies|colonias|ajuntament|catering|gastronom|finca|celler|castell|hospitality|sinso|edelweiss|broquetas|boella|nou coberts|vents)/i;
+      const VENUE_NAME = /\b(hotel|restaurant|masia|mas |colonies|colonias|ajuntament|ayuntamiento|diputaci|consell|consorci|generalitat|consejo|patronat|fundaci|catering|gastronom|finca|celler|castell|hospitality|sinso|edelweiss|broquetas|boella|nou coberts|vents)/i;
       const isCompany = c => CIF(c.code) || CIF(c.vat_number) || COMPANY_NAME.test(c.name || '') || VENUE_NAME.test(c.name || '');
       const links = store.setting('invoiceLinks') || {};   // vinculaciones manuales factura -> evento
       const yearOf = d => { if (typeof d === 'number') return new Date(d < 1e12 ? d * 1000 : d).getUTCFullYear(); const m = String(d || '').match(/(\d{4})/); return m ? +m[1] : 0; };
