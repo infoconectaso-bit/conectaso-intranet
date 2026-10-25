@@ -2520,6 +2520,14 @@ process.on('unhandledRejection', (e) => { console.error('[unhandledRejection] el
 /* ---------- servidor ---------- */
 const server = http.createServer(async (req, res) => {
   try {
+    // Cabeceras de seguridad en TODAS las respuestas (no afectan al uso):
+    //  - X-Frame-Options: evita que la intranet se embeba en un iframe de otra web (clickjacking).
+    //  - Referrer-Policy: no filtra la URL completa a sitios externos.
+    //  - X-Content-Type-Options: el navegador respeta el tipo de archivo declarado.
+    // (HSTS se añadirá cuando el dominio esté con HTTPS, para no bloquear accesos antes de tiempo.)
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
     if (url.pathname.startsWith('/uploads/')) return fail(res, 403, 'Prohibido'); // los archivos van por /api/files
