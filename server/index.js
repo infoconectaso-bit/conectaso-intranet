@@ -734,7 +734,15 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       const PACKS = [['fiesta', 'Fiesta'], ['bodorrio', 'Bodorrio'], ['tinglado', 'Tinglado'], ['boda', 'Boda']];
       const SERVICE_KW = ['fotomaton', 'photocall', 'fuego frio', 'fuegos frios', 'chispa', 'pirotecn', 'nebulizad', 'baja densidad', 'saxo', 'saxofon', 'trompeta', 'percusion', 'violin', 'cantante', 'co2', 'confeti', 'confetti', 'robot led', 'nube', 'humo'];
       const invConcept = raw => { const p = [raw.desc, raw.description, raw.notes, raw.notesText, raw.concept]; (raw.products || raw.items || raw.lines || []).forEach(it => { if (it) { p.push(it.name); p.push(it.desc || it.description); } }); return p.filter(Boolean).join(' · '); };
-      const parseConceptDate = txt => { let m = txt.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/); if (m) { let y = +m[3]; if (y < 100) y += 2000; return y + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); } m = txt.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/); if (m) return m[1] + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[3]).padStart(2, '0'); return ''; };
+      const MESES = { enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12, ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, sep: 9, set: 9, oct: 10, nov: 11, dic: 12, gener: 1, febrer: 2, marc: 3, maig: 5, juny: 6, juliol: 7, agost: 8, setembre: 9, novembre: 11, desembre: 12 };
+      const parseConceptDate = txt => {
+        let m = txt.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/); if (m) { let y = +m[3]; if (y < 100) y += 2000; return y + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); }
+        m = txt.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/); if (m) return m[1] + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[3]).padStart(2, '0');
+        // "24 de octubre de 2026", "24 octubre 2026", "24 oct 2026", "24 d'octubre de 2026"
+        m = normNm(txt).match(/\b(\d{1,2})\s*(?:de\s+|d\s*)?([a-z]+)\.?\s*(?:de\s+|del\s+)?(\d{4})\b/);
+        if (m) { const mo = MESES[m[2]]; if (mo) return m[3] + '-' + String(mo).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); }
+        return '';
+      };
       const suggestByConcept = raw => {
         const txt = invConcept(raw); if (!txt) return null;
         const nt = normNm(txt);
@@ -755,7 +763,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       const payByEvent = {};   // eventId -> suma de bases (sin IVA) de sus facturas vinculadas
       const _hoy = bizToday();
       let cWithConcept = 0, cWithDate = 0, cSample = '';   // diagnóstico: ¿se está leyendo el concepto de Holded?
-      const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0, antiguasInv = 0;
+      const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0, antiguasInv = 0, pasadasInv = 0;
       Object.values(idx.byId).forEach(c => {
         let ev = null;
         (c.emails || []).forEach(em => { if (!ev) ev = evByKey['e:' + normE(em)]; });
@@ -787,6 +795,8 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
           if (company) { empresaInv++; return; }              // factura a empresa/finca: no es un descuadre
           const yr = yearOf(inv.date);
           if (yr && yr < 2026) { antiguasInv++; return; }     // 2024/2025 y anteriores: no se muestran
+          const _wd = parseConceptDate(_c);                    // fecha de la boda según el concepto
+          if (_wd && _wd < _hoy) { pasadasInv++; return; }     // boda ya pasada: no hace falta vincularla
           const sg = suggestByConcept(raw);
           let suggestedEventId = null, suggestedLabel = '', catWarn = '';
           if (sg && sg.eventId) {
@@ -816,7 +826,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         }
       });
       payMismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
-      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings, payMismatches, conceptStats: { total: totalInv, withConcept: cWithConcept, withDate: cWithDate, sample: cSample } });
+      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, pasadasInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings, payMismatches, conceptStats: { total: totalInv, withConcept: cWithConcept, withDate: cWithDate, sample: cSample } });
     } catch (e) { return ok(res, { enabled: true, error: e.message, sinVincular: [] }); }
   }
   // --- VINCULAR una factura de Holded a un evento existente (o desvincular) ---

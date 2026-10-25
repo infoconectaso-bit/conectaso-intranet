@@ -887,7 +887,7 @@ on(/^#\/descuadres$/, async () => {
       <div class="grid-3" style="margin-bottom:14px">
         <div class="stat stat--pink"><div class="k">Facturas sin vincular</div><div class="v">${r.sinVincularN || 0}</div></div>
         <div class="stat stat--blue"><div class="k">Facturas vinculadas a boda</div><div class="v">${r.linkedInv || 0}</div></div>
-        <div class="stat"><div class="k">Excluidas (empresas + antiguas)</div><div class="v">${(r.empresaInv || 0) + (r.antiguasInv || 0)}</div></div>
+        <div class="stat"><div class="k">Excluidas (empresas + pasadas)</div><div class="v">${(r.empresaInv || 0) + (r.antiguasInv || 0) + (r.pasadasInv || 0)}</div></div>
       </div>
       <p class="hint" style="margin-bottom:8px">Salen facturas a <b>personas</b> de <b>2026 en adelante</b> que no cuadran con ningún evento. Cuando el concepto trae la <b>fecha y el lugar</b>, te propongo la boda y la vinculas con un clic (↩). Si el <b>pack</b> no coincide con la categoría de la boda, sale un aviso. También puedes vincular a mano (🔗).</p>
       ${csLine}
