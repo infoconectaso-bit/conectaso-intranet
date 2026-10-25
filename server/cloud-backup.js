@@ -24,6 +24,7 @@ const FILES_PREFIX = 'conectaso-archivos/';  // carpeta dentro del bucket (archi
 // BBDD: se sube a una ranura por DÍA DEL MES (conectaso-db-dNN.db) que se sobrescribe → ~1 mes de
 // historial diario, autolimitado (máx. 31 copias de ~14 MB ≈ 0,4 GB), sin depender de borrar nada.
 const FILES_FIXED = 'conectaso-archivos-actual.tar';  // nombre FIJO del paquete de archivos (se sobrescribe)
+const SAFE_LIMIT = 9.3 * 1024 * 1024 * 1024;          // margen de seguridad bajo el tope de 10 GB del bucket
 const UPLOADS = path.join(DATA_DIR, 'uploads');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
 let lastFilesOk = null;                       // { date, skipped? }
@@ -157,6 +158,55 @@ async function deleteLegacyDbSnapshots() {
   lastPrune = { prefix: PREFIX, candidates: files.length, deleted, failed, error: firstErr, date: new Date().toISOString() };
   return lastPrune;
 }
+// --- Purga REAL por versiones -------------------------------------------------------------------
+// En Backblaze, un DELETE normal (sin versionId) solo OCULTA el archivo: los bytes siguen contando
+// hasta que el ciclo de vida del bucket los barre (hasta 1 día). Para liberar espacio YA, listamos
+// TODAS las versiones y borramos cada una por su versionId (borrado definitivo).
+// Conservamos solo la versión actual del esquema nuevo: el paquete fijo de archivos y las ranuras
+// de BBDD por día del mes. Todo lo demás (copias con fecha del esquema anterior y versiones antiguas
+// de los archivos sobrescritos) se borra.
+function isKeepKey(key) {
+  if (key === FILES_PREFIX + FILES_FIXED) return true;                 // paquete de archivos actual
+  if (new RegExp('^' + PREFIX + 'conectaso-db-d\\d{2}\\.db$').test(key)) return true;  // ranura de BBDD por día
+  return false;
+}
+async function listAllVersions() {
+  const out = []; let km = null, vm = null, more = true;
+  while (more) {
+    const query = { 'versions': '', 'max-keys': '1000' };
+    if (km) query['key-marker'] = km;
+    if (vm) query['version-id-marker'] = vm;
+    const xml = await s3('GET', '', { query });
+    const re = /<(Version|DeleteMarker)>([\s\S]*?)<\/\1>/g; let m;
+    while ((m = re.exec(xml))) {
+      const bl = m[2];
+      const key = (bl.match(/<Key>([^<]+)<\/Key>/) || [])[1];
+      const vid = (bl.match(/<VersionId>([^<]+)<\/VersionId>/) || [])[1];
+      if (!key || !vid) continue;
+      out.push({ key, vid, latest: /<IsLatest>true<\/IsLatest>/.test(bl), isMarker: m[1] === 'DeleteMarker', size: +((bl.match(/<Size>(\d+)<\/Size>/) || [])[1] || 0) });
+    }
+    if (/<IsTruncated>true<\/IsTruncated>/.test(xml)) {
+      km = (/<NextKeyMarker>([^<]*)<\/NextKeyMarker>/.exec(xml) || [])[1] || null;
+      vm = (/<NextVersionIdMarker>([^<]*)<\/NextVersionIdMarker>/.exec(xml) || [])[1] || null;
+      more = !!km;
+    } else more = false;
+  }
+  return out;
+}
+// Borra definitivamente todas las versiones que no sean la actual del esquema nuevo. Devuelve el
+// resultado (deleted/failed/freedBytes). Si la clave no tiene permiso de borrado, failed saldrá > 0.
+async function purgeOldVersions() {
+  const vers = await listAllVersions();
+  let deleted = 0, failed = 0, freed = 0, firstErr = null;
+  for (const v of vers) {
+    if (v.latest && !v.isMarker && isKeepKey(v.key)) continue;         // conserva la copia actual válida
+    try { await s3('DELETE', v.key, { query: { versionId: v.vid } }); deleted++; freed += v.size; }
+    catch (e) { failed++; if (!firstErr) firstErr = e.message; }
+  }
+  lastPrune = { mode: 'purge', candidates: vers.length, deleted, failed, freedBytes: freed, error: firstErr, date: new Date().toISOString() };
+  if (failed > 0) alertNoDelete(firstErr);                             // la clave no puede borrar → avisa
+  return lastPrune;
+}
 // Cuenta los objetos .db bajo PREFIX (ranuras + lo que quede) y la fecha de la más reciente.
 async function countDb() {
   let count = 0, last = null, bytes = 0, token = null;
@@ -179,9 +229,8 @@ async function countDb() {
 async function pruneAll() {
   if (!enabled()) return null;
   pruneCheck = Date.now(); filesPruneCheck = Date.now();
-  const dbRes = await deleteLegacyDbSnapshots().catch(e => ({ error: e.message }));
-  const fRes = await deleteLegacyFilesTars().catch(e => ({ error: e.message }));
-  return { db: dbRes, files: fRes };
+  // Borrado definitivo por versiones: libera el espacio de verdad (no solo oculta).
+  return await purgeOldVersions().catch(e => ({ error: e.message }));
 }
 // Tamaño TOTAL del bucket (todos los objetos), para que coincida con lo que muestra Backblaze.
 async function bucketBytes() {
@@ -223,6 +272,18 @@ async function syncFiles() {
     const sig = filesSignature();
     if (sig === '0:0:0') return;                         // no hay nada subido todavía
     if (store.setting('filesBackupSig') === sig) { lastFilesOk = { date: new Date().toISOString(), skipped: true }; return; } // sin cambios
+    // GUARDA ANTI-LÍMITE: el paquete de archivos es lo pesado. Si subirlo acercaría el bucket al tope
+    // de 10 GB, primero intentamos liberar lo viejo; si aun así no cabe, POSPONEMOS esta subida (la de
+    // la BBDD, pequeña, sigue). Así la subida nunca se bloquea por llegar al límite.
+    try {
+      const folderBytes = +(sig.split(':')[1] || 0);
+      let cur = (await bucketBytes().catch(() => ({ bytes: 0 }))).bytes;
+      if (cur + folderBytes > SAFE_LIMIT) { try { await purgeOldVersions(); } catch (e) {} cur = (await bucketBytes().catch(() => ({ bytes: 0 }))).bytes; }
+      if (cur + folderBytes > SAFE_LIMIT) {
+        lastFilesError = { message: 'Copia de archivos POSPUESTA: el bucket está casi lleno (' + (cur / 1073741824).toFixed(1) + ' GB) y no se pudo liberar espacio (¿la clave de Backblaze no tiene permiso de borrado?).', date: new Date().toISOString() };
+        return;
+      }
+    } catch (e) {}
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
     const name = FILES_FIXED;                            // nombre fijo: sobrescribe la copia anterior en la nube
     const tmp = path.join(BACKUP_DIR, 'conectaso-archivos.tmp.tar');
@@ -234,8 +295,8 @@ async function syncFiles() {
     } finally {
       try { fs.unlinkSync(tmp); } catch (e) {}           // el tar local es redundante (los archivos ya están en disco)
     }
-    // Borra los paquetes antiguos con nombre de fecha (esquema anterior); el fijo ya no se acumula.
-    if (Date.now() - filesPruneCheck > 60 * 60 * 1000) { filesPruneCheck = Date.now(); try { await deleteLegacyFilesTars(); } catch (e) {} }
+    // Cada hora, borrado definitivo por versiones (paquetes antiguos y versiones sobrescritas).
+    if (Date.now() - filesPruneCheck > 60 * 60 * 1000) { filesPruneCheck = Date.now(); try { await purgeOldVersions(); } catch (e) {} }
   } catch (e) {
     lastFilesError = { message: e.message, date: new Date().toISOString() };
     console.error('[cloud-backup] fallo al subir archivos:', e.message);
@@ -257,13 +318,34 @@ async function syncSnapshot(localPath, name) {
     lastCloudDb = now;
     const dd = String(new Date().getDate()).padStart(2, '0');
     await uploadFile(localPath, PREFIX + 'conectaso-db-d' + dd + '.db');
-    // De vez en cuando, borra las copias del esquema anterior (con fecha y hora en el nombre).
-    if (now - pruneCheck > 60 * 60 * 1000) { pruneCheck = now; try { await deleteLegacyDbSnapshots(); } catch (e) {} }
+    // Cada hora, borrado definitivo por versiones (copias antiguas y versiones sobrescritas).
+    if (now - pruneCheck > 60 * 60 * 1000) { pruneCheck = now; try { await purgeOldVersions(); } catch (e) {} }
   } catch (e) {
     lastError = { message: e.message, date: new Date().toISOString() };
     console.error('[cloud-backup] fallo al subir:', e.message);
     alertFail(e);
   }
+}
+
+let lastNoDeleteAlert = 0;
+// Aviso específico: la clave de Backblaze no puede BORRAR (las copias antiguas no se liberan).
+// Explica el arreglo de una vez (recrear la clave con permiso de lectura y escritura). Máx. 1/12 h.
+function alertNoDelete(err) {
+  const now = Date.now();
+  if (now - lastNoDeleteAlert < 12 * 60 * 60 * 1000) return;
+  lastNoDeleteAlert = now;
+  if (!mail.enabled()) return;
+  let to = '';
+  try { to = users.all().filter(u => u.role === 'admin' && u.email && u.active).map(u => u.email).join(','); } catch (e) {}
+  if (!to) return;
+  const body = 'La copia en la nube (Backblaze) SUBE bien, pero no consigue BORRAR las copias antiguas, así que el espacio no se libera. Casi seguro la clave de API no tiene permiso de borrado.\n\n' +
+    'Arreglo (una sola vez, ~2 min):\n' +
+    '1) Entra en Backblaze → App Keys → "Add a New Application Key".\n' +
+    '2) Permiso: "Read and Write" (incluye borrar). Bucket: conectaso-backups. Sin prefijo ni límite. Crear.\n' +
+    '3) Copia el keyID y la applicationKey.\n' +
+    '4) En la intranet: Mi cuenta → Configuración avanzada → Copias de seguridad en la nube: pega las nuevas claves y Guarda.\n\n' +
+    'En cuanto estén puestas, el sistema borra solo las copias antiguas y el espacio baja. (Error técnico: ' + String(err || '') + ')';
+  try { mail.sendMail({ to, subject: '⚠ Backblaze: la clave no puede borrar — hay que recrearla', text: body, html: '<p>' + body.replace(/\n/g, '<br>') + '</p>' }); } catch (e) {}
 }
 
 function alertFail(err) {
