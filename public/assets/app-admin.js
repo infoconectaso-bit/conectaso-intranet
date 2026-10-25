@@ -1647,24 +1647,7 @@ on(/^#\/cuenta$/, async () => {
            <div class="field"><label>Token de API de Holded</label><input class="control" type="password" id="hdApiKey" autocomplete="off" placeholder="(pega aquí el token)"></div>
            <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Guardar</button> <button type="button" class="btn" id="hdTest">Probar conexión</button></div>
          </form>
-         <div id="holdedCfgMsg" style="margin-top:10px;display:none;font-size:13px"></div>
-         <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
-         <h4 style="margin:0 0 6px">📅 Google Calendar (sincronización instantánea)</h4>
-         <p class="hint" style="margin-bottom:12px">Permite que cada boda aparezca <b>al instante</b> en el Google Calendar de cada DJ (y se actualice o se borre sola). Se configura una sola vez. <b>Necesita el dominio con HTTPS</b> ya montado: hasta entonces puedes dejarlo preparado pero no funcionará.</p>
-         <ol class="hint" style="margin:0 0 12px 18px;padding:0;line-height:1.7">
-           <li>En <b>Google Cloud</b> → crea un proyecto y activa la <b>API de Google Calendar</b>.</li>
-           <li>Crea credenciales <b>OAuth de tipo «Aplicación web»</b>.</li>
-           <li>En «URIs de redirección autorizados» pega exactamente la dirección que ves abajo.</li>
-           <li>Copia aquí el <b>ID de cliente</b> y el <b>secreto</b>, marca «activado» y guarda.</li>
-         </ol>
-         <form id="gcalCfgForm" style="max-width:520px">
-           <label class="chk" style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><input type="checkbox" id="gcEnabled"> <span>Google Calendar <b>activado</b></span></label>
-           <div class="field"><label>URI de redirección autorizado <span class="muted">(pégalo tal cual en Google Cloud)</span></label><input class="control" id="gcRedirect" readonly value="(cargando…)"></div>
-           <div class="field"><label>ID de cliente</label><input class="control" id="gcClientId" autocomplete="off" placeholder="xxxxx.apps.googleusercontent.com"></div>
-           <div class="field"><label>Secreto de cliente</label><input class="control" type="password" id="gcSecret" autocomplete="off" placeholder="(pega aquí el secreto; déjalo vacío para no cambiarlo)"></div>
-           <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Guardar</button></div>
-         </form>
-         <div id="gcalCfgMsg" style="margin-top:10px;display:none;font-size:13px"></div>`
+         <div id="holdedCfgMsg" style="margin-top:10px;display:none;font-size:13px"></div>`
       : `<form id="advForm" style="max-width:420px"><div class="field"><label>Contraseña</label><input class="control" type="password" id="advPass" autocomplete="off"></div>
           <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Desbloquear</button>
           <button type="button" class="btn btn--sm" id="advForgot">¿Olvidaste la contraseña?</button></div></form>
@@ -1689,10 +1672,6 @@ on(/^#\/cuenta$/, async () => {
       <div class="panel" style="margin-top:4px"><div class="panel__head"><h3>📅 Mis bodas en tu calendario</h3></div><div class="panel__body">
         <p class="hint" style="margin-bottom:12px">Suscríbete y tus bodas asignadas aparecerán en tu calendario (Google o iPhone) y se <b>actualizarán solas</b>: cuando te asignen una nueva, aparece sin que tengas que entrar. Es de <b>solo lectura</b> — no borra ni duplica tus propios eventos.</p>
         <div id="calBox"><p class="hint">Cargando enlace…</p></div>
-      </div></div>
-      <div class="panel" style="margin-top:4px" id="gcalConnPanel" hidden><div class="panel__head"><h3>⚡ Google Calendar (al instante)</h3></div><div class="panel__body">
-        <p class="hint" style="margin-bottom:12px">Conéctate una vez y tus bodas aparecerán en tu Google Calendar <b>en el momento</b> en que te asignen o cambien una, sin esperar. Es de <b>solo lectura</b> sobre tus bodas de Conecta So — no toca el resto de tu calendario.</p>
-        <div id="gcalConnBox"><p class="hint">Comprobando…</p></div>
       </div></div>` : ''}
     ${adv}`, ['Mi cuenta']);
   (async () => {
@@ -1708,46 +1687,6 @@ on(/^#\/cuenta$/, async () => {
       <p class="hint"><b>iPhone:</b> pulsa «Añadir al iPhone» y confirma. <b>Google Calendar (desde el ordenador):</b> pulsa «Añadir a Google Calendar», pega el enlace en «Desde URL» y Añadir. Se actualiza solo cada pocas horas.</p>`;
     const u = el('calUrl'); if (u) u.onclick = () => u.select();
     const c = el('calCopy'); if (c) c.onclick = async () => { try { await navigator.clipboard.writeText(d.url); toast('Enlace copiado', 'ok'); } catch (e) { const i = el('calUrl'); if (i) { i.select(); } } };
-  })();
-  // --- Google Calendar (sincronización instantánea por OAuth) ---
-  (async () => {
-    // Aviso al volver del flujo de Google (?gcal=ok|error)
-    try {
-      const h = location.hash || '';
-      if (/[?&]gcal=ok/.test(h)) { toast('Google Calendar conectado. Tus bodas se sincronizarán al instante.', 'ok'); location.hash = '#/cuenta'; }
-      else if (/[?&]gcal=error/.test(h)) { toast('No se pudo conectar Google Calendar. Inténtalo de nuevo.', 'err'); location.hash = '#/cuenta'; }
-    } catch (e) {}
-    let st; try { st = await api('gcal/status'); } catch (e) { st = null; }
-    // Panel del DJ/admin: conectar / desconectar
-    const panel = el('gcalConnPanel'), box = el('gcalConnBox');
-    if (panel && box && st) {
-      panel.hidden = false;
-      const render = s => {
-        if (!s.configured) { box.innerHTML = '<p class="hint">La sincronización instantánea todavía no está activada por administración (necesita el dominio con HTTPS). Mientras tanto, usa la suscripción de arriba.</p>'; return; }
-        if (s.connected) {
-          box.innerHTML = '<p class="hint" style="margin-bottom:12px"><b style="color:#2e7d32">✓ Conectado.</b> Tus bodas aparecen en tu Google Calendar al instante.</p><div class="btn-row"><button class="btn" id="gcDisc">Desconectar</button></div>';
-          const b = el('gcDisc'); if (b) b.onclick = async () => { b.disabled = true; try { await api('gcal/disconnect', { method: 'POST', body: {} }); toast('Google Calendar desconectado', 'ok'); render({ ...s, connected: false }); } catch (e) { b.disabled = false; toast('No se pudo desconectar', 'err'); } };
-        } else {
-          box.innerHTML = '<div class="btn-row"><button class="btn btn--primary" id="gcConn">Conectar Google Calendar</button></div>';
-          const b = el('gcConn'); if (b) b.onclick = async () => { b.disabled = true; try { const r = await api('gcal/connect'); location.href = r.url; } catch (e) { b.disabled = false; toast(e.message || 'No se pudo iniciar la conexión', 'err'); } };
-        }
-      };
-      render(st);
-    }
-    // Formulario de configuración (solo admin, dentro de configuración avanzada)
-    const cfgForm = el('gcalCfgForm');
-    if (cfgForm && st) {
-      const rd = el('gcRedirect'); if (rd) rd.value = st.redirectUri || '';
-      if (st.config) { if (el('gcEnabled')) el('gcEnabled').checked = !!st.config.enabled; if (el('gcClientId')) el('gcClientId').value = st.config.clientId || ''; if (el('gcSecret')) el('gcSecret').placeholder = st.config.hasSecret ? '•••••••• (guardado; déjalo vacío para no cambiarlo)' : '(pega aquí el secreto)'; }
-      if (rd) rd.onclick = () => rd.select();
-      cfgForm.onsubmit = async e => {
-        e.preventDefault(); const m = el('gcalCfgMsg'); m.style.display = 'none';
-        const body = { enabled: !!(el('gcEnabled') && el('gcEnabled').checked), clientId: (el('gcClientId') || {}).value || '' };
-        const sec = (el('gcSecret') || {}).value || ''; if (sec) body.clientSecret = sec;
-        try { await api('gcal/config', { method: 'POST', body }); toast('Configuración de Google Calendar guardada', 'ok'); if (el('gcSecret')) el('gcSecret').value = ''; }
-        catch (err) { m.style.display = 'block'; m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>'; }
-      };
-    }
   })();
   el('pwForm').onsubmit = async e => {
     e.preventDefault(); const d = collectForm(e.target); const errEl = el('pwErr'); errEl.style.display = 'none';
