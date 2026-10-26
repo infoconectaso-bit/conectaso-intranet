@@ -5,7 +5,7 @@ apartados: **pagado por la empresa** y **pagado por nosotros**. Solo comparte el
 servidor: va en su propio contenedor (`conectaso-reforma`), en el puerto **8082**, con
 sus propios usuarios y sus datos en `data-reforma/` (fuera del repositorio).
 
-- Abrir: `https://reforma.prueba.lol` (o `http://IP_DEL_SERVIDOR:8082`).
+- Abrir: `http://IP_DEL_SERVIDOR:8082`.
 - La primera vez que se abre pide crear la primera cuenta. Las demás personas se
   añaden desde **Ajustes → Añadir persona**.
 - Subir la foto de un ticket: el servidor la lee con **Tesseract** (gratis, sin

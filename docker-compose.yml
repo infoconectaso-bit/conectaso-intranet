@@ -50,7 +50,7 @@ services:
       - ./data-seguros:/data
 
   # App de la reforma: independiente de la intranet (otro contenedor, puerto 8082 y datos propios).
-  # Se abre en https://reforma.prueba.lol (a través de Caddy) o en http://IP:8082
+  # Se abre en http://IP:8082
   reforma:
     build: ./reforma
     container_name: conectaso-reforma

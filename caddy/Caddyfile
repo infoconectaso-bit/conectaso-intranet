@@ -13,8 +13,3 @@ prueba.lol {
 http://200.234.226.246 {
 	reverse_proxy gestor:3000
 }
-
-# App Reforma (gastos de la reforma de casa): independiente de la intranet.
-reforma.prueba.lol {
-	reverse_proxy reforma:8082
-}
