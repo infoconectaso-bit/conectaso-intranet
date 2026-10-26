@@ -1681,7 +1681,7 @@ on(/^#\/cuenta$/, async () => {
   // --- Face ID / passkeys ---
   (() => {
     const panel = el('faceIdPanel'), box = el('faceIdBox');
-    if (!panel || !box || !waSupported()) return;   // navegador sin soporte → oculto
+    if (!panel || !box || !CS.waSupported()) return;   // navegador sin soporte → oculto
     panel.hidden = false;
     const render = () => {
       if (S.user.hasPasskey) {
@@ -1695,7 +1695,7 @@ on(/^#\/cuenta$/, async () => {
     };
     async function doRegister(e) {
       const btn = e && e.target; if (btn) btn.disabled = true;
-      try { await passkeyRegister('Face ID'); S.user.hasPasskey = true; toast('Face ID activado 🔒', 'ok'); render(); }
+      try { await CS.passkeyRegister('Face ID'); S.user.hasPasskey = true; toast('Face ID activado 🔒', 'ok'); render(); }
       catch (err) { if (btn) btn.disabled = false; toast((err && err.message) || 'No se pudo activar Face ID', 'err'); }
     }
     render();

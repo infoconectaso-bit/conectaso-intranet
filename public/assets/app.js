@@ -1018,7 +1018,8 @@ function eventMiniList(list) {
 
 /* El resto de páginas se cargan desde módulos añadidos abajo */
 window.__CS = { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
-  estado, locName, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, tycTitleYear, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$ };
+  estado, locName, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, tycTitleYear, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$,
+  waSupported, passkeyRegister, passkeyLogin };
 
 boot();
 })();
