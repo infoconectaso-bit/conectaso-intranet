@@ -49,6 +49,17 @@ services:
     volumes:
       - ./data-seguros:/data
 
+  # App de la reforma: independiente de la intranet (otro contenedor, puerto 8082 y datos propios).
+  # Se abre en https://reforma.prueba.lol (a través de Caddy) o en http://IP:8082
+  reforma:
+    build: ./reforma
+    container_name: conectaso-reforma
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./data-reforma:/data
+
 volumes:
   # Certificados y estado de Caddy (persisten para no re-emitir el certificado en cada despliegue).
   caddy_data:

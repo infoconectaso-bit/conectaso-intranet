@@ -8,3 +8,5 @@ data/
 *.log
 data-prestamo/
 data-seguros/
+data-reforma/
+.caddy-hash

@@ -1,0 +1,16 @@
+{
+  "name": "Reforma",
+  "short_name": "Reforma",
+  "description": "Gastos de la reforma: pagado por la empresa y pagado por nosotros, con fotos de los tickets.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f2ee",
+  "theme_color": "#d9661f",
+  "lang": "es",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
