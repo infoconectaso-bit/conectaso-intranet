@@ -1534,6 +1534,31 @@ function applyManualRates() {
   store.setSetting('djRates', rates);
   return n;
 }
+// Ajuste puntual (una vez): tarifa de Arnau Reguero DJ (uid 236) en Mas Corts (finca 22) = boda 220,
+// hora extra 50 (evento/mediodía 170, como en sus otras fincas). NO retroactivo: antes congela sus
+// bodas pasadas de Mas Corts a la tarifa actual. Se guarda en djRatesManual para sobrevivir al volcado.
+function migArnauMasCorts() {
+  try {
+    if (store.setting('mig_arnau_mascorts')) return;
+    const UID = 236, FINCA = 22;
+    // 1) Congelar (no retroactivo) las bodas pasadas de Arnau en Mas Corts, a la tarifa ACTUAL.
+    try {
+      const today = bizToday();
+      const ids = store.all('events').filter(e => +e.djId === UID && +e.lugar === FINCA && e.fecha && e.fecha < today).map(e => e.id);
+      if (ids.length) { const n = fact.reapplyRateToEvents(ids); console.log('[mig arnau] congeladas', n, 'bodas pasadas de Mas Corts'); }
+    } catch (e) { console.error('[mig arnau] congelado:', e.message); }
+    // 2) Añadir la tarifa como corrección manual (se reaplica sobre djRates).
+    const man = store.setting('djRatesManual') || {};
+    const o = man[String(UID)] || (man[String(UID)] = {});
+    o.fincas = o.fincas || {};
+    o.fincas[String(FINCA)] = Object.assign({}, o.fincas[String(FINCA)], { boda: 220, he: 50, evento: 170 });
+    store.setSetting('djRatesManual', man);
+    applyManualRates();
+    store.setSetting('mig_arnau_mascorts', true);
+    console.log('[mig arnau] Mas Corts 220/50 aplicado a Arnau (uid 236).');
+  } catch (e) { console.error('[mig arnau] error:', e.message); }
+}
+
 // Matriz de sueldos (solo lectura, admin): tarifas por trabajador × finca/pack/servicio + uso real
 // (cuántas veces ha trabajado cada uno en cada finca/servicio) para ver qué datos faltan.
 function salaryMatrix() {
@@ -2554,6 +2579,10 @@ server.listen(PORT, HOST, () => {
   setInterval(runCleanupIfOn, 24 * 60 * 60 * 1000);   // y cada 24 h
   // Congelado automático de tarifas: bloquea las bodas nuevas ya pasadas (con 3 días de margen para
   // corregir tarifas antes) para que los cambios de tarifa/masía NO sean retroactivos.
+  // Reaplica las correcciones manuales de tarifa en cada arranque (cubre despliegues y el volcado,
+  // que reconstruye djRates) y ejecuta el ajuste puntual de Arnau si aún no se hizo.
+  try { const n = applyManualRates(); if (n) console.log('[tarifas] correcciones manuales reaplicadas:', n, 'DJs'); } catch (e) { console.error('[tarifas] applyManual arranque:', e.message); }
+  try { migArnauMasCorts(); } catch (e) { console.error('[mig arnau] arranque:', e.message); }
   const runFreeze = () => { try { const n = fact.freezeRealized(); if (n) console.log('[congelado] tarifas congeladas en', n, 'bodas'); } catch (e) { console.error('[congelado] error:', e.message); } };
   setTimeout(runFreeze, 60 * 1000);                   // al arrancar
   setInterval(runFreeze, 60 * 60 * 1000);             // y cada hora (congela en cuanto la boda se realiza)
