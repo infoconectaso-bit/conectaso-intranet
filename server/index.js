@@ -1539,23 +1539,25 @@ function applyManualRates() {
 // bodas pasadas de Mas Corts a la tarifa actual. Se guarda en djRatesManual para sobrevivir al volcado.
 function migArnauMasCorts() {
   try {
-    if (store.setting('mig_arnau_mascorts')) return;
+    if (store.setting('mig_arnau_mascorts_v2')) return;
     const UID = 236, FINCA = 22;
-    // 1) Congelar (no retroactivo) las bodas pasadas de Arnau en Mas Corts, a la tarifa ACTUAL.
-    try {
-      const today = bizToday();
-      const ids = store.all('events').filter(e => +e.djId === UID && +e.lugar === FINCA && e.fecha && e.fecha < today).map(e => e.id);
-      if (ids.length) { const n = fact.reapplyRateToEvents(ids); console.log('[mig arnau] congeladas', n, 'bodas pasadas de Mas Corts'); }
-    } catch (e) { console.error('[mig arnau] congelado:', e.message); }
-    // 2) Añadir la tarifa como corrección manual (se reaplica sobre djRates).
+    // 1) Tarifa de Mas Corts como corrección manual (idempotente; sobrevive al volcado).
     const man = store.setting('djRatesManual') || {};
     const o = man[String(UID)] || (man[String(UID)] = {});
     o.fincas = o.fincas || {};
     o.fincas[String(FINCA)] = Object.assign({}, o.fincas[String(FINCA)], { boda: 220, he: 50, evento: 170 });
     store.setSetting('djRatesManual', man);
     applyManualRates();
-    store.setSetting('mig_arnau_mascorts', true);
-    console.log('[mig arnau] Mas Corts 220/50 aplicado a Arnau (uid 236).');
+    // 2) Aplicar la tarifa NUEVA a las bodas de Arnau en Mas Corts ya realizadas de este volcado
+    //    (la #1926 del 24-oct SÍ debe cobrarse a 220/50). Se recongela a la tarifa ya aplicada,
+    //    corrigiendo el congelado a 0 que había dejado la versión anterior.
+    try {
+      const today = bizToday(); const CUT = fact.volcadoCutoff();
+      const ids = store.all('events').filter(e => +e.djId === UID && +e.lugar === FINCA && e.fecha && e.fecha >= CUT && e.fecha < today).map(e => e.id);
+      if (ids.length) { const n = fact.reapplyRateToEvents(ids); console.log('[mig arnau] tarifa Mas Corts aplicada a', n, 'boda(s) realizadas:', ids.join(',')); }
+    } catch (e) { console.error('[mig arnau] reapply:', e.message); }
+    store.setSetting('mig_arnau_mascorts_v2', true);
+    console.log('[mig arnau] Mas Corts 220/50 aplicado a Arnau (uid 236), incluida la #1926.');
   } catch (e) { console.error('[mig arnau] error:', e.message); }
 }
 
@@ -1662,6 +1664,16 @@ function listEventsFor(user) {
 /* ---------- Calendario (suscripción ICS): feed por usuario con token HMAC estable ---------- */
 function calSecret() { let s = store.setting('calSecret'); if (!s) { s = crypto.randomBytes(24).toString('hex'); store.setSetting('calSecret', s); } return s; }
 function calToken(uid) { return crypto.createHmac('sha256', calSecret()).update('cal:' + uid).digest('base64url').slice(0, 24); }
+// Color del evento (RFC 7986 COLOR): nombre CSS más parecido al color de la finca en la intranet.
+// Nota: Google Calendar suele ignorarlo en calendarios suscritos (ICS); Apple Calendar y otros sí.
+const ICS_COLORS = [['7986CB', 'cornflowerblue'], ['33B679', 'mediumseagreen'], ['8E24AA', 'darkorchid'], ['E67C73', 'salmon'], ['F6BF26', 'gold'], ['F4511E', 'orangered'], ['039BE5', 'deepskyblue'], ['616161', 'dimgray'], ['3F51B5', 'royalblue'], ['0B8043', 'green'], ['D50000', 'tomato']];
+function fincaIcsColor(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || '').trim()); if (!m) return null;
+  const n = parseInt(m[1], 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  let best = null, bd = Infinity;
+  for (const [h, name] of ICS_COLORS) { const c = parseInt(h, 16); const dr = r - ((c >> 16) & 255), dg = g - ((c >> 8) & 255), db = b - (c & 255); const d = dr * dr + dg * dg + db * db; if (d < bd) { bd = d; best = name; } }
+  return best;
+}
 function serveCalendar(req, res, file) {
   const m = /^(\d+)-([A-Za-z0-9_-]{10,})\.ics$/.exec(String(file || ''));
   if (!m) return fail(res, 404, 'No encontrado');
@@ -1681,15 +1693,19 @@ function serveCalendar(req, res, file) {
     const ymd = f.replace(/-/g, '');
     const hm = /^(\d{1,2}):(\d{2})/.exec(e.hora || '');
     const venue = locName(e.lugar) || e.lugarOtro || '';
-    const title = (e.conyuges ? '💍 ' + e.conyuges : (e.tipo || 'Evento') + ' #' + e.id) + (venue ? ' — ' + venue : '');
-    const desc = [e.hora ? 'Hora: ' + e.hora : '', e.tipo ? 'Pack: ' + e.tipo : '', venue ? 'Lugar: ' + venue : '', 'Boda #' + e.id].filter(Boolean).join('\n');
+    // Por privacidad: solo lugar + fecha/hora de la ceremonia. SIN nombres de novios, pack ni nº de boda.
+    const title = venue || 'Boda';
+    const desc = e.hora ? 'Hora de la ceremonia: ' + e.hora : '';
     lines.push('BEGIN:VEVENT', 'UID:conecta-' + e.id + '-u' + uid + '@conectaso.es', 'DTSTAMP:' + dtstamp);
     // Hora de inicio = hora de la ceremonia; SIN hora de fin (por petición). Si no hay hora, día completo.
     if (hm) lines.push('DTSTART:' + ymd + 'T' + pad(+hm[1]) + hm[2] + '00');
     else lines.push('DTSTART;VALUE=DATE:' + ymd);
     lines.push('SUMMARY:' + esc(title));
     if (venue) lines.push('LOCATION:' + esc(venue));
-    lines.push('DESCRIPTION:' + esc(desc), 'END:VEVENT');
+    const col = fincaIcsColor((store.get('locations', e.lugar) || {}).colorHex);
+    if (col) lines.push('COLOR:' + col);
+    if (desc) lines.push('DESCRIPTION:' + esc(desc));
+    lines.push('END:VEVENT');
   });
   lines.push('END:VCALENDAR');
   res.writeHead(200, { 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'no-cache' });
