@@ -172,7 +172,12 @@ function mapInvoice(inv) {
   const pending = Math.max(0, Math.round((base - paid) * 100) / 100); // pendiente SIN IVA
   return {
     id: inv.id, number: inv.document_number || '', date: inv.date || '', dueDate: inv.due_date || '',
-    desc: inv.description || '', total: base, paid, pending, tax, totalConIva, paidConIva, status: inv.status || '',
+    desc: inv.description || inv.desc || '', total: base, paid, pending, tax, totalConIva, paidConIva, status: inv.status || '',
+    // Observaciones de la factura y líneas: el enlace por concepto mira también aquí (ahí suele venir
+    // la fecha y el lugar de la boda). customFields: por si las observaciones están en un campo propio.
+    notes: inv.notes || '',
+    products: (inv.products || inv.items || []).map(p => ({ name: (p && p.name) || '', desc: (p && (p.desc || p.description)) || '' })),
+    customFields: (inv.customFields || inv.custom_fields || []).map(f => (f && (f.value != null ? f.value : f.text)) || '').filter(Boolean),
     paidFull: pending <= 0.009 && base > 0,
   };
 }

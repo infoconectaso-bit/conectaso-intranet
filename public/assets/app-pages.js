@@ -926,7 +926,7 @@ async function loadHoldedFacturas(ev) {
       <td style="text-align:right">${eur(a.paid)}</td>
       <td style="text-align:right">${a.pending > 0 ? eur(a.pending) : '—'}</td>
       <td>${statusChip(i)}</td>
-      <td><a class="btn btn--icon" href="/api/events/${ev.id}/holded-invoice-pdf?inv=${encodeURIComponent(i.id)}" target="_blank" rel="noopener" title="Ver / descargar PDF">📄</a></td>
+      <td><button type="button" class="btn btn--icon" onclick="window.open('/api/events/${ev.id}/holded-invoice-pdf?inv=${encodeURIComponent(i.id)}','_blank','noopener')" title="Ver / descargar PDF">📄</button></td>
     </tr>`; }).join('');
   const t = invs.reduce((s, i) => { const a = amt(i); return { base: s.base + a.base, iva: s.iva + a.iva, total: s.total + a.total, paid: s.paid + a.paid, pending: s.pending + a.pending }; }, { base: 0, iva: 0, total: 0, paid: 0, pending: 0 });
   const note = admin
