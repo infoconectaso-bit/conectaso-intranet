@@ -271,7 +271,11 @@ async function syncFiles() {
     if (!fs.existsSync(UPLOADS)) return;
     const sig = filesSignature();
     if (sig === '0:0:0') return;                         // no hay nada subido todavía
-    if (store.setting('filesBackupSig') === sig) { lastFilesOk = { date: new Date().toISOString(), skipped: true }; return; } // sin cambios
+    // ¿Existe ya el paquete fijo en la nube? Si NO (p. ej. tras limpiar el bucket), hay que subirlo
+    // aunque la firma no haya cambiado — así la copia offsite de los archivos se autorrepara.
+    let fixedExists = true;
+    try { const xml = await s3('GET', '', { query: { 'list-type': '2', 'prefix': FILES_PREFIX + FILES_FIXED, 'max-keys': '1' } }); fixedExists = /<Contents>/.test(xml); } catch (e) { fixedExists = true; }
+    if (fixedExists && store.setting('filesBackupSig') === sig) { lastFilesOk = { date: new Date().toISOString(), skipped: true }; return; } // sin cambios y ya está en la nube
     // GUARDA ANTI-LÍMITE: el paquete de archivos es lo pesado. Si subirlo acercaría el bucket al tope
     // de 10 GB, primero intentamos liberar lo viejo; si aun así no cabe, POSPONEMOS esta subida (la de
     // la BBDD, pequeña, sigue). Así la subida nunca se bloquea por llegar al límite.
@@ -314,7 +318,7 @@ async function syncSnapshot(localPath, name) {
   if (!enabled()) return;
   try {
     const now = Date.now();
-    if (now - lastCloudDb < 55 * 60 * 1000) return;     // como mucho una subida a la nube por hora
+    if (now - lastCloudDb < 15 * 60 * 1000) return;     // como mucho una subida a la nube cada 15 min
     lastCloudDb = now;
     const dd = String(new Date().getDate()).padStart(2, '0');
     await uploadFile(localPath, PREFIX + 'conectaso-db-d' + dd + '.db');
