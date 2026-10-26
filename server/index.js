@@ -2670,10 +2670,14 @@ const server = http.createServer(async (req, res) => {
     //  - X-Frame-Options: evita que la intranet se embeba en un iframe de otra web (clickjacking).
     //  - Referrer-Policy: no filtra la URL completa a sitios externos.
     //  - X-Content-Type-Options: el navegador respeta el tipo de archivo declarado.
-    // (HSTS se añadirá cuando el dominio esté con HTTPS, para no bloquear accesos antes de tiempo.)
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    // CSP compatible: restringe de dónde se cargan recursos y evita el embebido, SIN romper la app
+    // (se permite inline en script/estilo porque la intranet usa estilos y algún manejador en línea).
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'");
+    // HSTS: solo en HTTPS (tras Caddy). Obliga a usar HTTPS durante 180 días. No se envía por HTTP/IP.
+    if (req.headers['x-forwarded-proto'] === 'https' || req.socket.encrypted) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
     if (url.pathname.startsWith('/uploads/')) return fail(res, 403, 'Prohibido'); // los archivos van por /api/files
