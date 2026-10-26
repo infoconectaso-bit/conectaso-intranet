@@ -1561,6 +1561,29 @@ function migArnauMasCorts() {
   } catch (e) { console.error('[mig arnau] error:', e.message); }
 }
 
+// Ajuste puntual (una vez): tarifa de DJ nico (uid 2012) en Can Ribas (fincas 14/15/16) = boda 220,
+// hora extra 50 (evento/mediodía 170, como el patrón de Can Ribas). Se guarda en djRatesManual
+// (sobrevive al volcado) y se aplica a sus bodas de Can Ribas ya realizadas de este periodo.
+function migNicoCanRibas() {
+  try {
+    if (store.setting('mig_nico_canribas')) return;
+    const UID = 2012, FINCAS = [14, 15, 16];
+    const man = store.setting('djRatesManual') || {};
+    const o = man[String(UID)] || (man[String(UID)] = {});
+    o.fincas = o.fincas || {};
+    FINCAS.forEach(fid => { o.fincas[String(fid)] = Object.assign({}, o.fincas[String(fid)], { boda: 220, he: 50, evento: 170 }); });
+    store.setSetting('djRatesManual', man);
+    applyManualRates();
+    try {
+      const today = bizToday(); const CUT = fact.volcadoCutoff();
+      const ids = store.all('events').filter(e => +e.djId === UID && FINCAS.includes(+e.lugar) && e.fecha && e.fecha >= CUT && e.fecha < today).map(e => e.id);
+      if (ids.length) { const n = fact.reapplyRateToEvents(ids); console.log('[mig nico] tarifa Can Ribas aplicada a', n, 'boda(s) realizadas:', ids.join(',')); }
+    } catch (e) { console.error('[mig nico] reapply:', e.message); }
+    store.setSetting('mig_nico_canribas', true);
+    console.log('[mig nico] Can Ribas 220/50 aplicado a DJ nico (uid 2012).');
+  } catch (e) { console.error('[mig nico] error:', e.message); }
+}
+
 // Matriz de sueldos (solo lectura, admin): tarifas por trabajador × finca/pack/servicio + uso real
 // (cuántas veces ha trabajado cada uno en cada finca/servicio) para ver qué datos faltan.
 function salaryMatrix() {
@@ -2599,6 +2622,7 @@ server.listen(PORT, HOST, () => {
   // que reconstruye djRates) y ejecuta el ajuste puntual de Arnau si aún no se hizo.
   try { const n = applyManualRates(); if (n) console.log('[tarifas] correcciones manuales reaplicadas:', n, 'DJs'); } catch (e) { console.error('[tarifas] applyManual arranque:', e.message); }
   try { migArnauMasCorts(); } catch (e) { console.error('[mig arnau] arranque:', e.message); }
+  try { migNicoCanRibas(); } catch (e) { console.error('[mig nico] arranque:', e.message); }
   const runFreeze = () => { try { const n = fact.freezeRealized(); if (n) console.log('[congelado] tarifas congeladas en', n, 'bodas'); } catch (e) { console.error('[congelado] error:', e.message); } };
   setTimeout(runFreeze, 60 * 1000);                   // al arrancar
   setInterval(runFreeze, 60 * 60 * 1000);             // y cada hora (congela en cuanto la boda se realiza)
