@@ -10,6 +10,25 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const el = (id) => document.getElementById(id);
 // Normaliza para búsquedas: minúsculas y SIN acentos (así "garcia" encuentra "García").
 const deac = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+// --- Passkeys / Face ID (WebAuthn) en el navegador ---
+const waSupported = () => !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+const _b2u = buf => { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const _u2b = s => { s = String(s).replace(/-/g, '+').replace(/_/g, '/'); const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
+async function passkeyRegister(label) {
+  const { cid, options } = await api('webauthn/register/begin', { method: 'POST', body: {} });
+  options.challenge = _u2b(options.challenge); options.user.id = _u2b(options.user.id);
+  (options.excludeCredentials || []).forEach(c => c.id = _u2b(c.id));
+  const cred = await navigator.credentials.create({ publicKey: options });
+  return api('webauthn/register/finish', { method: 'POST', body: { cid, label: label || 'Face ID', clientDataJSON: _b2u(cred.response.clientDataJSON), attestationObject: _b2u(cred.response.attestationObject) } });
+}
+async function passkeyLogin(email) {
+  const { cid, options } = await api('webauthn/login/begin', { method: 'POST', body: { email } });
+  options.challenge = _u2b(options.challenge);
+  (options.allowCredentials || []).forEach(c => c.id = _u2b(c.id));
+  const a = await navigator.credentials.get({ publicKey: options });
+  return api('webauthn/login/finish', { method: 'POST', body: { cid, id: _b2u(a.rawId), clientDataJSON: _b2u(a.response.clientDataJSON), authenticatorData: _b2u(a.response.authenticatorData), signature: _b2u(a.response.signature) } });
+}
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const app = el('app');
 
@@ -410,8 +429,18 @@ function renderAuth() {
       <div class="field"><label>Contraseña</label><div class="pw-wrap"><input class="control" name="password" type="password" autocomplete="current-password" required><button type="button" class="pw-eye" data-pwtoggle aria-label="Mostrar u ocultar la contraseña">👁</button></div></div>
       <div id="loginErr" class="field-error" style="display:none"></div>
       <button class="btn btn--primary btn--block" type="submit">Entrar</button>
+      ${waSupported() ? `<button type="button" id="faceIdBtn" class="btn btn--block" style="margin-top:10px">🔒 Entrar con Face ID</button>` : ''}
       <div style="margin-top:16px;text-align:center"><a href="#/recuperar">¿Olvidaste tu contraseña?</a></div>
     </form>`);
+  const fib = el('faceIdBtn');
+  if (fib) fib.onclick = async () => {
+    const email = ((document.querySelector('#loginForm [name=email]') || {}).value || '').trim();
+    const errEl = el('loginErr'); errEl.style.display = 'none';
+    if (!email) { errEl.textContent = 'Escribe tu email y pulsa Face ID.'; errEl.style.display = 'block'; return; }
+    fib.disabled = true;
+    try { await passkeyLogin(email); location.hash = '#/'; await afterLogin(); }
+    catch (err) { errEl.textContent = (err && err.message) || 'No se pudo entrar con Face ID.'; errEl.style.display = 'block'; fib.disabled = false; }
+  };
   $('#loginForm').addEventListener('submit', async e => {
     e.preventDefault(); const f = e.target; const btn = $('button', f); btn.disabled = true;
     const errEl = el('loginErr'); errEl.style.display = 'none';

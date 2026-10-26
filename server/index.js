@@ -19,6 +19,18 @@ const volcado = require('./volcado');
 const holded = require('./holded');
 const backup = require('./backup');
 const cloudBackup = require('./cloud-backup');
+const webauthn = require('./webauthn');
+
+// --- Passkeys / Face ID (WebAuthn) — estado en memoria (challenges) + credenciales en 'webauthnCreds' ---
+const waChallenges = new Map();   // id -> { challenge, uid, type, exp }
+function waPut(data) { const id = crypto.randomBytes(16).toString('hex'); waChallenges.set(id, Object.assign({ exp: Date.now() + 120000 }, data)); return id; }
+function waTake(id) { const c = waChallenges.get(id); if (!c) return null; waChallenges.delete(id); return c.exp < Date.now() ? null : c; }
+function waCreds() { return store.setting('webauthnCreds') || {}; }
+function waUserCreds(uid) { return waCreds()[String(uid)] || []; }
+function waHasPasskey(uid) { return waUserCreds(uid).length > 0; }
+function waAdd(uid, cred) { const all = waCreds(); (all[String(uid)] = all[String(uid)] || []).push(cred); store.setSetting('webauthnCreds', all); }
+function waClear(uid) { const all = waCreds(); delete all[String(uid)]; store.setSetting('webauthnCreds', all); }
+function waSetCount(uid, credentialId, n) { const all = waCreds(); const c = (all[String(uid)] || []).find(x => x.credentialId === credentialId); if (c) { c.signCount = n; store.setSetting('webauthnCreds', all); } }
 
 const PORT = +(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -181,6 +193,70 @@ async function api(req, res, url) {
     if (seg[1] === 'albaran-login' && method === 'POST') return albaranLogin(req, res);
     if (seg[1] === 'forgot' && method === 'POST') return forgot(req, res);
     if (seg[1] === 'change-password' && method === 'POST') return changePassword(req, res, user);
+    return fail(res, 404, 'Ruta no encontrada');
+  }
+
+  // --- Passkeys / Face ID (WebAuthn). El ACCESO no requiere sesión; el ALTA sí. ---
+  if (seg[0] === 'webauthn') {
+    const proto = (req.headers['x-forwarded-proto'] === 'https' || req.socket.encrypted) ? 'https' : 'http';
+    const host = (req.headers.host || '');
+    const rpId = host.split(':')[0];
+    const expectedOrigins = [proto + '://' + host];
+    // ACCESO: inicio (sin sesión)
+    if (seg[1] === 'login' && seg[2] === 'begin' && method === 'POST') {
+      const b = await readBody(req).catch(() => ({}));
+      const row = users.byEmail(b.email || '');
+      const creds = row && row.active ? waUserCreds(row.id) : [];
+      const cid = waPut({ challenge: webauthn.randomChallenge(), uid: row ? row.id : null, type: 'login' });
+      const ch = waChallenges.get(cid).challenge;
+      return ok(res, { cid, options: { challenge: ch, rpId, timeout: 120000, userVerification: 'required', allowCredentials: creds.map(c => ({ id: c.credentialId, type: 'public-key' })) } });
+    }
+    // ACCESO: fin (verifica la firma y crea sesión)
+    if (seg[1] === 'login' && seg[2] === 'finish' && method === 'POST') {
+      const b = await readBody(req).catch(() => ({}));
+      const c = waTake(b.cid);
+      if (!c || c.type !== 'login') return fail(res, 400, 'Sesión de acceso caducada. Inténtalo de nuevo.');
+      const all = waCreds(); let uid = null, cred = null;
+      for (const k of Object.keys(all)) { const m = (all[k] || []).find(x => x.credentialId === b.id); if (m) { uid = +k; cred = m; break; } }
+      if (!cred) return fail(res, 401, 'Passkey no reconocida.');
+      if (c.uid && +c.uid !== uid) return fail(res, 401, 'Passkey no válida para esta cuenta.');
+      const row = users.get(uid);
+      if (!row || !row.active) return fail(res, 401, 'Cuenta no disponible.');
+      try {
+        const r = webauthn.verifyAssertion({ authenticatorData: webauthn.b64u.dec(b.authenticatorData), clientDataJSON: webauthn.b64u.dec(b.clientDataJSON), signature: webauthn.b64u.dec(b.signature), publicKeyJwk: cred.publicKeyJwk, expectedChallenge: c.challenge, expectedOrigins, rpId });
+        if (r.signCount > 0 && cred.signCount > 0 && r.signCount <= cred.signCount) return fail(res, 401, 'Passkey rechazada (posible clonado).');
+        waSetCount(uid, b.id, r.signCount);
+        users.touch(uid); auth.createSession(req, res, uid); store.audit(uid, 'login-passkey');
+        return ok(res, { user: meView(users.get(uid)) });
+      } catch (e) { return fail(res, 401, 'Acceso con Face ID fallido: ' + e.message); }
+    }
+    // ALTA / BAJA: requieren sesión
+    if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
+    if (seg[1] === 'register' && seg[2] === 'begin' && method === 'POST') {
+      const cid = waPut({ challenge: webauthn.randomChallenge(), uid: user.id, type: 'reg' });
+      const ch = waChallenges.get(cid).challenge;
+      return ok(res, { cid, options: {
+        challenge: ch, rp: { id: rpId, name: 'Conecta So' },
+        user: { id: webauthn.b64u.enc(Buffer.from('u' + user.id)), name: user.email, displayName: user.name || user.email },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+        timeout: 120000, attestation: 'none',
+        excludeCredentials: waUserCreds(user.id).map(c => ({ id: c.credentialId, type: 'public-key' }))
+      } });
+    }
+    if (seg[1] === 'register' && seg[2] === 'finish' && method === 'POST') {
+      const b = await readBody(req).catch(() => ({}));
+      const c = waTake(b.cid);
+      if (!c || c.type !== 'reg' || +c.uid !== user.id) return fail(res, 400, 'Sesión de registro caducada. Inténtalo de nuevo.');
+      try {
+        const r = webauthn.verifyRegistration({ attestationObject: webauthn.b64u.dec(b.attestationObject), clientDataJSON: webauthn.b64u.dec(b.clientDataJSON), expectedChallenge: c.challenge, expectedOrigins, rpId });
+        if (waUserCreds(user.id).some(x => x.credentialId === r.credentialId)) return ok(res, { ok: true, already: true });
+        waAdd(user.id, { credentialId: r.credentialId, publicKeyJwk: r.publicKeyJwk, alg: r.alg, signCount: r.signCount, rpId, createdAt: new Date().toISOString(), label: (b.label || 'Face ID').slice(0, 40) });
+        store.audit(user.id, 'webauthn-register');
+        return ok(res, { ok: true });
+      } catch (e) { return fail(res, 400, 'No se pudo registrar la passkey: ' + e.message); }
+    }
+    if (seg[1] === 'remove' && method === 'POST') { waClear(user.id); store.audit(user.id, 'webauthn-remove'); return ok(res, { ok: true }); }
     return fail(res, 404, 'Ruta no encontrada');
   }
 
@@ -1198,6 +1274,7 @@ function meView(u) {
   out.tycSigned = tycSignedBy(u);
   // Bodas de 2026 y anteriores (o sin fecha): no necesitan firmar, no se les muestra el gate.
   out.tycNotNeeded = u.role === 'user' && !out.tycSigned && !tycNeeded(u);
+  out.hasPasskey = waHasPasskey(u.id);
   return out;
 }
 

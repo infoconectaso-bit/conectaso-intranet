@@ -1673,7 +1673,33 @@ on(/^#\/cuenta$/, async () => {
         <p class="hint" style="margin-bottom:12px">Suscríbete y tus bodas asignadas aparecerán en tu calendario (Google o iPhone) y se <b>actualizarán solas</b>: cuando te asignen una nueva, aparece sin que tengas que entrar. Es de <b>solo lectura</b> — no borra ni duplica tus propios eventos.</p>
         <div id="calBox"><p class="hint">Cargando enlace…</p></div>
       </div></div>` : ''}
+    <div class="panel" style="margin-top:4px" id="faceIdPanel" hidden><div class="panel__head"><h3>🔒 Acceso con Face ID</h3></div><div class="panel__body">
+      <p class="hint" style="margin-bottom:12px">Entra con tu cara o huella, sin escribir la contraseña. Se guarda de forma segura en este dispositivo (la contraseña sigue funcionando igual).</p>
+      <div id="faceIdBox"><p class="hint">Comprobando…</p></div>
+    </div></div>
     ${adv}`, ['Mi cuenta']);
+  // --- Face ID / passkeys ---
+  (() => {
+    const panel = el('faceIdPanel'), box = el('faceIdBox');
+    if (!panel || !box || !waSupported()) return;   // navegador sin soporte → oculto
+    panel.hidden = false;
+    const render = () => {
+      if (S.user.hasPasskey) {
+        box.innerHTML = '<p class="hint" style="margin-bottom:12px"><b style="color:#2e7d32">✓ Activado.</b> En este u otros dispositivos puedes entrar con Face ID.</p><div class="btn-row"><button class="btn" id="fiOff">Desactivar</button> <button class="btn" id="fiAdd">Añadir otro dispositivo</button></div>';
+        const off = el('fiOff'); if (off) off.onclick = async () => { off.disabled = true; try { await api('webauthn/remove', { method: 'POST', body: {} }); S.user.hasPasskey = false; toast('Face ID desactivado', 'ok'); render(); } catch (e) { off.disabled = false; toast('No se pudo desactivar', 'err'); } };
+        const add = el('fiAdd'); if (add) add.onclick = doRegister;
+      } else {
+        box.innerHTML = '<div class="btn-row"><button class="btn btn--primary" id="fiOn">Activar Face ID</button></div>';
+        const on = el('fiOn'); if (on) on.onclick = doRegister;
+      }
+    };
+    async function doRegister(e) {
+      const btn = e && e.target; if (btn) btn.disabled = true;
+      try { await passkeyRegister('Face ID'); S.user.hasPasskey = true; toast('Face ID activado 🔒', 'ok'); render(); }
+      catch (err) { if (btn) btn.disabled = false; toast((err && err.message) || 'No se pudo activar Face ID', 'err'); }
+    }
+    render();
+  })();
   (async () => {
     const box = el('calBox'); if (!box) return;
     let d; try { d = await api('my-calendar'); } catch (e) { box.innerHTML = '<p class="hint">No se pudo generar el enlace.</p>'; return; }
