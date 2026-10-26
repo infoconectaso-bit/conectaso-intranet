@@ -63,6 +63,34 @@ async function listInvoices({ maxPages = 50, limit = 200, filters = {} } = {}) {
 /** Devuelve una factura concreta (para inspeccionar campos: base imponible, estado de pago…). */
 function getInvoice(id) { return apiGet('/invoices/' + encodeURIComponent(id)); }
 
+/** Lista los PRESUPUESTOS (estimates), igual que las facturas. Puede no estar disponible si el token
+ * no tiene acceso; en ese caso el llamador lo trata como vacío (no rompe nada). */
+async function listEstimates({ maxPages = 50, limit = 200 } = {}) {
+  const out = [];
+  let cursor = null;
+  for (let p = 0; p < maxPages; p++) {
+    const qs = new URLSearchParams({ limit: String(limit) });
+    if (cursor) qs.set('cursor', cursor);
+    const page = await apiGet('/estimates?' + qs.toString());
+    const arr = (page && Array.isArray(page.items)) ? page.items : (Array.isArray(page) ? page : (page && page.data) || []);
+    out.push(...arr);
+    cursor = page && page.cursor;
+    if (!cursor || (page && page.has_more === false) || !arr.length) break;
+  }
+  return out;
+}
+// Número de documento normalizado (para casar "presupuesto nº P-123" con el presupuesto real).
+const normNum = s => String(s || '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+// Texto-concepto de un documento (factura o presupuesto): descripción, observaciones, líneas, campos.
+function docConcept(d) {
+  const p = [d.description, d.desc, d.notes, d.date];
+  (d.products || d.items || []).forEach(it => { if (it) { p.push(it.name); p.push(it.desc || it.description); } });
+  (d.customFields || d.custom_fields || []).forEach(f => { if (f) p.push(f.value != null ? f.value : f.text); });
+  return p.filter(Boolean).join(' · ');
+}
+/** Concepto (texto) del presupuesto cuyo número se indica; '' si no está o no hay acceso a presupuestos. */
+function estimateConcept(num) { const k = normNum(num); return (_idx && _idx.estByNum && _idx.estByNum[k]) || ''; }
+
 /** Lista TODOS los contactos (paginación por cursor). */
 async function listContacts({ maxPages = 50, limit = 500 } = {}) {
   const out = [];
@@ -141,7 +169,12 @@ async function _rebuildIndex() {
     if (c.name) push(byName, normName(c.name), c.id);
   });
   invoices.forEach(inv => { const e = byId[inv.contact_id]; if (e) e.invoices.push(inv); });
-  _idx = { byId, byEmail, byNif, byName, contactsN: contacts.length, invoicesN: invoices.length, builtAt: Date.now() };
+  // Presupuestos indexados por número (para "tirar del hilo" cuando una factura los referencia).
+  // A prueba de fallos: si el token no tiene acceso a presupuestos, se queda vacío y no afecta a nada.
+  let estByNum = {};
+  try { const estimates = await listEstimates(); estimates.forEach(e => { const num = normNum(e.document_number || e.number || e.docNumber); if (num) estByNum[num] = docConcept(e); }); }
+  catch (e) { estByNum = {}; }
+  _idx = { byId, byEmail, byNif, byName, estByNum, contactsN: contacts.length, invoicesN: invoices.length, estimatesN: Object.keys(estByNum).length, builtAt: Date.now() };
   _idxAt = Date.now();
   return _idx;
 }
@@ -326,4 +359,4 @@ async function testPayslips() {
   return { ok: true, probes };
 }
 
-module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };
+module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listEstimates, estimateConcept, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };
