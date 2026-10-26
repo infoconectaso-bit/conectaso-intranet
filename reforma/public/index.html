@@ -127,7 +127,26 @@ hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
 .login form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px}
 .login h1{font-size:3rem}
 .login p{margin:0;color:var(--muted)}
-@media (max-width:420px){.split{grid-template-columns:1fr 1fr}.split .sav{grid-column:1/-1}.big{font-size:1.7rem}}
+.months{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:14px}
+.months-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.months-head h2{font-family:var(--display);font-weight:700;font-size:1.2rem;margin:0}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.kpis div{min-width:0;background:var(--sunk);border-radius:10px;padding:10px}
+.kpis b{display:block;font-size:1rem}
+.kpis span.m{display:block;font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chart-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.chart-scroll svg{display:block}
+.chart-scroll text{font-family:var(--body);font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+.mtable{display:flex;flex-direction:column;gap:4px;font-size:.85rem}
+.mtable div{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:12px;align-items:baseline;padding:6px 2px;border-bottom:1px solid var(--line)}
+.mtable div:last-child{border-bottom:0}
+.mtable .h{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.mtable .r{text-align:right}
+.tag{font-size:.68rem;font-weight:700;padding:1px 6px;border-radius:12px;margin-left:6px}
+.tag.max{background:var(--accent-soft);color:var(--accent)}
+.tag.min{background:var(--sunk);color:var(--good)}
+@media (max-width:420px){.kpis{grid-template-columns:1fr 1fr}.kpis .avg{grid-column:1/-1}.split{grid-template-columns:1fr 1fr}.split .sav{grid-column:1/-1}.big{font-size:1.7rem}}
 </style>
 </head>
 <body>
@@ -168,6 +187,18 @@ hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
       <div><span class="lbl"><span class="dot" style="background:var(--nos)"></span>Nosotros</span><b class="num" id="tNos">0,00 €</b></div>
       <div class="sav"><span class="lbl">Ahorrado en descuentos</span><b class="num" id="tSav" style="color:var(--good)">0,00 €</b></div>
     </div>
+  </section>
+
+  <section class="months" aria-label="Gasto por mes">
+    <div class="months-head"><h2>Gasto por mes</h2><span class="status" id="mRange"></span></div>
+    <div class="kpis">
+      <div><span class="lbl">Mes que más</span><b class="num" id="kMax">—</b><span class="m" id="kMaxM"></span></div>
+      <div><span class="lbl">Mes que menos</span><b class="num" id="kMin">—</b><span class="m" id="kMinM"></span></div>
+      <div class="avg"><span class="lbl">Media al mes</span><b class="num" id="kAvg">—</b><span class="m" id="kAvgM"></span></div>
+    </div>
+    <div class="chart-scroll" id="mChart"></div>
+    <div class="legend"><span><span class="dot" style="background:var(--emp)"></span>Empresa</span><span><span class="dot" style="background:var(--nos)"></span>Nosotros</span></div>
+    <details><summary class="status" style="cursor:pointer">Ver el detalle mes a mes</summary><div class="mtable" id="mTable" style="margin-top:8px"></div></details>
   </section>
 
   <div class="tabs" role="tablist">
@@ -281,6 +312,7 @@ hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
 
   let CATS = ["Materiales","Herramientas","Mano de obra","Electricidad","Fontanería","Pintura","Suelos y azulejos","Carpintería","Cocina","Baño","Electrodomésticos","Mobiliario","Iluminación","Transporte y escombros","Licencias y tasas","Otros"];
   let rows=[], users={}, yo=null, tab="nosotros";
+  addEventListener("resize",()=>{ clearTimeout(window._rz); window._rz=setTimeout(()=>{ if(!$("app").hidden) renderMonths(); },200); });
   try { const t=localStorage.getItem("reforma.tab"); if (t==="empresa"||t==="nosotros") tab=t; } catch {}
   let editing=null, form={}, fotoName=null, photoUrl=null, upCtl=null;
 
@@ -325,7 +357,64 @@ hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
   const signed = r => (r.tipo==="gasto" ? 1 : -1) * (Number(r.importe)||0);
   const saved = r => r.tipo==="gasto" ? (Number(r.descuento)||0) : (r.tipo==="descuento" ? (Number(r.importe)||0) : 0);
 
+
+  // ---------- gasto por mes ----------
+  const MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const mesLargo = k => { const t=new Date(k+"-01T12:00").toLocaleDateString("es-ES",{month:"long",year:"numeric"}); return t.charAt(0).toUpperCase()+t.slice(1); };
+  const eur0 = n => (Number(n)||0).toLocaleString("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0});
+  function renderMonths(){
+    const by={};
+    for (const r of rows){ const k=(r.fecha||"").slice(0,7); if (k.length!==7) continue; const o=by[k]||(by[k]={e:0,n:0}); o[r.pagador==="empresa"?"e":"n"]+=signed(r); }
+    const keys=Object.keys(by).sort();
+    const chart=$("mChart"), tbl=$("mTable"); chart.replaceChildren(); tbl.replaceChildren();
+    if (!keys.length){ $("mRange").textContent=""; for (const id of ["kMax","kMin","kAvg"]) $(id).textContent="—"; for (const id of ["kMaxM","kMinM","kAvgM"]) $(id).textContent=""; chart.append(el("div",{class:"status",text:"Cuando subáis tickets verás aquí qué mes se gasta más."})); return; }
+    // rellena los meses vacíos entre el primero y el último
+    const all=[]; let [y,m]=keys[0].split("-").map(Number); const [ly,lm]=keys[keys.length-1].split("-").map(Number);
+    while (y<ly||(y===ly&&m<=lm)){ const k=y+"-"+String(m).padStart(2,"0"); all.push({k,e:by[k]?.e||0,n:by[k]?.n||0}); m++; if(m>12){m=1;y++;} }
+    for (const a of all) a.t=a.e+a.n;
+    const conGasto=all.filter(a=>a.t>0);
+    const max=conGasto.reduce((a,b)=>b.t>a.t?b:a, conGasto[0]||all[0]);
+    const min=conGasto.length>1 ? conGasto.reduce((a,b)=>b.t<a.t?b:a, conGasto[0]) : null;
+    const avg=all.reduce((s,a)=>s+a.t,0)/all.length;
+    $("mRange").textContent = all.length===1 ? mesLargo(all[0].k) : all.length+" meses de obra";
+    $("kMax").textContent=eur0(max.t); $("kMaxM").textContent=mesLargo(max.k);
+    $("kMin").textContent=min?eur0(min.t):"—"; $("kMinM").textContent=min?mesLargo(min.k):"Hace falta más de un mes";
+    $("kAvg").textContent=eur0(avg); $("kAvgM").textContent=all.length+(all.length===1?" mes":" meses");
+    // gráfico de barras apiladas (SVG)
+    const NS="http://www.w3.org/2000/svg", H=220, top=26, bottom=34, left=8, slot=56, bw=30;
+    const W=Math.max(left*2+all.length*slot, Math.min(chart.clientWidth||320, 680));
+    const off=(W-left*2-all.length*slot)/2;
+    const vmax=Math.max(...all.map(a=>Math.max(a.e,0)+Math.max(a.n,0)),1);
+    const sc=v=>v/vmax*(H-top-bottom);
+    const svg=document.createElementNS(NS,"svg"); svg.setAttribute("width",W); svg.setAttribute("height",H); svg.setAttribute("viewBox",`0 0 ${W} ${H}`); svg.setAttribute("role","img"); svg.setAttribute("aria-label","Gasto por mes");
+    const mk=(t,a)=>{ const e=document.createElementNS(NS,t); for (const k in a) e.setAttribute(k,a[k]); return e; };
+    const base=H-bottom;
+    // línea de media
+    if (all.length>1){ const ya=base-sc(avg); svg.append(mk("line",{x1:left,x2:W-left,y1:ya,y2:ya,stroke:"var(--muted)","stroke-dasharray":"4 4","stroke-width":1,opacity:.6})); const tx=mk("text",{x:W-left,y:ya-4,"text-anchor":"end","font-size":10,fill:"var(--muted)"}); tx.textContent="media"; svg.append(tx); }
+    svg.append(mk("line",{x1:left,x2:W-left,y1:base,y2:base,stroke:"var(--line)","stroke-width":1}));
+    all.forEach((a,i)=>{
+      const x=left+off+i*slot+(slot-bw)/2;
+      const he=sc(Math.max(a.e,0)), hn=sc(Math.max(a.n,0));
+      if (hn>0) svg.append(mk("rect",{x,y:base-hn,width:bw,height:hn,fill:"var(--nos)",rx:3}));
+      if (he>0) svg.append(mk("rect",{x,y:base-hn-he,width:bw,height:he,fill:"var(--emp)",rx:3}));
+      const isMax=a===max, isMin=min&&a===min;
+      if (a.t!==0){ const v=mk("text",{x:x+bw/2,y:base-hn-he-6,"text-anchor":"middle","font-size":10.5,"font-weight":isMax?700:500,fill:isMax?"var(--accent)":"var(--fg)"}); v.textContent=a.t>=1000?(a.t/1000).toLocaleString("es-ES",{maximumFractionDigits:1})+"k":Math.round(a.t); svg.append(v); }
+      const [yy,mm]=a.k.split("-");
+      const lb=mk("text",{x:x+bw/2,y:base+15,"text-anchor":"middle","font-size":11,"font-weight":isMax||isMin?700:400,fill:isMax?"var(--accent)":isMin?"var(--good)":"var(--muted)"}); lb.textContent=MESES[+mm-1]; svg.append(lb);
+      if (i===0||mm==="01"){ const yl=mk("text",{x:x+bw/2,y:base+28,"text-anchor":"middle","font-size":9.5,fill:"var(--muted)"}); yl.textContent=yy; svg.append(yl); }
+      const t=document.createElementNS(NS,"title"); t.textContent=mesLargo(a.k)+": "+eur(a.t)+" (empresa "+eur(a.e)+", nosotros "+eur(a.n)+")"; svg.append(t);
+    });
+    chart.append(svg);
+    // tabla
+    tbl.append(el("div",{class:"h"}, el("span",{text:"Mes"}), el("span",{class:"r",text:"Empresa"}), el("span",{class:"r",text:"Nosotros"}), el("span",{class:"r",text:"Total"})));
+    for (const a of [...all].reverse()){
+      const name=el("span",{text:mesLargo(a.k)});
+      if (a===max) name.append(el("span",{class:"tag max",text:"más"})); else if (min&&a===min) name.append(el("span",{class:"tag min",text:"menos"}));
+      tbl.append(el("div",{}, name, el("span",{class:"r num",text:eur(a.e)}), el("span",{class:"r num",text:eur(a.n)}), el("b",{class:"r num",text:eur(a.t)})));
+    }
+  }
   function render(){
+    renderMonths();
     let e=0,n=0,s=0,ce=0,cn=0;
     for (const r of rows){ if (r.pagador==="empresa"){e+=signed(r);ce++;} else {n+=signed(r);cn++;} s+=saved(r); }
     $("tTotal").textContent=eur(e+n); $("tEmp").textContent=eur(e); $("tNos").textContent=eur(n); $("tSav").textContent=eur(s);
