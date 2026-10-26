@@ -253,6 +253,28 @@ function modal(title, bodyHtml, { okText, onOk, danger } = {}) {
   return bg;
 }
 
+// Invitación a activar Face ID la PRIMERA vez que entra (si el dispositivo lo soporta y aún no lo tiene).
+// Devuelve true si mostró el aviso (para no solapar con el de "instalar app"). Se ofrece una vez por dispositivo.
+function maybeFaceIdPrompt() {
+  try {
+    if (!S.user || !waSupported() || S.user.hasPasskey) return false;
+    let done; try { done = localStorage.getItem('cs_faceid_prompted'); } catch (e) {}
+    if (done) return false;
+    try { localStorage.setItem('cs_faceid_prompted', '1'); } catch (e) {}
+    modal('Entra más rápido con Face ID', '<p>Puedes activar el acceso con <b>Face ID o huella</b> para no tener que escribir la contraseña cada vez. Es seguro y se guarda solo en este dispositivo.</p><p class="hint">La contraseña seguirá funcionando igual.</p>', {
+      okText: 'Activar',
+      onOk: (bg) => {
+        const btn = bg.querySelector('[data-ok]'); if (btn) { btn.disabled = true; btn.textContent = 'Activando…'; }
+        passkeyRegister('Face ID')
+          .then(() => { S.user.hasPasskey = true; toast('Face ID activado 🔒', 'ok'); bg.remove(); })
+          .catch(err => { toast((err && err.message) || 'No se pudo activar Face ID', 'err'); bg.remove(); });
+        return true;   // se mantiene abierto mientras se procesa
+      }
+    });
+    return true;
+  } catch (e) { return false; }
+}
+
 /* ---- Instalar como app (Android/Windows con botón nativo; iPhone con pasos) ---- */
 let _deferredInstall = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); _deferredInstall = e; });
@@ -456,7 +478,8 @@ function renderAuth() {
 async function afterLogin() {
   const me = await api('auth/me'); S.user = me.user; S.mailEnabled = me.mailEnabled;
   await loadContext(); if (await tycGate()) return; if (!location.hash || location.hash === '#/recuperar') location.hash = '#/'; route();
-  setTimeout(maybeInstallPrompt, 1500);
+  // Primero ofrecemos Face ID (si procede); si no, el aviso de instalar la app. Nunca los dos a la vez.
+  setTimeout(() => { if (!maybeFaceIdPrompt()) maybeInstallPrompt(); }, 1400);
 }
 function renderForgot() {
   app.innerHTML = authShell(`
