@@ -134,11 +134,11 @@ hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
 
 <!-- Entrada -->
 <div class="login" id="login" hidden>
-  <form id="loginForm" novalidate>
+  <form id="loginForm" method="post" action="api/entrar">
     <h1>Reforma<span style="color:var(--accent)">.</span></h1>
     <p id="loginTxt">Entra con tu nombre y contraseña.</p>
-    <div class="field"><label for="lNombre">Nombre</label><input id="lNombre" autocomplete="username" autocapitalize="words" placeholder="Adrià"></div>
-    <div class="field"><label for="lClave">Contraseña</label><input id="lClave" type="password" autocomplete="current-password"></div>
+    <div class="field"><label for="lNombre">Nombre</label><input id="lNombre" name="username" type="text" autocomplete="username" autocapitalize="words" autocorrect="off" spellcheck="false" required placeholder="Adrià"></div>
+    <div class="field"><label for="lClave">Contraseña</label><input id="lClave" name="password" type="password" autocomplete="current-password" required></div>
     <div class="note err" id="lErr" hidden></div>
     <button class="primary" type="submit" id="lBtn">Entrar</button>
   </form>
@@ -251,7 +251,7 @@ hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
     <h4>Cambiar mi contraseña</h4>
     <form id="chPass" class="grid" novalidate>
       <div class="field"><label for="cpA">Actual</label><input id="cpA" type="password" autocomplete="current-password"></div>
-      <div class="field"><label for="cpN">Nueva</label><input id="cpN" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="cpN">Nueva</label><input id="cpN" name="new-password" type="password" autocomplete="new-password"></div>
       <div class="field full"><button class="ghost" type="submit">Cambiar contraseña</button></div>
     </form>
     <div class="note" id="cpMsg" hidden></div>
@@ -298,12 +298,14 @@ hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
     $("lBtn").textContent = first ? "Crear mi cuenta" : "Entrar";
     $("lClave").setAttribute("autocomplete", first ? "new-password" : "current-password");
   }
-  $("loginForm").addEventListener("submit", async e=>{
-    e.preventDefault(); $("lErr").hidden=true; $("lBtn").disabled=true;
-    try { const r=await post("entrar",{nombre:$("lNombre").value,clave:$("lClave").value}); $("lClave").value=""; yo=r.yo; await start(); }
-    catch(x){ $("lErr").textContent=x.message; $("lErr").hidden=false; }
-    finally{ $("lBtn").disabled=false; }
-  });
+  // La entrada es un formulario normal (el navegador lo envía y vuelve a la app):
+  // así el iPhone y los navegadores ofrecen guardar la contraseña en «Contraseñas».
+  $("loginForm").addEventListener("submit", ()=>{ $("lBtn").disabled=true; $("lBtn").textContent="Entrando…"; });
+  try {
+    const qs=new URLSearchParams(location.search);
+    if (qs.get("e")){ $("lErr").textContent=qs.get("e"); $("lErr").hidden=false; if (qs.get("n")) $("lNombre").value=qs.get("n"); }
+    if (location.search) history.replaceState(null,"",location.pathname);
+  } catch {}
 
   async function start(){
     $("login").hidden=true; $("app").hidden=false; $("fabs").hidden=false;

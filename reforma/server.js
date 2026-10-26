@@ -102,7 +102,19 @@ function raw(req, max) {
     req.on('error', reject);
   });
 }
-async function body(req) { const b = await raw(req, 64 * 1024); return b.length ? JSON.parse(b.toString('utf8')) : {}; }
+async function body(req) {
+  const b = await raw(req, 64 * 1024);
+  if (!b.length) return {};
+  if (/application\/x-www-form-urlencoded/.test(req.headers['content-type'] || '')) return Object.fromEntries(new URLSearchParams(b.toString('utf8')));
+  return JSON.parse(b.toString('utf8'));
+}
+// Respuesta de la entrada: si viene del formulario (para que el iPhone ofrezca guardar la contraseña), redirige.
+function respEntrar(req, res, status, data, nombre) {
+  if (!/application\/x-www-form-urlencoded/.test(req.headers['content-type'] || '')) return send(res, status, data);
+  const loc = status === 200 ? '../' : '../?e=' + encodeURIComponent(data.error || 'Error') + '&n=' + encodeURIComponent(nombre || '');
+  res.writeHead(303, Object.assign({ Location: loc, 'Cache-Control': 'no-store' }, SEC));
+  res.end();
+}
 
 const isDate = s => typeof s === 'string' && /^\d{4}-\d\d-\d\d$/.test(s);
 const num = v => { const x = Math.round(Math.abs(+v || 0) * 100) / 100; return x < 1e7 ? x : 0; };
@@ -154,22 +166,22 @@ async function api(req, res, p) {
   }
 
   if (p === '/api/entrar' && m === 'POST') {
-    if (limited(req)) return send(res, 429, { error: 'Demasiados intentos. Espera 15 minutos.' });
     const b = await body(req);
-    const nombre = String(b.nombre || '').trim().slice(0, 40), clave = String(b.clave || '');
+    const nombre = String(b.nombre || b.username || '').trim().slice(0, 40), clave = String(b.clave || b.password || '');
+    if (limited(req)) return respEntrar(req, res, 429, { error: 'Demasiados intentos. Espera 15 minutos.' }, nombre);
     if (!Object.keys(DB.usuarios).length) {
       // Primera vez: se crea la primera cuenta.
-      if (!slug(nombre)) return send(res, 400, { error: 'Escribe tu nombre.' });
-      if (clave.length < 6) return send(res, 400, { error: 'La contraseña debe tener al menos 6 caracteres.' });
+      if (!slug(nombre)) return respEntrar(req, res, 400, { error: 'Escribe tu nombre.' }, nombre);
+      if (clave.length < 6) return respEntrar(req, res, 400, { error: 'La contraseña debe tener al menos 6 caracteres.' }, nombre);
       const u = { id: nid(), nombre, usuario: slug(nombre), passHash: hash(clave), creado: Date.now() };
       DB.usuarios[u.id] = u; save();
       newSession(res, u.id, req);
-      return send(res, 200, { ok: true, yo: publico(u) });
+      return respEntrar(req, res, 200, { ok: true, yo: publico(u) });
     }
     const u = Object.values(DB.usuarios).find(x => x.usuario === slug(nombre));
-    if (!u || !verify(clave, u.passHash)) { failTry(req); return send(res, 401, { error: 'Nombre o contraseña incorrectos.' }); }
+    if (!u || !verify(clave, u.passHash)) { failTry(req); return respEntrar(req, res, 401, { error: 'Nombre o contraseña incorrectos.' }, nombre); }
     tries.delete(ip(req)); newSession(res, u.id, req);
-    return send(res, 200, { ok: true, yo: publico(u) });
+    return respEntrar(req, res, 200, { ok: true, yo: publico(u) });
   }
 
   const yo = quien(req);
