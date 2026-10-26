@@ -32,6 +32,9 @@ function waAdd(uid, cred) { const all = waCreds(); (all[String(uid)] = all[Strin
 function waClear(uid) { const all = waCreds(); delete all[String(uid)]; store.setSetting('webauthnCreds', all); }
 function waSetCount(uid, credentialId, n) { const all = waCreds(); const c = (all[String(uid)] || []).find(x => x.credentialId === credentialId); if (c) { c.signCount = n; store.setSetting('webauthnCreds', all); } }
 
+// --- Modo mantenimiento: durante una actualización/volcado, bloquea a todos menos al admin ---
+function maintenanceState() { const m = store.setting('maintenance') || {}; return { on: !!m.on, msg: m.msg || 'Estamos haciendo una actualización. Volvemos enseguida. 🙏', at: m.at || null }; }
+
 const PORT = +(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -187,7 +190,7 @@ async function api(req, res, url) {
   if (seg[0] === 'auth') {
     if (seg[1] === 'login' && method === 'POST') return login(req, res);
     if (seg[1] === 'logout' && method === 'POST') { auth.destroySession(req, res); return ok(res, { ok: true }); }
-    if (seg[1] === 'me' && method === 'GET') return ok(res, { user: user ? meView(user) : null, mailEnabled: mail.enabled() });
+    if (seg[1] === 'me' && method === 'GET') return ok(res, { user: user ? meView(user) : null, mailEnabled: mail.enabled(), maintenance: maintenanceState() });
     if (seg[1] === 'invite-info' && method === 'GET') return inviteInfo(req, res, url);
     if (seg[1] === 'activate' && method === 'POST') return activate(req, res);
     if (seg[1] === 'albaran-login' && method === 'POST') return albaranLogin(req, res);
@@ -267,6 +270,18 @@ async function api(req, res, url) {
   if (seg[0] === 'calendar' && seg[1] && method === 'GET') return serveCalendar(req, res, seg[1]);
 
   if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
+
+  // Modo mantenimiento: durante una actualización, los que NO son admin quedan bloqueados (ni
+  // lecturas ni escrituras) para que nadie toque datos mientras se actualiza. El admin sigue entrando.
+  { const _m = maintenanceState(); if (_m.on && user.role !== 'admin') return send(res, 503, { error: _m.msg, maintenance: true }); }
+
+  // --- Modo mantenimiento (solo admin): consultar y activar/desactivar ---
+  if (seg[0] === 'maintenance') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (method === 'GET') return ok(res, maintenanceState());
+    if (method === 'POST') { const b = await readBody(req); store.setSetting('maintenance', { on: !!b.on, msg: (b.msg || '').trim().slice(0, 300) || undefined, at: b.on ? new Date().toISOString() : null }); store.audit(user.id, 'maintenance-' + (b.on ? 'on' : 'off')); return ok(res, maintenanceState()); }
+    return fail(res, 404, 'Ruta no encontrada');
+  }
 
   // --- metadatos (catálogos para la interfaz) ---
   if (seg[0] === 'meta' && method === 'GET') return ok(res, meta(user));
@@ -2673,9 +2688,8 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    // CSP compatible: restringe de dónde se cargan recursos y evita el embebido, SIN romper la app
-    // (se permite inline en script/estilo porque la intranet usa estilos y algún manejador en línea).
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'");
+    // (CSP retirada temporalmente: la versión anterior bloqueaba Google Fonts y cambiaba la tipografía.
+    //  Se volverá a añadir una CSP correcta —permitiendo fonts.googleapis.com / fonts.gstatic.com— ya probada.)
     // HSTS: solo en HTTPS (tras Caddy). Obliga a usar HTTPS durante 180 días. No se envía por HTTP/IP.
     if (req.headers['x-forwarded-proto'] === 'https' || req.socket.encrypted) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
     const url = new URL(req.url, 'http://localhost');

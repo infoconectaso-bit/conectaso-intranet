@@ -52,6 +52,8 @@ async function api(path, { method = 'GET', body, form } = {}) {
     const data = ct.includes('json') ? await res.json().catch(() => null) : await res.text();
     if (!res.ok) {
       const err = Object.assign(new Error((data && data.error) || ('Error ' + res.status)), { status: res.status, data });
+      // Modo mantenimiento activado mientras el cliente estaba dentro: se le muestra la pantalla.
+      if (res.status === 503 && data && data.maintenance && S.user && S.user.role !== 'admin') { S.maintenance = { on: true, msg: data.error }; try { renderMaintenance(); } catch (e) {} throw err; }
       if (isGet && res.status >= 500) { lastErr = err; continue; } // 5xx transitorio → reintenta
       throw err;
     }
@@ -476,10 +478,21 @@ function renderAuth() {
   });
 }
 async function afterLogin() {
-  const me = await api('auth/me'); S.user = me.user; S.mailEnabled = me.mailEnabled;
+  const me = await api('auth/me'); S.user = me.user; S.mailEnabled = me.mailEnabled; S.maintenance = me.maintenance || { on: false };
+  // Modo mantenimiento: si está activo y NO eres admin, se muestra la pantalla de "volvemos pronto".
+  if (S.maintenance.on && S.user && S.user.role !== 'admin') { renderMaintenance(); return; }
   await loadContext(); if (await tycGate()) return; if (!location.hash || location.hash === '#/recuperar') location.hash = '#/'; route();
   // Primero ofrecemos Face ID (si procede); si no, el aviso de instalar la app. Nunca los dos a la vez.
   setTimeout(() => { if (!maybeFaceIdPrompt()) maybeInstallPrompt(); }, 1400);
+}
+function renderMaintenance() {
+  removeSpotlight();
+  app.innerHTML = authShell(`
+    <h1>🛠 En mantenimiento</h1>
+    <div class="sub">${esc((S.maintenance && S.maintenance.msg) || 'Estamos haciendo una actualización. Volvemos enseguida.')}</div>
+    <p class="hint" style="margin-top:14px">Gracias por tu paciencia. Si es urgente, escríbenos a <b>info@conectaso.es</b>.</p>
+    <button class="btn btn--primary btn--block" id="mReload" style="margin-top:16px">Reintentar</button>`);
+  const r = el('mReload'); if (r) r.onclick = () => location.reload();
 }
 function renderForgot() {
   app.innerHTML = authShell(`
