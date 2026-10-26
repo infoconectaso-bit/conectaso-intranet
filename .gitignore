@@ -10,3 +10,6 @@ data-prestamo/
 data-seguros/
 data-reforma/
 .caddy-hash
+
+# Claves de restauración (no subir)
+.env.restore
