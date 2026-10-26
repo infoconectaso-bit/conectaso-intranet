@@ -3,10 +3,11 @@
 const crypto = require('crypto');
 const { db, users } = require('./db');
 
-const SESSION_DAYS = +(process.env.SESSION_DAYS || 14);
+const SESSION_DAYS = +(process.env.SESSION_DAYS || 30);
 // Cierre de sesión por INACTIVIDAD: si no se navega durante estas horas, la sesión caduca.
-// La caducidad se desliza en cada request mientras se usa la intranet.
-const IDLE_MS = +(process.env.SESSION_IDLE_HOURS || 8) * 3600e3;
+// La caducidad se desliza en cada request mientras se usa la intranet. 30 días para que no haya que
+// re-entrar constantemente (sobre todo en el acceso directo del iPhone, que no autorrellena como Safari).
+const IDLE_MS = +(process.env.SESSION_IDLE_HOURS || 720) * 3600e3;
 const COOKIE = 'cs_session';
 const SECURE_COOKIE = (process.env.COOKIE_SECURE || 'auto');
 
