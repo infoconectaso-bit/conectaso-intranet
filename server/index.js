@@ -551,7 +551,8 @@ async function api(req, res, url) {
         if (linkedIds.length) { try { const extra = await holded.invoicesByIds(linkedIds, force); const have = new Set(invoices.map(i => String(i.id))); extra.forEach(i => { if (!have.has(String(i.id))) { i.linked = true; invoices.push(i); } }); } catch (e) {} }
         const rows = invoices.map(i => ({ number: i.number, credit: i.credit, base: i.total, totalConIva: i.totalConIva, paid: i.paid, pending: i.pending, status: i.status }));
         const sum = invoices.reduce((a, i) => ({ base: a.base + i.total, paid: a.paid + i.paid }), { base: 0, paid: 0 });
-        return ok(res, { event: +evParam, conyuges: ev.conyuges || '', matchedBy: r.matchedBy, contact: r.contact, apuntado_pagado: +ev.pagado || 0, apuntado_total: +ev.pagoCliente || 0, holded_base: Math.round(sum.base * 100) / 100, holded_pagado: Math.round(sum.paid * 100) / 100, rows });
+        const finca = (store.get('locations', ev.lugar) || {}).name || ev.lugarOtro || '';
+        return ok(res, { event: +evParam, conyuges: ev.conyuges || '', fecha: ev.fecha || '', lugar: finca, matchedBy: r.matchedBy, contact: r.contact, apuntado_pagado: +ev.pagado || 0, apuntado_total: +ev.pagoCliente || 0, holded_base: Math.round(sum.base * 100) / 100, holded_pagado: Math.round(sum.paid * 100) / 100, rows });
       }
       const q = String(url.searchParams.get('num') || '').trim().toLowerCase();
       const idx = await holded.buildIndex(url.searchParams.get('refresh') === '1');
@@ -562,7 +563,8 @@ async function api(req, res, url) {
         const num = String(raw.document_number || raw.docNumber || raw.number || '');
         if (q && (num.toLowerCase().includes(q) || JSON.stringify(raw).toLowerCase().includes(q))) {
           const m = holded.mapInvoice(raw);
-          hits.push({ contact: c.name || '', number: num, keys: Object.keys(raw), mapped: { total: m.total, totalConIva: m.totalConIva, paid: m.paid, credit: m.credit }, raw });
+          const concept = [raw.description, raw.notes].concat((raw.lines || []).map(l => l && (l.name || l.description) && ((l.name || '') + ' ' + (l.description || '')).trim())).concat((raw.custom_fields || []).map(f => f && (f.value != null ? f.value : f.text))).filter(Boolean).join(' · ');
+          hits.push({ contact: c.name || '', contact_id: raw.contact_id, number: num, date: raw.date, credit: m.credit, total: m.totalConIva, concept, keys: Object.keys(raw) });
         }
       }));
       return ok(res, { count: hits.length, hits: hits.slice(0, 5) });
