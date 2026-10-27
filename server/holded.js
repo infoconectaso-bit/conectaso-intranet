@@ -90,7 +90,7 @@ async function listCreditNotes({ maxPages = 50, limit = 200 } = {}) {
     for (let p = 0; p < maxPages; p++) {
       const qs = new URLSearchParams({ limit: String(limit) });
       if (cursor) qs.set('cursor', cursor);
-      const page = await apiGet('/creditnotes?' + qs.toString());
+      const page = await apiGet('/credit-notes?' + qs.toString());
       const arr = (page && Array.isArray(page.items)) ? page.items : (Array.isArray(page) ? page : (page && page.data) || []);
       arr.forEach(cn => { if (cn) cn._isCreditNote = true; });
       out.push(...arr);
