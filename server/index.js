@@ -862,29 +862,46 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         m = txt.match(/\b(\d{1,2})[\/\-.](\d{2})(\d{2}|\d{4})\b/); if (m) { const mo = +m[2]; if (mo >= 1 && mo <= 12) { let y = +m[3]; if (y < 100) y += 2000; return y + '-' + String(mo).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); } }
         m = txt.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/); if (m) return m[1] + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[3]).padStart(2, '0');
         // "24 de octubre de 2026", "24 octubre 2026", "24 oct 2026", "24 d'octubre de 2026"
-        m = normNm(txt).match(/\b(\d{1,2})\s*(?:de\s+|d\s*)?([a-z]+)\.?\s*(?:de\s+|del\s+)?(\d{4})\b/);
-        if (m) { const mo = MESES[m[2]]; if (mo) return m[3] + '-' + String(mo).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); }
+        // y también con año de 2 cifras: "10 de septiembre del 27" -> 2027-09-10.
+        m = normNm(txt).match(/\b(\d{1,2})\s*(?:de\s+|d\s*)?([a-z]+)\.?\s*(?:de\s+|del\s+)?(\d{2,4})\b/);
+        if (m) { const mo = MESES[m[2]]; if (mo) { let y = +m[3]; if (y < 100) y += 2000; return y + '-' + String(mo).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); } }
         return '';
+      };
+      // TODAS las fechas que aparecen en el concepto (una factura puede traer la fecha de emisión Y
+      // la de la boda); así podemos quedarnos con la que realmente tiene una boda creada.
+      const allConceptDates = txt => {
+        const out = []; const push = iso => { if (iso && out.indexOf(iso) < 0) out.push(iso); };
+        const n = normNm(txt); let m, re;
+        re = /\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/g; while ((m = re.exec(txt))) { let y = +m[3]; if (y < 100) y += 2000; const mo = +m[2], d = +m[1]; if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) push(y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0')); }
+        re = /\b(\d{1,2})[\/\-.](\d{2})(\d{2}|\d{4})\b/g; while ((m = re.exec(txt))) { const mo = +m[2]; if (mo >= 1 && mo <= 12) { let y = +m[3]; if (y < 100) y += 2000; push(y + '-' + String(mo).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0')); } }
+        re = /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/g; while ((m = re.exec(txt))) push(m[1] + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[3]).padStart(2, '0'));
+        re = /\b(\d{1,2})\s*(?:de\s+|d\s*)?([a-z]+)\.?\s*(?:de\s+|del\s+)?(\d{2,4})\b/g; while ((m = re.exec(n))) { const mo = MESES[m[2]]; if (mo) { let y = +m[3]; if (y < 100) y += 2000; push(y + '-' + String(mo).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0')); } }
+        return out;
       };
       const suggestByConcept = raw => {
         const txt = invConcept(raw); if (!txt) return { eventId: null, pack: null, date: '', nOnDate: 0 };
-        const nt = normNm(txt);
-        const date = parseConceptDate(txt);
+        const nt = normNm(txt), ntv = softv(nt);
         const packHit = PACKS.find(p => new RegExp('\\b' + p[0]).test(nt));
         const pack = packHit ? packHit[1] : null;
-        let cand = (date && evByDate[date]) ? evByDate[date].slice() : [];
-        const nOnDate = cand.length;
-        if (cand.length > 1) {
-          // desempatar por cuántas palabras clave del lugar del evento aparecen en el concepto (ignorando b/v)
-          const ntv = softv(nt);
-          const scored = cand.map(e => ({ e, sc: evLocTokens(e).filter(t => ntv.indexOf(t) >= 0).length }));
-          const max = Math.max.apply(null, scored.map(s => s.sc));
-          if (max > 0) cand = scored.filter(s => s.sc === max).map(s => s.e);   // nos quedamos con los de mejor coincidencia de lugar
+        const dates = allConceptDates(txt);
+        if (!dates.length) return { eventId: null, pack, date: '', nOnDate: 0 };
+        let fallback = null;
+        // Probamos todas las fechas del concepto; nos quedamos con la primera que dé UNA sola boda.
+        for (const date of dates) {
+          let cand = (evByDate[date] || []).slice();
+          if (!cand.length) continue;
+          const nOnDate = cand.length;
+          if (cand.length > 1) {
+            // desempatar por cuántas palabras clave del lugar del evento aparecen en el concepto (ignorando b/v)
+            const scored = cand.map(e => ({ e, sc: evLocTokens(e).filter(t => ntv.indexOf(t) >= 0).length }));
+            const max = Math.max.apply(null, scored.map(s => s.sc));
+            if (max > 0) cand = scored.filter(s => s.sc === max).map(s => s.e);
+          }
+          if (cand.length === 1) return { eventId: cand[0].id, pack, date, nOnDate };
+          if (cand.length <= 3 && !fallback) fallback = { eventId: null, pack, date, nOnDate, options: cand.map(e => e.id) };   // ambiguo: varias posibles
         }
-        if (!date || cand.length === 0) return { eventId: null, pack, date, nOnDate };
-        if (cand.length === 1) return { eventId: cand[0].id, pack, date, nOnDate };
-        if (cand.length <= 3) return { eventId: null, pack, date, nOnDate, options: cand.map(e => e.id) };   // ambiguo: varias posibles
-        return { eventId: null, pack, date, nOnDate };
+        if (fallback) return fallback;
+        return { eventId: null, pack, date: dates[0], nOnDate: (evByDate[dates[0]] || []).length };
       };
       const conceptUnknownServices = raw => {
         const nt = normNm(invConcept(raw)); const found = [];
@@ -893,6 +910,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       };
       const serviceWarnings = [];
       const payByEvent = {};   // eventId -> suma de bases (sin IVA) de sus facturas vinculadas
+      const unlinkedCredits = [];   // rectificativas (CN) que quedaron sin vincular: se netean por concepto en 2ª pasada
       const ignored = new Set((store.setting('invoiceIgnored') || []).map(String));   // facturas "obviadas" a mano
       const ignoradas = [];
       const _hoy = bizToday();
@@ -939,7 +957,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
             if (inv.number) pe.invs.push(inv.number);
             return;
           }
-          if (inv.credit) return;   // rectificativa (CN, negativa) sin vincular: no se persigue en esta lista (se netea en el pago de su boda)
+          if (inv.credit) { unlinkedCredits.push({ raw, inv }); return; }   // CN sin vincular: se netea por concepto en 2ª pasada
           if (company) { empresaInv++; return; }              // factura a empresa/finca: no es un descuadre
           const yr = yearOf(inv.date);
           if (yr && yr < 2026) { antiguasInv++; return; }     // 2024/2025 y anteriores: no se muestran
@@ -966,6 +984,14 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
           }
           sinVincular.push({ number: inv.number, date: inv.date, total: inv.total, paid: inv.paid, pending: inv.pending, status: inv.status, contact: c.name || '', code: c.code || c.vat_number || '', invId: inv.id, suggestedEventId, suggestedLabel, catWarn, why, options, concept: String(_c || '').slice(0, 160) });
         });
+      });
+      // 2ª pasada: rectificativas (CN) sin vincular. Si su concepto apunta a una boda que YA tiene
+      // facturas vinculadas, se netean ahí (restan su importe del pagado y de la base). Así una CN que
+      // está en otro contacto de Holded o que no se vinculó a mano también cuadra la boda.
+      unlinkedCredits.forEach(({ raw, inv }) => {
+        const sgc = suggestByConcept(raw);
+        const eid = sgc && sgc.eventId;
+        if (eid && payByEvent[eid]) { const pe = payByEvent[eid]; pe.base += inv.total; pe.paid += inv.total; if (inv.number) pe.invs.push(inv.number); }
       });
       sinVincular.sort((a, b) => String(b.date).localeCompare(String(a.date)));
       serviceWarnings.sort((a, b) => String(b.date).localeCompare(String(a.date)));
