@@ -1044,24 +1044,61 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
     const box = document.createElement('div'); box.className = 'panel'; box.style.marginBottom = '14px';
     const linkBtn = () => ev.spotifyUrl ? `<a class="btn btn--sm" href="${esc(ev.spotifyUrl)}" target="_blank" rel="noopener">🎵 Abrir en Spotify</a>${ev.spotifyCount ? ` <span class="hint">${ev.spotifyCount} canciones</span>` : ''}` : '<span class="hint">Aún no se ha generado la playlist.</span>';
     const synced = () => ev.spotifySyncedAt ? `<p class="hint" style="margin:6px 0 0">Última actualización: ${esc(new Date(ev.spotifySyncedAt).toLocaleString('es-ES'))}</p>` : '';
+    const collabNote = canGen ? '<p class="hint" style="margin:8px 0 0">La playlist es privada y <b>colaborativa</b>: los novios pueden reordenar y añadir canciones abriéndola con el enlace. Ojo: al pulsar «Actualizar» se reemplaza por lo seleccionado aquí.</p>' : '';
     box.innerHTML = `<div class="panel__head"><h3>🎵 Playlist de Spotify</h3></div><div class="panel__body">
       <div id="spLink" style="margin-bottom:${canGen ? '10px' : '0'}">${linkBtn()}</div>
-      ${canGen ? `<div class="btn-row"><button type="button" class="btn btn--primary" id="spGen">${ev.spotifyUrl ? '↻ Actualizar playlist' : '🎵 Generar playlist'}</button></div><div id="spSynced">${synced()}</div><div id="spGenOut" style="margin-top:10px"></div>` : ''}</div>`;
+      ${canGen ? `<div class="btn-row"><button type="button" class="btn btn--primary" id="spPrep">${ev.spotifyUrl ? '↻ Revisar y actualizar' : '🎵 Preparar playlist'}</button></div><div id="spSynced">${synced()}</div>${collabNote}<div id="spGenOut" style="margin-top:10px"></div>` : ''}</div>`;
     musPane.insertBefore(box, musPane.firstChild);
-    const gen = box.querySelector('#spGen');
-    if (gen) gen.onclick = async () => {
-      gen.disabled = true; const t0 = gen.textContent; gen.textContent = 'Generando… (tarda un poco)';
-      const out = box.querySelector('#spGenOut'); if (out) out.innerHTML = '<p class="hint">Buscando las canciones en Spotify…</p>';
+    const out = box.querySelector('#spGenOut');
+    const prep = box.querySelector('#spPrep');
+
+    // Pinta el selector: cada canción con su mejor coincidencia preseleccionada, alternativas por % y "Omitir".
+    const renderChooser = (data) => {
+      const rows = (data.songs || []).map((s, i) => {
+        const ic = s.status === 'ok' ? '✅' : s.status === 'warn' ? '⚠️' : '❌';
+        const opts = ['<option value="">— Omitir (no añadir) —</option>'].concat(
+          (s.candidates || []).map(c => `<option value="${esc(c.uri)}"${c.uri === s.bestUri ? ' selected' : ''}>${esc(c.name)} — ${esc(c.artist)}${c.dur ? ' · ' + esc(c.dur) : ''} (${c.score}%)</option>`)
+        ).join('');
+        const orig = s.song || s.link || '';
+        const srcDur = s.srcDur ? ` <span class="hint">· vídeo ${esc(s.srcDur)}</span>` : '';
+        const err = (!s.candidates || !s.candidates.length) ? `<span class="hint" style="color:#d9534f">❌ ${esc(s.error || 'sin resultados en Spotify')}</span>` : '';
+        return `<div style="padding:8px 0;border-top:1px solid var(--line,#eee)">
+          <div><b>${esc(s.title)}</b> ${ic} ${orig ? `<span class="hint">— ${esc(orig)}</span>` : ''}${srcDur}</div>
+          ${s.candidates && s.candidates.length ? `<select class="sp-pick input" data-idx="${i}" style="margin-top:4px;max-width:100%">${opts}</select>` : err}
+        </div>`;
+      }).join('');
+      out.innerHTML = `<div class="hint" style="margin-bottom:6px">Elige la versión de cada canción (o déjala en «Omitir» si no la quieres). Título: <b>${esc(data.title || '')}</b></div>
+        ${rows}
+        <div class="btn-row" style="margin-top:12px"><button type="button" class="btn btn--primary" id="spGen">${ev.spotifyUrl ? '↻ Actualizar playlist con esta selección' : '✅ Generar playlist con esta selección'}</button></div>
+        <div id="spGenMsg" style="margin-top:10px"></div>`;
+      const gen = out.querySelector('#spGen');
+      gen.onclick = async () => {
+        const picks = [...out.querySelectorAll('.sp-pick')].map(sel => sel.value).filter(Boolean);
+        const msg = out.querySelector('#spGenMsg');
+        if (!picks.length) { if (msg) msg.innerHTML = '<span style="color:#d9534f;font-weight:700">Selecciona al menos una canción (o deja alguna sin «Omitir»).</span>'; return; }
+        gen.disabled = true; const t0 = gen.textContent; gen.textContent = 'Guardando en Spotify…';
+        if (msg) msg.innerHTML = '<p class="hint">Creando/actualizando la playlist…</p>';
+        try {
+          const r = await api('events/' + ev.id + '/spotify-sync', { method: 'POST', body: { picks } });
+          ev.spotifyUrl = r.url; ev.spotifySyncedAt = r.syncedAt; ev.spotifyCount = r.count;
+          if (msg) msg.innerHTML = `<div class="alert" style="background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2;border-radius:10px;padding:10px 12px">✅ Playlist con <b>${r.count}</b> canciones. <a href="${esc(r.url)}" target="_blank" rel="noopener">Abrir en Spotify</a></div>`;
+          const lk = box.querySelector('#spLink'); if (lk) lk.innerHTML = linkBtn();
+          const sy = box.querySelector('#spSynced'); if (sy) sy.innerHTML = synced();
+          if (prep) prep.textContent = '↻ Revisar y actualizar';
+          toast('Playlist actualizada', 'ok');
+        } catch (e) { if (msg) msg.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(e.message) + '</span>'; gen.textContent = t0; }
+        gen.disabled = false;
+      };
+    };
+
+    if (prep) prep.onclick = async () => {
+      prep.disabled = true; const t0 = prep.textContent; prep.textContent = 'Buscando en Spotify… (tarda un poco)';
+      if (out) out.innerHTML = '<p class="hint">Emparejando las canciones con Spotify…</p>';
       try {
-        const r = await api('events/' + ev.id + '/spotify-sync', { method: 'POST' });
-        ev.spotifyUrl = r.url; ev.spotifySyncedAt = r.syncedAt; ev.spotifyCount = r.count;
-        const rows = (r.results || []).map(x => { const ic = x.status === 'ok' ? '✅' : x.status === 'warn' ? '⚠️' : '❌'; const st = x.included ? '' : 'opacity:.55;text-decoration:line-through'; return `<div style="padding:5px 0;border-top:1px solid var(--line,#eee);${st}"><b>${esc(x.title)}</b> — ${esc(x.song)}<br><span class="hint">${ic} ${x.matched ? esc(x.matched) + ' · ' + x.score + '%' : esc(x.error || 'no encontrada')}</span></div>`; }).join('');
-        if (out) out.innerHTML = `<div class="alert" style="background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2;border-radius:10px;padding:10px 12px;margin-bottom:8px">✅ Playlist con <b>${r.count}</b> de ${r.total} canciones. <a href="${esc(r.url)}" target="_blank" rel="noopener">Abrir en Spotify</a></div>${rows}`;
-        const lk = box.querySelector('#spLink'); if (lk) lk.innerHTML = linkBtn();
-        const sy = box.querySelector('#spSynced'); if (sy) sy.innerHTML = synced();
-        gen.textContent = '↻ Actualizar playlist'; toast('Playlist actualizada', 'ok');
-      } catch (e) { if (out) out.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(e.message) + '</span>'; gen.textContent = t0; }
-      gen.disabled = false;
+        const data = await api('events/' + ev.id + '/spotify-preview', { method: 'POST' });
+        renderChooser(data);
+      } catch (e) { if (out) out.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(e.message) + '</span>'; }
+      prep.textContent = t0; prep.disabled = false;
     };
   })();
   // botones de pago (pasarela Holded, pendiente de conectar): total o en 2 plazos

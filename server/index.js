@@ -2165,6 +2165,29 @@ function eventSongs(ev) {
   (ev.optionals || []).forEach((o, i) => { if (o && (o.value || o.link)) out.push({ title: o.title || 'Momento', song: o.value || '', url: o.link || '', order: +o.order || 60 }); });
   return out.sort((a, b) => a.order - b.order);
 }
+// Nombres de pila de los novios (sin apellidos): "Adrián Fernández & Laura García" -> "Adrián & Laura".
+function coupleFirstNames(conyuges) {
+  return String(conyuges || '')
+    .split(/\s*[&+\/]\s*|\s+(?:y|i|and)\s+|\s*,\s*/i)
+    .map(p => p.trim().split(/\s+/)[0]).filter(Boolean).join(' & ');
+}
+// Título y descripción de la playlist de una boda: NOMBRE FINCA · fecha · nombres de pila.
+function spotifyMeta(ev) {
+  const finca = (store.get('locations', ev.lugar) || {}).name || ev.lugarOtro || '';
+  const fm = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ev.fecha || '')); const fecha = fm ? (fm[3] + '/' + fm[2] + '/' + fm[1]) : '';
+  const names = coupleFirstNames(ev.conyuges) || (ev.conyuges || '') || ('#' + ev.id);
+  const plName = [finca, fecha, names].filter(Boolean).join(' · ').slice(0, 100);
+  const plDesc = ((ev.conyuges || '') + ' · Playlist de Conecta Só').trim().slice(0, 300);
+  return { plName, plDesc, finca, fecha, names };
+}
+// Duración ms -> "m:ss".
+function mmss(ms) { ms = +ms || 0; if (!ms) return ''; const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000); return m + ':' + String(s).padStart(2, '0'); }
+// Vista compacta de una pista de Spotify para elegir en la interfaz.
+function trackView(t, s) {
+  return { uri: t.uri, name: t.name || '', artist: (t.artists || []).map(a => a.name).join(', '),
+    img: (t.album && t.album.images && t.album.images.length ? t.album.images[t.album.images.length - 1].url : ''),
+    dur: mmss(t.duration_ms), score: Math.round((s || 0) * 100) };
+}
 
 function enrichEvent(out, ev, user) {
   if (!out) return out;
@@ -2415,31 +2438,60 @@ async function events(req, res, user, seg, method, url) {
     return ok(res, { ok: true, recipients: results, sentAt: ev.fotosSentAt });
   }
 
-  // --- Spotify: generar/actualizar LA playlist de la boda (una única por boda; solo DJ/admin) ---
-  if (seg[2] === 'spotify-sync' && method === 'POST') {
-    if (!(user.role === 'admin' || user.role === 'dj')) return fail(res, 403, 'Solo el DJ o administración pueden generar la playlist.');
+  // --- Spotify: PREVISUALIZAR las coincidencias (candidatas + % por canción) sin escribir nada (DJ/admin) ---
+  if (seg[2] === 'spotify-preview' && method === 'POST') {
+    if (!(user.role === 'admin' || user.role === 'dj')) return fail(res, 403, 'Solo el DJ o administración pueden preparar la playlist.');
     if (!spotify.connected()) return fail(res, 400, 'Spotify no está conectado. Conéctalo en Configuración avanzada → Spotify.');
     const songs = eventSongs(ev);
     if (!songs.length) return fail(res, 400, 'Esta boda no tiene canciones con nombre o enlace.');
-    const results = []; const uris = []; const seen = new Set();
+    const items = [];
     for (const s of songs) {
       const it = spotify.toItem(s);
       let r; try { r = await spotify.resolveItem(it); } catch (e) { r = { status: 'bad', error: e.message }; }
-      const include = !!(r.track && r.track.uri && (it.kind === 'id' || (r.score || 0) >= 0.4));
-      if (include && !seen.has(r.track.uri)) { seen.add(r.track.uri); uris.push(r.track.uri); }
-      results.push({ title: s.title, song: s.song || s.url, status: r.status, matched: r.track ? (r.track.name + ' — ' + (r.track.artists || []).map(a => a.name).join(', ')) : '', score: Math.round((r.score || 0) * 100), error: r.error || '', included: include });
+      const candidates = (r.scored || []).map(c => trackView(c.t, c.s));
+      // Elección automática por defecto: la 1ª candidata si es enlace directo o si llega al 40%; si no, "omitir".
+      const bestUri = (candidates[0] && (it.kind === 'id' || candidates[0].score >= 40)) ? candidates[0].uri : '';
+      const srcDur = it.durSec ? mmss(it.durSec * 1000) : '';
+      items.push({ title: s.title, song: s.song || '', link: s.url || '', kind: it.kind, status: r.status, error: r.error || '', candidates, bestUri, srcDur });
     }
-    if (!uris.length) return fail(res, 400, 'No se pudo emparejar ninguna canción en Spotify. Revisa los nombres o enlaces.');
+    const meta = spotifyMeta(ev);
+    return ok(res, { ok: true, title: meta.plName, songs: items, currentUrl: ev.spotifyUrl || '' });
+  }
+
+  // --- Spotify: generar/actualizar LA playlist de la boda (una única por boda; solo DJ/admin) ---
+  // Si llega body.picks (lista de uris elegidas por el DJ) se usan esas EXACTAS y en ese orden;
+  // si no, se emparejan automáticamente todas las canciones de la boda.
+  if (seg[2] === 'spotify-sync' && method === 'POST') {
+    if (!(user.role === 'admin' || user.role === 'dj')) return fail(res, 403, 'Solo el DJ o administración pueden generar la playlist.');
+    if (!spotify.connected()) return fail(res, 400, 'Spotify no está conectado. Conéctalo en Configuración avanzada → Spotify.');
+    const body = await readBody(req).catch(() => ({}));
+    const picks = Array.isArray(body && body.picks) ? body.picks : null;
+    const results = []; const uris = []; const seen = new Set(); let total = 0;
+    if (picks) {
+      // El DJ ya eligió en el selector: respetamos sus uris, en orden, sin volver a emparejar.
+      picks.forEach(u => { if (typeof u === 'string' && /^spotify:track:[A-Za-z0-9]{22}$/.test(u) && !seen.has(u)) { seen.add(u); uris.push(u); } });
+      total = picks.length;
+      if (!uris.length) return fail(res, 400, 'No has seleccionado ninguna canción.');
+    } else {
+      const songs = eventSongs(ev);
+      if (!songs.length) return fail(res, 400, 'Esta boda no tiene canciones con nombre o enlace.');
+      total = songs.length;
+      for (const s of songs) {
+        const it = spotify.toItem(s);
+        let r; try { r = await spotify.resolveItem(it); } catch (e) { r = { status: 'bad', error: e.message }; }
+        const include = !!(r.track && r.track.uri && (it.kind === 'id' || (r.score || 0) >= 0.4));
+        if (include && !seen.has(r.track.uri)) { seen.add(r.track.uri); uris.push(r.track.uri); }
+        results.push({ title: s.title, song: s.song || s.url, status: r.status, matched: r.track ? (r.track.name + ' — ' + (r.track.artists || []).map(a => a.name).join(', ')) : '', score: Math.round((r.score || 0) * 100), error: r.error || '', included: include });
+      }
+      if (!uris.length) return fail(res, 400, 'No se pudo emparejar ninguna canción en Spotify. Revisa los nombres o enlaces.');
+    }
     let me; try { me = await spotify.me(); } catch (e) { return fail(res, 502, 'Spotify: ' + e.message); }
-    const finca = (store.get('locations', ev.lugar) || {}).name || ev.lugarOtro || '';
-    const fm = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ev.fecha || '')); const fecha = fm ? (fm[3] + '/' + fm[2] + '/' + fm[1]) : '';
-    const plName = ('Boda ' + (ev.conyuges || ('#' + ev.id))).slice(0, 100);
-    const plDesc = ([fecha, finca].filter(Boolean).join(' · ') + ' · Playlist de Conecta Só').slice(0, 300);
+    const meta = spotifyMeta(ev);
     let pid = ev.spotifyPlaylistId;
     try {
       if (pid && !(await spotify.playlistExists(pid))) pid = null;   // se borró en Spotify → se recrea
-      if (!pid) { const pl = await spotify.createPlaylist(me.id, plName, plDesc, false); pid = pl.id; }   // privada (public:false)
-      else { await spotify.updateDetails(pid, { name: plName, description: plDesc }); }
+      if (!pid) { const pl = await spotify.createPlaylist(me.id, meta.plName, meta.plDesc, false, true); pid = pl.id; }   // privada + colaborativa
+      else { await spotify.updateDetails(pid, { name: meta.plName, description: meta.plDesc, public: false, collaborative: true }); }
       await spotify.replaceTracks(pid, uris);
     } catch (e) { return fail(res, 502, 'Spotify: ' + e.message); }
     ev.spotifyPlaylistId = pid;
@@ -2447,7 +2499,7 @@ async function events(req, res, user, seg, method, url) {
     ev.spotifySyncedAt = new Date().toISOString();
     ev.spotifyCount = uris.length;
     store.put('events', ev); store.audit(user.id, 'spotify-sync', 'events', id);
-    return ok(res, { ok: true, url: ev.spotifyUrl, syncedAt: ev.spotifySyncedAt, count: uris.length, total: songs.length, results });
+    return ok(res, { ok: true, url: ev.spotifyUrl, syncedAt: ev.spotifySyncedAt, count: uris.length, total, results });
   }
 
   // --- enlace de autologin para que el DJ (o trabajador por horas) rellene su parte (admin) ---

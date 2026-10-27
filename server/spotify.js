@@ -124,7 +124,15 @@ function score(item, t) {
     s = Math.max(sim(q, title + ' ' + allA), sim(q, allA + ' ' + title), toks(q, title + ' ' + allA) * 0.9);
   }
   const candRaw = t.name + ' ' + ((t.album && t.album.name) || '') + ' ' + (t.artists || []).map(a => a.name).join(' ');
-  return Math.max(0, Math.min(1, s - flagPenalty(item.pq || item.q || '', candRaw)));
+  let sc = Math.max(0, Math.min(1, s - flagPenalty(item.pq || item.q || '', candRaw)));
+  // Factor duración: si conocemos la duración del origen (vídeo de YouTube), penaliza las versiones
+  // cuya duración se aleja mucho (extendidas, cortadas, mixes largos). No afecta si no hay duración.
+  if (item.durSec && t.duration_ms) {
+    const diff = Math.abs(item.durSec - Math.round(t.duration_ms / 1000));
+    const f = diff <= 3 ? 1 : diff <= 10 ? 0.97 : Math.max(0.6, 1 - (diff - 10) / 120);
+    sc = sc * f;
+  }
+  return sc;
 }
 
 /* ---------- Parseo de una canción de la intranet (nombre + enlace) ---------- */
@@ -159,6 +167,16 @@ async function ytMeta(id) {
     throw new Error('yt');
   }
 }
+// Duración (segundos) de un vídeo de YouTube, leyendo la página (campo "lengthSeconds"). 0 si no se puede.
+async function ytDuration(id) {
+  try {
+    const r = await fetch('https://www.youtube.com/watch?v=' + id, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'es,en;q=0.8' } });
+    if (!r.ok) return 0; const h = await r.text();
+    let m = h.match(/"lengthSeconds":"(\d+)"/); if (m) return +m[1] || 0;
+    m = h.match(/"approxDurationMs":"(\d+)"/); if (m) return Math.round(+m[1] / 1000) || 0;
+    return 0;
+  } catch (e) { return 0; }
+}
 function ytClean(title, author) {
   let t = String(title)
     .replace(/[(\[][^)\]]*\b(official|oficial|video|v[ií]deo|videoclip|lyrics?|letra|audio|visuali[sz]er|hd|hq|4k|mv|clip|remaster(ed)?)\b[^)\]]*[)\]]/gi, ' ')
@@ -174,12 +192,13 @@ function ytClean(title, author) {
 async function resolveItem(it) {
   if (it.kind === 'none') return { status: 'bad', error: 'Sin canción ni enlace' };
   if (it.kind === 'id') {
-    try { const t = await getTrack(it.id); return { status: 'ok', track: t, score: 1, candidates: [t] }; }
+    try { const t = await getTrack(it.id); return { status: 'ok', track: t, score: 1, candidates: [t], scored: [{ t, s: 1 }] }; }
     catch (e) { return { status: 'bad', error: 'El enlace de Spotify no es válido' }; }
   }
   if (it.kind === 'yt') {
     try { const m = await ytMeta(it.ytId); Object.assign(it, ytClean(m.title, m.author)); }
     catch (e) { return { status: 'bad', error: 'No se pudo leer el vídeo de YouTube' }; }
+    try { it.durSec = await ytDuration(it.ytId); } catch (e) { it.durSec = 0; }
   }
   const pool = new Map();
   const add = list => list.forEach(t => { if (t && t.id && !pool.has(t.id)) pool.set(t.id, { t, s: score(it, t) }); });
@@ -196,15 +215,17 @@ async function resolveItem(it) {
   if (!cands.length) return { status: 'bad', error: 'Sin resultados en Spotify' };
   const s = cands[0].s;
   const status = s >= 0.8 ? 'ok' : s >= 0.55 ? 'warn' : 'bad';
-  return { status: (it.kind === 'yt' && status === 'ok') ? 'warn' : status, track: cands[0].t, score: s, candidates: cands.map(c => c.t) };
+  return { status: (it.kind === 'yt' && status === 'ok') ? 'warn' : status, track: cands[0].t, score: s, candidates: cands.map(c => c.t), scored: cands.map(c => ({ t: c.t, s: c.s })) };
 }
 
 /* ---------- Playlists ---------- */
 // NOTA: desde el cambio de la API de Spotify de feb-2026, las apps en "Development mode" DEBEN usar
 // los endpoints nuevos (/me/playlists y /playlists/{id}/items); los antiguos (/users/{id}/playlists y
 // /playlists/{id}/tracks) devuelven 403. Ref: developer.spotify.com .../february-2026-migration-guide
-async function createPlaylist(userId, name, description, isPublic) {
-  return apiPost('/me/playlists', { name: String(name).slice(0, 100), description: String(description || '').slice(0, 300), public: !!isPublic });
+async function createPlaylist(userId, name, description, isPublic, collaborative) {
+  // Las playlists colaborativas DEBEN ser privadas (public:false); Spotify lo exige.
+  const collab = !!collaborative;
+  return apiPost('/me/playlists', { name: String(name).slice(0, 100), description: String(description || '').slice(0, 300), public: collab ? false : !!isPublic, collaborative: collab });
 }
 async function updateDetails(playlistId, patch) { return apiPut('/playlists/' + playlistId, patch); }
 // Reemplaza TODAS las pistas de la playlist por las indicadas (hasta 100 por llamada).
