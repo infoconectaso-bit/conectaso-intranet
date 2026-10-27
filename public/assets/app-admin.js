@@ -1807,6 +1807,17 @@ on(/^#\/cuenta$/, async () => {
          <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
          <h4 style="margin:0 0 6px">🛠 Modo mantenimiento</h4>
          <p class="hint" style="margin-bottom:12px">Al activarlo, <b>todos</b> (novios, DJs y wedding planners) ven la pantalla de "En mantenimiento". <b>Tú y el resto de administración seguís entrando con normalidad</b> para hacer los cambios. Actívalo antes de una actualización y desactívalo al terminar.</p>
+         <div style="background:#f6f3ff;border:1px solid #e2daf7;border-left:4px solid #E82C88;border-radius:10px;padding:14px 16px 14px 18px;margin-bottom:16px;max-width:620px">
+           <div style="font-weight:800;margin-bottom:8px">📋 Pasos recomendados</div>
+           <ol style="margin:0;padding-left:20px;line-height:1.9;font-size:14px">
+             <li>🛡 <b>Crea una copia previa a mantenimiento</b> (punto seguro, abajo).</li>
+             <li>✅ <b>Activa el modo mantenimiento</b> (tu email ya está permitido) → se cierra la sesión de los demás.</li>
+             <li>🔧 <b>Haz los cambios</b> con calma; tú sigues entrando con normalidad.</li>
+             <li>👁 <b>Comprueba</b> que todo funciona bien.</li>
+             <li>🔓 <b>Desactiva el modo mantenimiento</b> al terminar.</li>
+             <li>↩ ¿Algo salió mal? <b>Restaura</b> desde la copia previa en <a href="#/backups">Copias de seguridad</a>.</li>
+           </ol>
+         </div>
          <div id="mntState" style="margin-bottom:12px"></div>
          <div class="btn-row" style="margin-bottom:8px"><button type="button" class="btn" id="mntBackup">💾 Crear copia previa a mantenimiento</button></div>
          <p class="hint" style="margin-bottom:14px">Guarda un <b>punto de restauración conocido-bueno</b> justo antes de tocar nada. Sale <b>resaltada</b> en la lista de copias como "previa a mantenimiento" y <b>no se borra nunca</b>. Recomendado antes de cada cambio importante.</p>
