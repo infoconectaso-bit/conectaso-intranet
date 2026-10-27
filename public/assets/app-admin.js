@@ -1806,6 +1806,17 @@ on(/^#\/cuenta$/, async () => {
          </form>
          <div id="holdedCfgMsg" style="margin-top:10px;display:none;font-size:13px"></div>
          <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
+         <h4 style="margin:0 0 6px">🎵 Conexión con Spotify</h4>
+         <p class="hint" style="margin-bottom:10px">Para generar las playlists de las bodas en <b>una cuenta de empresa</b> (Premium). El Client ID lo coges de developer.spotify.com; el Secret se guarda aquí, en la intranet.</p>
+         <div id="spStatus" style="margin-bottom:10px"></div>
+         <form id="spotifyCfgForm" style="max-width:520px">
+           <div class="field"><label>Client ID</label><input class="control" id="spClientId" autocomplete="off"></div>
+           <div class="field"><label>Client Secret</label><input class="control" type="password" id="spSecret" autocomplete="new-password" placeholder="(pega aquí el Client Secret)"></div>
+           <div class="field"><label>Redirect URI <span class="muted">(debe coincidir EXACTA con la de tu app de Spotify)</span></label><input class="control" id="spRedir" placeholder="https://prueba.lol/api/spotify/callback"></div>
+           <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Guardar</button> <button type="button" class="btn" id="spConnect">🎵 Conectar con Spotify</button> <button type="button" class="btn btn--sm" id="spDisconnect" hidden>Desconectar</button></div>
+         </form>
+         <div id="spotifyCfgMsg" style="margin-top:10px;display:none;font-size:13px"></div>
+         <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
          <h4 style="margin:0 0 6px">🛠 Modo mantenimiento</h4>
          <p class="hint" style="margin-bottom:12px">Al activarlo, <b>todos</b> (novios, DJs y wedding planners) ven la pantalla de "En mantenimiento". <b>Tú y el resto de administración seguís entrando con normalidad</b> para hacer los cambios. Actívalo antes de una actualización y desactívalo al terminar.</p>
          <div style="background:#f6f3ff;border:1px solid #e2daf7;border-left:4px solid #E82C88;border-radius:10px;padding:14px 16px 14px 18px;margin-bottom:16px;max-width:620px">
@@ -1963,6 +1974,36 @@ on(/^#\/cuenta$/, async () => {
         m.innerHTML = r.ok ? '✅ Conexión correcta con Holded.' : '<span style="color:#d9534f;font-weight:700">No conecta: ' + esc(r.error || '') + '</span>';
       } catch (err) { m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>'; }
     };
+  }
+  const spForm = el('spotifyCfgForm');
+  if (spForm) {
+    const paintSp = st => {
+      const sb = el('spStatus'); if (el('spClientId') && st.clientId != null) el('spClientId').value = st.clientId || '';
+      if (el('spRedir') && !el('spRedir').value) el('spRedir').value = st.redirect || '';
+      const dc = el('spDisconnect'); if (dc) dc.hidden = !st.connected;
+      if (!sb) return;
+      sb.innerHTML = st.connected
+        ? `<div class="banner" style="padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Conectado${st.account ? ' como <b>' + esc(st.account) + '</b>' : ''}. Ya se pueden generar playlists.</div>`
+        : (st.configured
+          ? `<div class="banner" style="padding:10px 14px;border-radius:10px;background:#FFF8E1;color:#8a6d00;border:1px solid #FFE49A">⚠ Falta <b>conectar la cuenta</b>: pulsa «Conectar con Spotify» y autoriza con la cuenta Premium de empresa.</div>`
+          : `<div class="banner" style="padding:10px 14px;border-radius:10px;background:#EEF2F7;color:#334;border:1px solid #D6DEE8">Pega el <b>Client ID</b> y el <b>Client Secret</b>, Guarda, y luego «Conectar con Spotify».</div>`);
+    };
+    const loadSp = () => api('spotify-config').then(paintSp).catch(() => {});
+    loadSp();
+    spForm.onsubmit = async e => {
+      e.preventDefault();
+      const out = el('spotifyCfgMsg'); if (out) { out.style.display = 'block'; out.textContent = 'Guardando…'; }
+      try { await api('spotify-config', { method: 'POST', body: { clientId: (el('spClientId') || {}).value || '', clientSecret: (el('spSecret') || {}).value || '', redirect: (el('spRedir') || {}).value || '' } }); if (el('spSecret')) el('spSecret').value = ''; if (out) out.innerHTML = '✅ Guardado. Ahora pulsa «Conectar con Spotify».'; toast('Configuración de Spotify guardada', 'ok'); loadSp(); }
+      catch (err) { if (out) out.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>'; }
+    };
+    const scn = el('spConnect');
+    if (scn) scn.onclick = async () => {
+      try { const st = await api('spotify-config'); if (!st.hasSecret) { toast('Guarda primero el Client ID y el Secret', 'err'); return; } } catch (e) {}
+      window.open('/api/spotify/auth', '_blank', 'noopener');
+      const out = el('spotifyCfgMsg'); if (out) { out.style.display = 'block'; out.innerHTML = 'Se ha abierto Spotify en otra pestaña. Autoriza con la cuenta de empresa y vuelve aquí; luego pulsa <a href="#/cuenta">recargar</a> para ver el estado.'; }
+    };
+    const sdc = el('spDisconnect');
+    if (sdc) sdc.onclick = async () => { if (!confirm('¿Desconectar la cuenta de Spotify? Las playlists ya creadas no se borran.')) return; try { await api('spotify/disconnect', { method: 'POST' }); toast('Spotify desconectado', 'ok'); loadSp(); } catch (e) { toast(e.message || 'Error', 'err'); } };
   }
   const mntForm = el('mntForm');
   if (mntForm) {

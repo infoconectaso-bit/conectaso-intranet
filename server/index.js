@@ -34,6 +34,7 @@ const fact = require('./facturacion');
 const { evFinished, evRealized } = require('./time');
 const volcado = require('./volcado');
 const holded = require('./holded');
+const spotify = require('./spotify');
 const backup = require('./backup');
 const cloudBackup = require('./cloud-backup');
 const webauthn = require('./webauthn');
@@ -540,6 +541,54 @@ async function api(req, res, url) {
       return ok(res, { ok: true, hasApiKey: !!next.apiKey });
     }
   }
+  // --- Spotify: configuración (Client ID / Secret), solo admin ---
+  const spRedirect = () => { const c = spotify.getConfig(); return c.redirect || (APP_URL() ? APP_URL() + '/api/spotify/callback' : ''); };
+  if (seg[0] === 'spotify-config') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (method === 'GET') {
+      const c = spotify.getConfig();
+      return ok(res, { clientId: c.clientId, hasSecret: !!c.clientSecret, configured: spotify.configured(), connected: spotify.connected(), account: c.account, redirect: spRedirect() });
+    }
+    if (method === 'POST') {
+      const b = await readBody(req);
+      const patch = {};
+      if (b.clientId != null) patch.clientId = String(b.clientId).trim();
+      if (b.clientSecret != null && b.clientSecret !== '') patch.clientSecret = String(b.clientSecret).trim();
+      if (b.redirect != null) patch.redirect = String(b.redirect).trim();
+      spotify.saveConfig(patch);
+      store.audit(user.id, 'spotify-config-save');
+      return ok(res, { ok: true });
+    }
+  }
+  if (seg[0] === 'spotify' && seg[1] === 'status' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const c = spotify.getConfig();
+    return ok(res, { configured: spotify.configured(), connected: spotify.connected(), account: c.account, redirect: spRedirect() });
+  }
+  if (seg[0] === 'spotify' && seg[1] === 'auth' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (!spotify.configured()) return fail(res, 400, 'Primero guarda el Client ID y el Client Secret.');
+    const state = crypto.randomBytes(12).toString('hex');
+    store.setSetting('spotifyState', { state, at: Date.now() });
+    const url2 = spotify.authUrl(spRedirect(), state);
+    return send(res, 302, '', { Location: url2 });
+  }
+  if (seg[0] === 'spotify' && seg[1] === 'callback' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const q = new URL(req.url, 'http://localhost').searchParams;
+    const page = (title, msg, ok2) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui,sans-serif;background:#0c0910;color:#fff;display:grid;place-items:center;height:100vh;margin:0;text-align:center"><div style="max-width:420px;padding:24px"><div style="font-size:42px">${ok2 ? '✅' : '⚠️'}</div><h1 style="font-size:22px">${title}</h1><p style="color:#cfc7d6">${msg}</p><a href="/" style="display:inline-block;margin-top:14px;background:#1db954;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:700">Volver a la intranet</a></div></body>`); };
+    if (q.get('error')) return page('No se pudo conectar', 'Spotify rechazó el acceso: ' + esc(q.get('error')) + '.', false);
+    const st = store.setting('spotifyState') || {};
+    if (!q.get('code') || !q.get('state') || q.get('state') !== st.state || (Date.now() - (st.at || 0) > 15 * 60 * 1000)) return page('Enlace caducado', 'Vuelve a pulsar «Conectar con Spotify» e inténtalo de nuevo.', false);
+    try { const me = await spotify.exchangeCode(q.get('code'), spRedirect()); store.setSetting('spotifyState', null); store.audit(user.id, 'spotify-connect'); return page('¡Spotify conectado!', 'Cuenta conectada' + (me && (me.display_name || me.id) ? ': <b>' + esc(me.display_name || me.id) + '</b>' : '') + '. Ya puedes generar las playlists de las bodas.', true); }
+    catch (e) { return page('No se pudo conectar', esc(e.message || 'Error') + '.', false); }
+  }
+  if (seg[0] === 'spotify' && seg[1] === 'disconnect' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    spotify.disconnect(); store.audit(user.id, 'spotify-disconnect');
+    return ok(res, { ok: true });
+  }
+
   // --- probar la conexión con Holded (admin) ---
   if (seg[0] === 'holded-test' && method === 'POST') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
@@ -2092,6 +2141,15 @@ function fotomatonList() {
   };
 }
 
+// Canciones de una boda (momentos fijos + opcionales) con nombre o enlace, en orden.
+function eventSongs(ev) {
+  const out = [];
+  const mu = ev.music || {};
+  Object.keys(mu).forEach(k => { const m = mu[k]; if (m && !m.on && (m.song || m.link)) out.push({ title: (ev.labels && ev.labels[k]) || k, song: m.song || '', url: m.link || '', order: +m.order || 50 }); });
+  (ev.optionals || []).forEach((o, i) => { if (o && (o.value || o.link)) out.push({ title: o.title || 'Momento', song: o.value || '', url: o.link || '', order: +o.order || 60 }); });
+  return out.sort((a, b) => a.order - b.order);
+}
+
 function enrichEvent(out, ev, user) {
   if (!out) return out;
   out.canEdit = perm.clientEditOpen(ev);
@@ -2339,6 +2397,41 @@ async function events(req, res, user, seg, method, url) {
     ev.fotosSentAt = new Date().toISOString();
     store.put('events', ev); store.audit(user.id, 'fotos-email', 'events', id);
     return ok(res, { ok: true, recipients: results, sentAt: ev.fotosSentAt });
+  }
+
+  // --- Spotify: generar/actualizar LA playlist de la boda (una única por boda; solo DJ/admin) ---
+  if (seg[2] === 'spotify-sync' && method === 'POST') {
+    if (!(user.role === 'admin' || user.role === 'dj')) return fail(res, 403, 'Solo el DJ o administración pueden generar la playlist.');
+    if (!spotify.connected()) return fail(res, 400, 'Spotify no está conectado. Conéctalo en Configuración avanzada → Spotify.');
+    const songs = eventSongs(ev);
+    if (!songs.length) return fail(res, 400, 'Esta boda no tiene canciones con nombre o enlace.');
+    const results = []; const uris = []; const seen = new Set();
+    for (const s of songs) {
+      const it = spotify.toItem(s);
+      let r; try { r = await spotify.resolveItem(it); } catch (e) { r = { status: 'bad', error: e.message }; }
+      const include = !!(r.track && r.track.uri && (it.kind === 'id' || (r.score || 0) >= 0.4));
+      if (include && !seen.has(r.track.uri)) { seen.add(r.track.uri); uris.push(r.track.uri); }
+      results.push({ title: s.title, song: s.song || s.url, status: r.status, matched: r.track ? (r.track.name + ' — ' + (r.track.artists || []).map(a => a.name).join(', ')) : '', score: Math.round((r.score || 0) * 100), error: r.error || '', included: include });
+    }
+    if (!uris.length) return fail(res, 400, 'No se pudo emparejar ninguna canción en Spotify. Revisa los nombres o enlaces.');
+    let me; try { me = await spotify.me(); } catch (e) { return fail(res, 502, 'Spotify: ' + e.message); }
+    const finca = (store.get('locations', ev.lugar) || {}).name || ev.lugarOtro || '';
+    const fm = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ev.fecha || '')); const fecha = fm ? (fm[3] + '/' + fm[2] + '/' + fm[1]) : '';
+    const plName = ('Boda ' + (ev.conyuges || ('#' + ev.id))).slice(0, 100);
+    const plDesc = ([fecha, finca].filter(Boolean).join(' · ') + ' · Playlist de Conecta Só').slice(0, 300);
+    let pid = ev.spotifyPlaylistId;
+    try {
+      if (pid && !(await spotify.playlistExists(pid))) pid = null;   // se borró en Spotify → se recrea
+      if (!pid) { const pl = await spotify.createPlaylist(me.id, plName, plDesc, false); pid = pl.id; }   // privada (public:false)
+      else { await spotify.updateDetails(pid, { name: plName, description: plDesc }); }
+      await spotify.replaceTracks(pid, uris);
+    } catch (e) { return fail(res, 502, 'Spotify: ' + e.message); }
+    ev.spotifyPlaylistId = pid;
+    ev.spotifyUrl = 'https://open.spotify.com/playlist/' + pid;
+    ev.spotifySyncedAt = new Date().toISOString();
+    ev.spotifyCount = uris.length;
+    store.put('events', ev); store.audit(user.id, 'spotify-sync', 'events', id);
+    return ok(res, { ok: true, url: ev.spotifyUrl, syncedAt: ev.spotifySyncedAt, count: uris.length, total: songs.length, results });
   }
 
   // --- enlace de autologin para que el DJ (o trabajador por horas) rellene su parte (admin) ---
