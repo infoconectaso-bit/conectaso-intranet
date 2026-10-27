@@ -509,6 +509,25 @@ async function api(req, res, url) {
     try { return ok(res, await holded.findByText(url.searchParams.get('q') || '')); }
     catch (e) { return ok(res, { ok: false, error: e.message }); }
   }
+  // --- DIAGNÓSTICO (admin): ver los campos crudos de Holded de una factura por número/texto, para
+  // entender cómo marca Holded las rectificativas. Uso: /api/holded-raw?num=250019 ---
+  if (seg[0] === 'holded-raw' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (!holded.enabled()) return ok(res, { enabled: false });
+    try {
+      const q = String(url.searchParams.get('num') || '').trim().toLowerCase();
+      const idx = await holded.buildIndex(url.searchParams.get('refresh') === '1');
+      const hits = [];
+      Object.values(idx.byId).forEach(c => (c.invoices || []).forEach(raw => {
+        const num = String(raw.document_number || raw.docNumber || raw.number || '');
+        if (q && (num.toLowerCase().includes(q) || JSON.stringify(raw).toLowerCase().includes(q))) {
+          const m = holded.mapInvoice(raw);
+          hits.push({ contact: c.name || '', number: num, keys: Object.keys(raw), mapped: { total: m.total, totalConIva: m.totalConIva, paid: m.paid, credit: m.credit }, raw });
+        }
+      }));
+      return ok(res, { count: hits.length, hits: hits.slice(0, 5) });
+    } catch (e) { return ok(res, { ok: false, error: e.message }); }
+  }
   // --- IMPAGOS: facturas con importe pendiente, con cliente, concepto y enlace a su boda (admin) ---
   if (seg[0] === 'holded-unpaid' && method === 'GET') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');

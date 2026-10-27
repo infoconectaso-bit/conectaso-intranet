@@ -196,15 +196,31 @@ async function buildIndex(force) {
  *   pendiente = base − pagado
  * Se conservan también los importes con IVA (totalConIva, paidConIva) por si hacen falta. */
 function mapInvoice(inv) {
-  const totalConIva = parseAmount(inv.total);
-  const base = parseAmount(inv.subtotal);
-  const tax = parseAmount(inv.tax);
-  const paidConIva = parseAmount(inv.payments_total);
-  const ratio = totalConIva > 0 ? base / totalConIva : 1; // proporción sin IVA
-  const paid = Math.round(paidConIva * ratio * 100) / 100; // pagado SIN IVA
-  const pending = Math.max(0, Math.round((base - paid) * 100) / 100); // pendiente SIN IVA
+  const rawNum = String(inv.document_number || inv.docNumber || inv.number || '');
+  const rawTotal = parseAmount(inv.total);
+  const rawBase = parseAmount(inv.subtotal);
+  // ¿Es una RECTIFICATIVA (nota de crédito / abono)? Se detecta por:
+  //  - el número de serie (CN…, R…, ABONO…), aunque el número en sí sea "250019";
+  //  - un campo de tipo de documento de Holded (creditnote / rectificative / refund / abono);
+  //  - o porque el importe ya viene en negativo.
+  // IMPORTANTE: Holded a veces devuelve el importe de la rectificativa en POSITIVO. Si es
+  // rectificativa, forzamos el signo NEGATIVO en todos los importes para que compense a su positiva.
+  const num = rawNum.toUpperCase();
+  const typeStr = String(inv.docType || inv.type || inv.kind || inv.doctype || inv.documentType || '').toLowerCase();
+  const isCredit =
+    /(^|[^A-Z0-9])(CN|CR|ABONO|RECT)[-\s]?\d/.test(num) || /^CN/.test(num)
+    || /credit|rectific|abono|refund|nota.?credit/.test(typeStr)
+    || rawTotal < 0 || rawBase < 0;
+  const sgn = isCredit ? -1 : 1;
+  const totalConIva = sgn * Math.abs(rawTotal);
+  const base = sgn * Math.abs(rawBase);
+  const tax = sgn * Math.abs(parseAmount(inv.tax));
+  const paidConIva = sgn * Math.abs(parseAmount(inv.payments_total));
+  const ratio = totalConIva !== 0 ? base / totalConIva : 1; // proporción sin IVA (base y total mismo signo)
+  const paid = Math.round(paidConIva * ratio * 100) / 100; // pagado SIN IVA (negativo si es rectificativa)
+  const pending = isCredit ? 0 : Math.max(0, Math.round((base - paid) * 100) / 100); // pendiente SIN IVA
   return {
-    id: inv.id, number: inv.document_number || '', date: inv.date || '', dueDate: inv.due_date || '',
+    id: inv.id, number: rawNum, date: inv.date || '', dueDate: inv.due_date || '',
     desc: inv.description || inv.desc || '', total: base, paid, pending, tax, totalConIva, paidConIva, status: inv.status || '',
     // Observaciones de la factura y líneas: el enlace por concepto mira también aquí (ahí suele venir
     // la fecha y el lugar de la boda). customFields: por si las observaciones están en un campo propio.
@@ -212,9 +228,7 @@ function mapInvoice(inv) {
     products: (inv.products || inv.items || []).map(p => ({ name: (p && p.name) || '', desc: (p && (p.desc || p.description)) || '' })),
     customFields: (inv.customFields || inv.custom_fields || []).map(f => (f && (f.value != null ? f.value : f.text)) || '').filter(Boolean),
     paidFull: pending <= 0.009 && base > 0,
-    // Rectificativa (abono / factura rectificativa de Holded): su nº empieza por "CN" o el importe es
-    // negativo. Siempre lleva importe en negativo y compensa a la positiva que corrige (+100 / −100).
-    credit: /^\s*CN/i.test(inv.document_number || '') || totalConIva < 0 || base < 0,
+    credit: isCredit,
   };
 }
 

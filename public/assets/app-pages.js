@@ -924,7 +924,7 @@ async function loadHoldedFacturas(ev) {
       : '';  // a la pareja/planner no les mostramos nada si aún no hay facturas
     return;
   }
-  const statusChip = i => i.paidFull ? '<span class="tag tag--green">Pagada</span>' : (i.paid > 0 ? '<span class="tag tag--yellow">Parcial</span>' : '<span class="tag tag--grey">Pendiente</span>');
+  const statusChip = i => (i.credit || i.total < 0) ? '<span class="tag tag--grey">Rectificativa</span>' : (i.paidFull ? '<span class="tag tag--green">Pagada</span>' : (i.paid > 0 ? '<span class="tag tag--yellow">Parcial</span>' : '<span class="tag tag--grey">Pendiente</span>'));
   const rows = invs.map(i => { const a = amt(i); return `<tr>
       <td><b>${esc(i.number || '—')}</b></td>
       <td>${esc(slash(i.date) || '')}</td>
