@@ -212,6 +212,9 @@ function mapInvoice(inv) {
     products: (inv.products || inv.items || []).map(p => ({ name: (p && p.name) || '', desc: (p && (p.desc || p.description)) || '' })),
     customFields: (inv.customFields || inv.custom_fields || []).map(f => (f && (f.value != null ? f.value : f.text)) || '').filter(Boolean),
     paidFull: pending <= 0.009 && base > 0,
+    // Rectificativa (abono / factura rectificativa de Holded): su nº empieza por "CN" o el importe es
+    // negativo. Siempre lleva importe en negativo y compensa a la positiva que corrige (+100 / −100).
+    credit: /^\s*CN/i.test(inv.document_number || '') || totalConIva < 0 || base < 0,
   };
 }
 

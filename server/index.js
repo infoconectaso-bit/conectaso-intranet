@@ -890,6 +890,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         return found;
       };
       const serviceWarnings = [];
+      const rectificativas = []; let compensadasInv = 0;   // rectificativas (CN) y sus positivas cuadradas
       const payByEvent = {};   // eventId -> suma de bases (sin IVA) de sus facturas vinculadas
       const ignored = new Set((store.setting('invoiceIgnored') || []).map(String));   // facturas "obviadas" a mano
       const ignoradas = [];
@@ -903,6 +904,21 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         if (!ev && c.vat_number) ev = evByKey['n:' + normN(c.vat_number)];
         if (!ev && c.name) ev = evByKey['m:' + normNm(c.name)];
         const company = isCompany(c);
+        // Rectificativas (CN): cada CN en negativo compensa una factura POSITIVA del mismo cliente con
+        // el mismo importe (base). Las emparejamos para no perseguir ni la CN ni la positiva ya cuadrada.
+        // Lo que no encuentre pareja se marca "sin cuadrar" para revisarlo a mano (siempre se revisa una CN).
+        const cancelledIds = new Set();
+        {
+          const mapped = (c.invoices || []).map(raw => ({ raw, m: holded.mapInvoice(raw) }));
+          const positives = mapped.filter(x => !x.m.credit && x.m.total > 0);
+          mapped.filter(x => x.m.credit).forEach(cr => {
+            const amt = Math.abs(cr.m.total);
+            const pos = positives.find(p => !cancelledIds.has(p.raw.id) && Math.abs(p.m.total - amt) <= 1);
+            if (pos) { cancelledIds.add(cr.raw.id); cancelledIds.add(pos.raw.id); }
+            rectificativas.push({ contact: c.name || '', date: cr.m.date, cn: cr.m.number, cnTotal: cr.m.total,
+              pos: pos ? pos.m.number : '', posTotal: pos ? pos.m.total : 0, matched: !!pos });
+          });
+        }
         (c.invoices || []).forEach(raw => {
           totalInv++;
           const inv = holded.mapInvoice(raw);
@@ -924,6 +940,8 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
             if (evId) { const pe = (payByEvent[evId] = payByEvent[evId] || { base: 0, paid: 0, invs: [] }); pe.base += inv.total; pe.paid += inv.paid; if (inv.number) pe.invs.push(inv.number); }
             return;
           }
+          if (cancelledIds.has(raw.id)) { compensadasInv++; return; }   // CN o positiva ya cuadrada (+100 / −100)
+          if (inv.credit) { return; }                          // rectificativa sin positiva que cuadre: va al panel de rectificativas
           if (company) { empresaInv++; return; }              // factura a empresa/finca: no es un descuadre
           const yr = yearOf(inv.date);
           if (yr && yr < 2026) { antiguasInv++; return; }     // 2024/2025 y anteriores: no se muestran
@@ -969,7 +987,8 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       });
       payMismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
       ignoradas.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, pasadasInv, sinPagarInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings, payMismatches, ignoradas, conceptStats: { total: totalInv, withConcept: cWithConcept, withDate: cWithDate, sample: cSample } });
+      rectificativas.sort((a, b) => (a.matched === b.matched ? String(b.date).localeCompare(String(a.date)) : (a.matched ? 1 : -1)));
+      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, pasadasInv, sinPagarInv, compensadasInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings, rectificativas, payMismatches, ignoradas, conceptStats: { total: totalInv, withConcept: cWithConcept, withDate: cWithDate, sample: cSample } });
     } catch (e) { return ok(res, { enabled: true, error: e.message, sinVincular: [] }); }
   }
   // --- VINCULAR una factura de Holded a un evento existente (o desvincular) ---
