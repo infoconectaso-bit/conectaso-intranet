@@ -418,7 +418,7 @@ async function api(req, res, url) {
   if (seg[0] === 'tyc') return tycApi(req, res, user, seg, method);
 
   // --- avisos del panel de inicio (admin) ---
-  if (['price-alerts', 'vacation-conflicts', 'itv-alerts', 'staff-conflicts', 'price-fix', 'dup-ack', 'salary-matrix'].includes(seg[0])) return dashboardAlerts(req, res, user, seg, method);
+  if (['price-alerts', 'vacation-conflicts', 'itv-alerts', 'staff-conflicts', 'price-fix', 'dup-ack', 'salary-matrix', 'fotomaton'].includes(seg[0])) return dashboardAlerts(req, res, user, seg, method);
 
   // --- solicitudes de servicios extras (admin) ---
   if (seg[0] === 'extra-requests') return extraRequestsApi(req, res, user);
@@ -1715,6 +1715,7 @@ function salaryMatrix() {
 async function dashboardAlerts(req, res, user, seg, method) {
   if (!user || user.role !== 'admin') return fail(res, 403, 'Sin acceso');
   if (seg[0] === 'staff-conflicts') return ok(res, staffConflicts());
+  if (seg[0] === 'fotomaton' && method === 'GET') return ok(res, fotomatonList());
   if (seg[0] === 'vacation-conflicts') return ok(res, vacationConflicts());
   if (seg[0] === 'itv-alerts') return ok(res, itvAlerts());
   if (seg[0] === 'price-alerts') return ok(res, priceAlerts());
@@ -1855,6 +1856,41 @@ function extraRequestsApi(req, res, user) {
 }
 // Añade al evento saneado los campos que calcula el servidor: si el cliente puede
 // editar (canEdit), días hasta la boda, personas con acceso y, para el cliente, su pago.
+// --- Fotomatón: detección sin IA de qué bodas llevan fotomatón ---
+const _fotoNorm = s => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+// Ids del catálogo de servicios (colección 'extras') cuyo nombre es "fotomatón".
+function fotoServiceIds() {
+  const set = new Set();
+  store.all('extras').forEach(x => { if (x && x.id != null && _fotoNorm(x.name).indexOf('fotomat') >= 0) set.add(x.id); });
+  return set;
+}
+// Una boda "lleva fotomatón" si: tiene logo de fotomatón en la pestaña discoteca,
+// tiene el servicio de fotomatón creado, o lo tiene seleccionado como extra.
+function eventHasFotomaton(ev, fids) {
+  if (!ev) return false;
+  if (ev.disco && ev.disco.fotoLogo) return true;
+  if (ev.extras && Object.keys(ev.extras).some(k => ev.extras[k] && _fotoNorm(k).indexOf('fotomat') >= 0)) return true;
+  const ids = fids || fotoServiceIds();
+  return Array.isArray(ev.services) && ev.services.some(s => s && ids.has(s.servicio));
+}
+// Listado para la pestaña Fotomatón: cada boda con su enlace de galería y estado (subida / pendiente).
+function fotomatonList() {
+  const fids = fotoServiceIds();
+  const rows = store.all('events').filter(e => eventHasFotomaton(e, fids)).map(e => {
+    const finca = (store.get('locations', e.lugar) || {}).name || e.lugarOtro || '';
+    const ids = [e.userId].concat(e.coUsers || []).filter(Boolean);
+    const emails = []; const seen = new Set();
+    ids.forEach(uid => { const u = users.get(uid); if (u && u.email && !seen.has(u.email.toLowerCase())) { seen.add(u.email.toLowerCase()); emails.push(u.email); } });
+    return {
+      id: e.id, conyuges: e.conyuges || '', fecha: e.fecha || '', lugar: finca,
+      djName: (users.get(e.djId) || {}).name || '',
+      realized: evRealized(e), uploaded: !!e.fotosLink, fotosLink: e.fotosLink || '',
+      fotosSentAt: e.fotosSentAt || '', emails,
+    };
+  }).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  return { events: rows, total: rows.length, uploaded: rows.filter(r => r.uploaded).length, pending: rows.filter(r => !r.uploaded).length };
+}
+
 function enrichEvent(out, ev, user) {
   if (!out) return out;
   out.canEdit = perm.clientEditOpen(ev);
@@ -2058,6 +2094,50 @@ async function events(req, res, user, seg, method, url) {
     const out = perm.sanitizeEvent(user, ev); enrichEvent(out, ev, user);
     out.factRows = fact.computeFact(ev); out.revRows = fact.computeRevenue(ev);
     return ok(res, { event: out });
+  }
+
+  // --- Fotomatón: guardar / quitar el enlace de la galería de fotos (admin) ---
+  if (seg[2] === 'fotos' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const body = await readBody(req);
+    const link = String(body.link || '').trim();
+    if (link && !/^https?:\/\//i.test(link)) return fail(res, 400, 'El enlace debe empezar por http:// o https://');
+    if (link) ev.fotosLink = link; else { delete ev.fotosLink; delete ev.fotosSentAt; }
+    store.put('events', ev); store.audit(user.id, 'fotos-link', 'events', id);
+    return ok(res, { ok: true, fotosLink: ev.fotosLink || '', fotosSentAt: ev.fotosSentAt || '' });
+  }
+  // --- Fotomatón: enviar el email de "fotos listas" a TODOS los emails de la boda ---
+  // (titular + pareja invitada / co-titulares). Con body.testTo envía solo una prueba a esa
+  // dirección (prefijo [PRUEBA]) y no marca el evento como enviado. Siempre manual (botón admin).
+  if (seg[2] === 'fotos-email' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const link = String(ev.fotosLink || '').trim();
+    if (!link) return fail(res, 400, 'Primero añade el enlace de la galería de fotos.');
+    const body = await readBody(req);
+    const testTo = String(body.testTo || '').trim();
+    const finca = (store.get('locations', ev.lugar) || {}).name || ev.lugarOtro || '';
+    const em = emails.coupleFotosEmail(ev, link, APP_URL(), finca);
+    if (testTo) {
+      if (testTo.indexOf('@') < 0) return fail(res, 400, 'Indica una dirección de prueba válida.');
+      if (!mail.enabled()) return ok(res, { ok: false, disabled: true });
+      try { await mail.sendMail({ to: testTo, subject: '[PRUEBA] ' + em.subject, text: em.text, html: em.html }); }
+      catch (e) { return ok(res, { ok: false, error: e.message }); }
+      return ok(res, { ok: true, test: true, to: testTo });
+    }
+    // Destinatarios reales: titular (ev.userId) + pareja invitada / co-titulares (ev.coUsers), sin repetir.
+    const ids = [ev.userId].concat(ev.coUsers || []).filter(Boolean);
+    const seen = new Set(); const recipients = [];
+    ids.forEach(uid => { const u = users.get(uid); if (u && u.email && !seen.has(u.email.toLowerCase())) { seen.add(u.email.toLowerCase()); recipients.push({ id: +uid, name: u.name || '', email: u.email }); } });
+    if (!recipients.length) return fail(res, 400, 'No hay ningún email asociado a esta boda.');
+    if (!mail.enabled()) return ok(res, { ok: false, disabled: true, recipients: recipients.map(r => ({ email: r.email, status: 'disabled' })) });
+    const results = [];
+    for (const r of recipients) {
+      try { const r2 = await mail.sendMail({ to: r.email, subject: em.subject, text: em.text, html: em.html }); results.push({ email: r.email, status: (r2 && r2.skipped) ? 'skipped' : 'sent' }); }
+      catch (e) { results.push({ email: r.email, status: 'error', error: e.message }); }
+    }
+    ev.fotosSentAt = new Date().toISOString();
+    store.put('events', ev); store.audit(user.id, 'fotos-email', 'events', id);
+    return ok(res, { ok: true, recipients: results, sentAt: ev.fotosSentAt });
   }
 
   // --- enlace de autologin para que el DJ (o trabajador por horas) rellene su parte (admin) ---

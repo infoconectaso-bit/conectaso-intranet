@@ -953,6 +953,95 @@ on(/^#\/descuadres$/, async () => {
   draw();
 });
 
+/* =========================================================================
+   FOTOMATÓN (admin): listado de bodas con fotomatón y estado de subida de fotos.
+   Línea entera en VERDE = fotos subidas (hay enlace de galería); en ROJO =
+   celebrada y pendiente de subir. Las que aún no se han celebrado salen neutras.
+   ========================================================================= */
+on(/^#\/fotomaton$/, async () => {
+  if (!isAdmin()) { location.hash = '#/'; return; }
+  async function draw() {
+    loading(['Fotomatón']);
+    const r = await api('fotomaton').catch(() => ({ events: [], total: 0, uploaded: 0, pending: 0 }));
+    const rows = r.events || [];
+    const pendReal = rows.filter(e => e.realized && !e.uploaded).length;
+    const subidas = rows.filter(e => e.uploaded).length;
+    const proximas = rows.filter(e => !e.realized).length;
+    const estado = e => !e.realized ? '<span class="tag tag--blue">Próxima</span>'
+      : (e.uploaded ? '<span class="tag tag--green">✓ Fotos subidas</span>' : '<span class="tag tag--red">⬆ Pendiente de subir</span>');
+    const cols = [
+      { t: 'Fecha', get: i => i.fecha || '', html: i => `<b>${esc(slash(i.fecha) || '—')}</b>` },
+      { t: 'Boda', get: i => i.conyuges || '', html: i => `<a href="#/eventos/${i.id}" title="Abrir la boda">${esc(i.conyuges || '—')}</a><div class="hint">#${i.id}</div>` },
+      { t: 'Lugar', get: i => i.lugar || '', html: i => esc(i.lugar || '—') },
+      { t: 'DJ', get: i => i.djName || '', html: i => esc(i.djName || '—') },
+      { t: 'Estado', get: i => i.uploaded ? 2 : (i.realized ? 0 : 1), html: estado },
+      { t: 'Galería', nosort: true, nofilter: true, html: i => i.fotosLink
+        ? `<a class="btn btn--xs" href="${esc(i.fotosLink)}" target="_blank" rel="noopener" title="Abrir la galería de fotos">🔗 Abrir</a>`
+        : '<span class="hint">— sin enlace —</span>' },
+      { t: 'Email enviado', get: i => i.fotosSentAt || '', html: i => i.fotosSentAt
+        ? `<span class="tag tag--green" title="${esc(i.fotosSentAt)}">✓ ${esc(slash(i.fotosSentAt.slice(0, 10)))}</span>`
+        : '<span class="hint">—</span>' },
+      { t: 'Acciones', nosort: true, nofilter: true, html: i => {
+        const emails = (i.emails || []).length;
+        return `<button class="btn btn--xs ${i.fotosLink ? '' : 'btn--primary'}" data-setlink="${i.id}" title="Pegar o cambiar el enlace de la galería de Google Drive">${i.fotosLink ? '✏️ Enlace' : '➕ Añadir enlace'}</button>`
+          + (i.fotosLink ? ` <button class="btn btn--xs btn--primary" data-sendmail="${i.id}" title="Enviar el email de fotos listas a los novios"${emails ? '' : ' disabled'}>📧 Enviar aviso${emails ? ` (${emails})` : ''}</button>` : '');
+      } },
+    ];
+    shell(`${pageHead('Fotomatón', 'Bodas con fotomatón (servicio, extra o con logo en discoteca) y estado de las fotos. Verde = fotos subidas · Rojo = celebrada y pendiente de subir.')}
+      <div class="grid-3" style="margin-bottom:14px">
+        <div class="stat stat--pink"><div class="k"><span class="foto-stat-dot" style="background:#d50000"></span>Pendientes de subir</div><div class="v">${pendReal}</div></div>
+        <div class="stat"><div class="k"><span class="foto-stat-dot" style="background:#1c9b4b"></span>Con fotos subidas</div><div class="v">${subidas}</div></div>
+        <div class="stat stat--blue"><div class="k"><span class="foto-stat-dot" style="background:#2f6fed"></span>Próximas (aún sin celebrar)</div><div class="v">${proximas}</div></div>
+      </div>
+      <p class="hint" style="margin-bottom:12px">Flujo: tras la boda, subes las fotos a una carpeta de Google Drive y pegas aquí el <b>enlace para compartir</b> (➕). La boda pasa a <b>verde</b> y la pareja ya puede descargarlas desde su evento. Con <b>📧 Enviar aviso</b> les llega el email a <b>todos los correos de la boda</b> (titular y pareja invitada). El aviso es siempre manual, no se envía solo.</p>
+      <div class="panel"><div class="panel__body">${table('dtFoto', { rows, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, rowClass: i => !i.realized ? '' : (i.uploaded ? 'row-ok' : 'row-no'), empty: 'Todavía no hay bodas con fotomatón.' })}</div></div>`, ['Fotomatón']);
+
+    const setLink = id => {
+      const ev = rows.find(x => x.id === id) || {};
+      modal('Enlace de la galería de fotos', `
+        <p class="hint" style="margin-bottom:10px">Pega el <b>enlace para compartir</b> de la carpeta de Google Drive con las fotos del fotomatón de <b>${esc(ev.conyuges || ('la boda #' + id))}</b>. Asegúrate de que la carpeta está compartida como <b>"cualquiera con el enlace"</b> para que la pareja pueda abrirla.</p>
+        <div class="field"><label>Enlace (https://…)</label><input class="control" id="fotoLinkInput" type="url" placeholder="https://drive.google.com/drive/folders/…" value="${esc(ev.fotosLink || '')}"></div>
+        ${ev.fotosLink ? '<p class="hint">Deja el campo vacío y guarda para quitar el enlace.</p>' : ''}`, {
+        okText: 'Guardar enlace', onOk: async () => {
+          const link = ((el('fotoLinkInput') || {}).value || '').trim();
+          if (link && !/^https?:\/\//i.test(link)) { toast('El enlace debe empezar por http:// o https://', 'err'); return true; }
+          try { await api('events/' + id + '/fotos', { method: 'POST', body: { link } }); toast(link ? '✅ Enlace guardado' : 'Enlace quitado', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); return true; }
+          draw();
+        }
+      });
+    };
+    const sendMail = id => {
+      const ev = rows.find(x => x.id === id) || {};
+      const emails = ev.emails || [];
+      modal('Enviar email de fotos a los novios', `
+        <p style="margin-bottom:10px">Se enviará el email <b>"vuestras fotos ya están listas"</b> (solo el enlace de descarga, sin reseña de Google) a <b>todos los correos de la boda</b> de <b>${esc(ev.conyuges || ('#' + id))}</b>:</p>
+        <ul style="margin:0 0 10px 18px">${emails.length ? emails.map(e => `<li><b>${esc(e)}</b></li>`).join('') : '<li class="hint">No hay ningún correo asociado a esta boda.</li>'}</ul>
+        ${ev.fotosSentAt ? `<p class="hint" style="color:#b26a00">⚠ Ya se envió una vez el ${esc(slash(ev.fotosSentAt.slice(0, 10)))}. Si lo vuelves a enviar, les llegará de nuevo.</p>` : ''}
+        <div class="field" style="margin-top:8px"><label>¿Prefieres una prueba primero? Envíatela a ti</label><input class="control" id="fotoTestTo" type="email" placeholder="tu-email@conectaso.es (opcional)"></div>
+        <p class="hint">Si rellenas tu email, se envía <b>solo a ti</b> como prueba (con [PRUEBA] en el asunto) y no se marca como enviado.</p>`, {
+        okText: '📧 Enviar', onOk: async () => {
+          const testTo = ((el('fotoTestTo') || {}).value || '').trim();
+          if (!testTo && !emails.length) { toast('No hay correos a los que enviar.', 'err'); return true; }
+          try {
+            const res = await api('events/' + id + '/fotos-email', { method: 'POST', body: testTo ? { testTo } : {} });
+            if (res.disabled) { toast('El envío de emails está desactivado en la configuración.', 'err'); return; }
+            if (res.test) { toast('✅ Prueba enviada a ' + testTo, 'ok'); return; }
+            const sent = (res.recipients || []).filter(x => x.status === 'sent').length;
+            const bad = (res.recipients || []).filter(x => x.status === 'error' || x.status === 'skipped').length;
+            toast('✅ Email enviado a ' + sent + ' destinatario' + (sent === 1 ? '' : 's') + (bad ? ' · ' + bad + ' no enviados' : ''), 'ok');
+          } catch (e) { toast(e.message || 'Error', 'err'); return true; }
+          draw();
+        }
+      });
+    };
+    bindTable('dtFoto', () => {
+      $$('[data-setlink]').forEach(b => b.onclick = () => setLink(+b.dataset.setlink));
+      $$('[data-sendmail]').forEach(b => b.onclick = () => sendMail(+b.dataset.sendmail));
+    });
+  }
+  draw();
+});
+
 on(/^#\/nominas$/, async () => {
   // Acceso a nóminas: SOLO administración y DJ/técnicos (sus propias). Wedding planner y
   // cliente NUNCA tienen acceso a nóminas.

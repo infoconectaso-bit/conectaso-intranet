@@ -529,7 +529,16 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
   const roSel = readonly ? 'disabled' : '';
   const sp = ev.spouses || [{}, {}];
   const showSpouse = S.user.role === 'admin' || S.user.role === 'user';
-  return `<div class="mblock"><h4>Datos principales</h4><div class="inner"><div class="form-grid">
+  // Descarga de fotos del fotomatón para la pareja / planner (cuando administración ha subido el enlace).
+  const fotosCard = ((S.user.role === 'user' || S.user.role === 'planner') && ev.fotosLink)
+    ? `<div class="mblock foto-dl"><div class="inner" style="text-align:center;padding:22px 16px">
+        <div style="font-size:34px;line-height:1">📸</div>
+        <h4 style="margin:6px 0 2px;border:0">¡Vuestras fotos del fotomatón ya están aquí!</h4>
+        <p class="hint" style="margin:0 0 14px">Ya podéis descargar todas las fotos de vuestra boda.</p>
+        <a class="btn btn--primary" href="${esc(ev.fotosLink)}" target="_blank" rel="noopener">📸 Descargar nuestras fotos</a>
+      </div></div>`
+    : '';
+  return `${fotosCard}<div class="mblock"><h4>Datos principales</h4><div class="inner"><div class="form-grid">
     ${isAdmin() ? fg('Tipo de boda', sel('wedding_type', S.meta.tipos, ev.tipo, roSel)) : ''}
     ${isAdmin()
       ? fg('Fecha', inp('wedding_date', ev.fecha, { type: 'date' }))

@@ -325,6 +325,7 @@ const ICON = {
   wrench: 'M14.7 6.3a4 4 0 00-5.4 5.2L3 17.8 6.2 21l6.3-6.3a4 4 0 005.2-5.4l-2.7 2.7-2.1-.6-.6-2.1 2.7-2.7z',
   logout: 'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9', key: 'M15 7a4 4 0 11-5.6 3.6L3 17v4h4l1-1h2v-2h2l1.4-1.4A4 4 0 0015 7z',
   mail: 'M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1zM3 6l9 7 9-7',
+  camera: 'M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h3l2-3h8l2 3h3a2 2 0 012 2zM12 17a4 4 0 100-8 4 4 0 000 8z',
   phone: 'M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z',
 };
 const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON[k]}"/></svg>`;
@@ -546,6 +547,7 @@ function navFor(role) {
     { s: 'Principal' }, { t: 'Inicio', i: 'home', h: '#/' },
     { s: 'Eventos' }, { t: 'Bodas pendientes', i: 'events', h: '#/eventos' }, { t: 'Bodas realizadas', i: 'events', h: '#/eventos/realizados' },
     { t: 'Servicios extras', i: 'extras', h: '#/extras' },
+    { t: 'Fotomatón', i: 'camera', h: '#/fotomaton' },
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
     { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' }, { t: 'Nóminas', i: 'doc', h: '#/nominas' },
     { s: 'Negocio' }, { t: 'Cobros de la semana', i: 'euro', h: '#/cobros' }, { t: 'Impagos', i: 'euro', h: '#/impagos' }, { t: 'Descuadre facturas', i: 'euro', h: '#/descuadres' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
@@ -744,7 +746,7 @@ function renderTable(id) {
   const from = total ? st.page * st.len + 1 : 0, to = Math.min(total, (st.page + 1) * st.len);
   const ths = cfg.cols.map((c, i) => `<th data-sort="${c.nosort ? '' : i}" class="${c.nosort ? 'nosort' : ''}">${esc(c.t)}${c.nosort ? '' : `<span class="caret">${oc === i ? (od === 'asc' ? '▲' : '▼') : '⇅'}</span>`}</th>`).join('');
   const filt = cfg.filters ? `<tr class="filters">${cfg.cols.map((c, i) => `<th>${c.nofilter || c.nosort ? '' : `<input data-cf="${i}"${(c.num || c.t === 'Id') ? ' inputmode="numeric"' : ''} value="${esc(st.f[i] || '')}" placeholder="Buscar">`}</th>`).join('')}</tr>` : '';
-  const body = slice.length ? slice.map(r => `<tr>${cfg.cols.map(c => `<td>${c.html ? c.html(r) : esc(c.get(r))}</td>`).join('')}</tr>`).join('')
+  const body = slice.length ? slice.map(r => `<tr${cfg.rowClass ? ` class="${esc(cfg.rowClass(r))}"` : ''}>${cfg.cols.map(c => `<td>${c.html ? c.html(r) : esc(c.get(r))}</td>`).join('')}</tr>`).join('')
     : `<tr><td class="td-empty" colspan="${cfg.cols.length}">${esc(cfg.empty || 'No hay registros.')}</td></tr>`;
   const start = Math.max(0, Math.min(st.page - 2, pages - 5)); const pb = [];
   for (let p = start; p < Math.min(pages, start + 5); p++) pb.push(`<button data-pg="${p}" class="${p === st.page ? 'cur' : ''}">${p + 1}</button>`);

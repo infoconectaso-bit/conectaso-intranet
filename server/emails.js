@@ -173,4 +173,52 @@ function extraRequestEmail(ev, items, finca, link, baseUrl) {
   };
 }
 
-module.exports = { inviteEmail, resetEmail, coupleReminderEmail, coupleMusicEmail, djAlbaranEmail, extraRequestEmail, shell, inviteCopy };
+// --- Fotos del fotomatón listas (solo enlace de descarga; SIN reseña de Google) ---
+function coupleFotosEmail(ev, link, baseUrl, fincaName) {
+  const logoUrl = baseUrl ? baseUrl.replace(/\/$/, '') + '/assets/brand/logo-principal-blanco.svg' : '';
+  const names = esc(ev.conyuges || 'pareja');
+  const fecha = (() => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ev.fecha || '')); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; })();
+  const lugar = esc(fincaName || ev.lugarOtro || '');
+  const sub = [fecha, lugar].filter(Boolean).join('  ·  ');
+  const logo = logoUrl
+    ? `<img src="${esc(logoUrl)}" width="180" alt="Conecta So" style="display:block;margin:0 auto;border:0;max-width:180px;height:auto">`
+    : `<div style="font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:bold;letter-spacing:1px;color:#fff">CONECTA SÓ</div>`;
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head>
+<body style="margin:0;padding:0;background:${CREAM};-webkit-text-size-adjust:100%">
+<span style="display:none;max-height:0;overflow:hidden;opacity:0">¡Vuestras fotos del fotomatón ya están listas para descargar! 📸</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CREAM}"><tr><td align="center" style="padding:30px 14px">
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#fff;border:1px solid ${LINE};border-radius:18px;overflow:hidden">
+    <tr><td align="center" style="background:${INK};padding:30px 30px 26px">${logo}</td></tr>
+    <tr><td style="height:5px;background:${PINK};line-height:5px;font-size:0">&nbsp;</td></tr>
+    <tr><td align="center" style="padding:36px 36px 6px">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr><td align="center" width="76" height="76" style="width:76px;height:76px;background:${PINK};border-radius:50%;font-size:36px;line-height:76px;color:#fff">📸</td></tr></table>
+    </td></tr>
+    <tr><td align="center" style="padding:20px 36px 0">
+      <h1 style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:25px;line-height:1.25;color:${INK}">¡Vuestras fotos ya están aquí!</h1>
+      <p style="margin:12px 0 2px;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-style:italic;color:${PINK}">${names}</p>
+      ${sub ? `<p style="margin:2px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:.4px;color:${MUTED};text-transform:uppercase">${sub}</p>` : ''}
+    </td></tr>
+    <tr><td style="padding:22px 44px 0">
+      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15.5px;line-height:1.7;color:#39333f;text-align:center">
+        Ya podéis descargar <b>todas las fotos del fotomatón</b> de vuestra boda. ¡Teníamos muchas ganas de enseñároslas! Son vuestras para siempre. 💛</p>
+    </td></tr>
+    <tr><td align="center" style="padding:28px 36px 6px">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="${PINK}" style="border-radius:12px">
+        <a href="${esc(link)}" style="display:inline-block;padding:17px 38px;font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold;color:#fff;text-decoration:none;border-radius:12px">📸  Descargar nuestras fotos</a>
+      </td></tr></table>
+    </td></tr>
+    <tr><td style="padding:16px 44px 4px">
+      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.6;color:${MUTED};text-align:center">El enlace estará disponible durante unos meses, así que descargadlas con calma.<br>Si el botón no funciona, copia y pega este enlace:<br><a href="${esc(link)}" style="color:${PINK};word-break:break-all">${esc(link)}</a></p>
+    </td></tr>
+    <tr><td style="padding:26px 36px 30px;border-top:1px solid ${LINE};margin-top:18px">
+      <p style="margin:18px 0 4px 0;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;color:${INK};font-weight:bold;text-align:center">Conecta Só</p>
+      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.7;color:${MUTED};text-align:center">DJs, sonido e iluminación para bodas y eventos<br>
+        🌐 <a href="${WEB}" style="color:${MUTED}">conectaso.es</a> &nbsp;·&nbsp; 📸 <a href="${IG}" style="color:${MUTED}">@conecta.so</a> &nbsp;·&nbsp; 📞 ${TEL}</p>
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`;
+  return { subject: '¡Vuestras fotos del fotomatón ya están listas! 📸 · Conecta Só', html, text: `¡Vuestras fotos del fotomatón ya están listas!\n\n${ev.conyuges || ''}${sub ? ' · ' + sub.replace(/·/g, '-') : ''}\n\nDescargadlas aquí: ${link}\n\nConecta Só · conectaso.es` };
+}
+
+module.exports = { inviteEmail, resetEmail, coupleReminderEmail, coupleMusicEmail, djAlbaranEmail, extraRequestEmail, coupleFotosEmail, shell, inviteCopy };
