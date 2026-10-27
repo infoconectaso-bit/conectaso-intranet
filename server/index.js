@@ -509,6 +509,22 @@ async function api(req, res, url) {
     try { return ok(res, await holded.findByText(url.searchParams.get('q') || '')); }
     catch (e) { return ok(res, { ok: false, error: e.message }); }
   }
+  // --- PROBADOR (admin): prueba UNA vez varios nombres de endpoint para encontrar el de las
+  // rectificativas (notas de crédito). Uso: /api/holded-probe ---
+  if (seg[0] === 'holded-probe' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (!holded.enabled()) return ok(res, { enabled: false });
+    const candidates = ['/creditnotes', '/credit-notes', '/creditNotes', '/refunds', '/salesrefunds', '/documents/creditnote', '/invoices?type=creditnote', '/invoices?docType=creditnote'];
+    const results = [];
+    for (const path of candidates) {
+      try {
+        const page = await holded.apiGet(path + (path.includes('?') ? '&' : '?') + 'limit=1');
+        const arr = (page && Array.isArray(page.items)) ? page.items : (Array.isArray(page) ? page : (page && page.data) || []);
+        results.push({ path, ok: true, items: Array.isArray(arr) ? arr.length : 0, total: (page && page.total) || null, sampleNumber: arr[0] && (arr[0].document_number || arr[0].number) || null });
+      } catch (e) { results.push({ path, ok: false, error: String(e.message || e).slice(0, 120) }); }
+    }
+    return ok(res, { results });
+  }
   // --- DIAGNÓSTICO (admin): ver los campos crudos de Holded de una factura por número/texto, para
   // entender cómo marca Holded las rectificativas. Uso: /api/holded-raw?num=250019 ---
   if (seg[0] === 'holded-raw' && method === 'GET') {
