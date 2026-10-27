@@ -140,7 +140,11 @@ async function getInvoicePdf(id) {
 // todo a Holded en cada apertura de evento. TTL corto (se puede forzar refresco).
 // ---------------------------------------------------------------------------
 let _idx = null, _idxAt = 0, _idxRefreshing = null;
-const IDX_TTL = 5 * 60 * 1000;
+// Caché del índice de Holded. Cada reconstrucción gasta varias llamadas a la API de Holded
+// (contactos + facturas + presupuestos), así que la mantenemos 60 min para no agotar el cupo
+// mensual de llamadas. Para datos al instante tras cambiar algo en Holded, está el botón
+// "↻ Actualizar desde Holded" (fuerza el refresco con ?refresh=1).
+const IDX_TTL = 60 * 60 * 1000;
 const normEmail = s => String(s || '').trim().toLowerCase();
 const normNif = s => String(s || '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
 const normName = s => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');

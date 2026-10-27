@@ -854,9 +854,9 @@ on(/^#\/impagos$/, async () => {
 on(/^#\/descuadres$/, async () => {
   if (!isAdmin()) { location.hash = '#/'; return; }
   const eur = n => (Math.round((+n || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-  async function draw() {
+  async function draw(refresh) {
     loading(['Descuadres']);
-    const r = await api('holded-descuadres').catch(() => ({ sinVincular: [] }));
+    const r = await api('holded-descuadres' + (refresh ? '?refresh=1' : '')).catch(() => ({ sinVincular: [] }));
     if (r.enabled === false) { shell(`${pageHead('Descuadre facturas', 'Facturas de Holded sin vincular a un evento.')}<div class="empty">La integración de Holded no está activada.</div>`, ['Descuadres']); return; }
     const sv = r.sinVincular || [];
     const cols = [
@@ -908,6 +908,7 @@ on(/^#\/descuadres$/, async () => {
     ] })}</div></div></details>` : '';
     const sugList = sv.filter(i => i.suggestedEventId && !i.catWarn);
     shell(`${pageHead('Descuadre facturas / eventos', 'Facturas de Holded que NO están vinculadas a ningún evento (posible falta de vinculación).')}
+      <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--sm" id="descRefresh" title="Vuelve a leer contactos y facturas de Holded (gasta llamadas de la API; úsalo solo cuando hayas cambiado algo en Holded)">↻ Actualizar desde Holded</button> <span class="hint">Los datos se guardan 1 hora para no gastar llamadas; pulsa aquí si acabas de cambiar algo en Holded.</span></div>
       <div class="grid-3" style="margin-bottom:14px">
         <div class="stat stat--pink"><div class="k">Facturas sin vincular</div><div class="v">${r.sinVincularN || 0}</div></div>
         <div class="stat stat--blue"><div class="k">Facturas vinculadas a boda</div><div class="v">${r.linkedInv || 0}</div></div>
@@ -949,6 +950,7 @@ on(/^#\/descuadres$/, async () => {
         }
       });
     };
+    const rfb = el('descRefresh'); if (rfb) rfb.onclick = () => { rfb.disabled = true; rfb.textContent = 'Actualizando…'; draw(true); };
   }
   draw();
 });
