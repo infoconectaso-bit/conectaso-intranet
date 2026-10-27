@@ -67,7 +67,11 @@ async function spFetch(method, path, body) {
     if (r.status === 401 && attempt === 0) { _access = null; await accessToken(); continue; }
     if (r.status >= 500 && attempt < 5) { await sleep(800 * (attempt + 1)); continue; }
     const txt = await r.text(); let j = null; try { j = txt ? JSON.parse(txt) : null; } catch (e) { j = null; }
-    if (!r.ok) { const e = new Error((j && j.error && (j.error.message || j.error)) || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+    if (!r.ok) {
+      let base = (j && j.error && (j.error.message || j.error)) || r.statusText || ('HTTP ' + r.status);
+      if (r.status === 403) base += ' — la cuenta conectada debe ser la DUEÑA de la app de Spotify o estar añadida en "User Management" del panel de developer.spotify.com';
+      const e = new Error(base + ' (HTTP ' + r.status + ')'); e.status = r.status; throw e;
+    }
     return j;
   }
   throw new Error('Spotify está limitando las peticiones; inténtalo en un minuto.');
