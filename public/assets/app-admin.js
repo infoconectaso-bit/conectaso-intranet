@@ -1460,7 +1460,13 @@ on(/^#\/backups$/, async () => {
         ${pct >= 80 ? '<p class="hint" style="color:#B71C1C;margin-top:6px">⚠ Te acercas al límite gratuito de 10 GB. Revisa el ciclo de vida del bucket (que borre versiones antiguas) o valora ampliar.</p>' : ''}
       </div>`;
     }
-    const rows = list.map(b => `<tr><td><b>${esc(b.name)}</b></td><td>${fmtDate(b.date)}</td><td style="text-align:right">${fmtSize(b.size)}</td><td style="text-align:right"><a class="btn btn--sm" href="/api/backups/download?name=${encodeURIComponent(b.name)}" download>⬇ Descargar</a></td></tr>`).join('');
+    const tagLabel = t => t === 'pre' ? 'previa a mantenimiento' : t === 'prr' ? 'previa a restauración' : '';
+    const rows = list.map(b => {
+      const lbl = tagLabel(b.tag);
+      const tr = b.pre ? ' style="background:#eafaf0"' : '';
+      const nameCell = `<b>${esc(b.name)}</b>${lbl ? ` <span class="tag tag--green" style="margin-left:6px;white-space:nowrap">🛡 ${esc(lbl)}</span>` : ''}`;
+      return `<tr${tr}><td>${nameCell}</td><td>${fmtDate(b.date)}</td><td style="text-align:right">${fmtSize(b.size)}</td><td style="text-align:right;white-space:nowrap"><button class="btn btn--sm" data-restore="${esc(b.name)}" title="Restaurar la intranet a este punto">↩ Restaurar</button> <a class="btn btn--sm" href="/api/backups/download?name=${encodeURIComponent(b.name)}" download>⬇ Descargar</a></td></tr>`;
+    }).join('');
     shell(`${pageHead('Copias de seguridad', 'Copias automáticas de la base de datos (bodas, usuarios, tarifas…).')}
       ${banner}
       ${localBar}
@@ -1469,8 +1475,8 @@ on(/^#\/backups$/, async () => {
         <div class="stat"><div class="k">Copias guardadas</div><div class="v">${r.count || 0}</div></div>
         <div class="stat stat--yellow"><div class="k">Espacio ocupado</div><div class="v" style="font-size:18px">${fmtSize(r.totalSize || 0)}</div></div>
       </div>
-      <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--primary" id="bkNow">💾 Crear copia ahora</button></div>
-      <p class="hint" style="margin-bottom:12px">Se hace una copia automática al arrancar y <b>cada 7 minutos</b>. Se conservan todas las de las últimas 24 h y una diaria durante 30 días; las más antiguas se borran solas (no se llena el disco). Para protección total conviene, además, la copia en la nube de abajo y respaldar los archivos de nóminas.</p>
+      <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--primary" id="bkNow">💾 Crear copia ahora</button> <button class="btn" id="bkPre">🛡 Crear copia previa a mantenimiento</button></div>
+      <p class="hint" style="margin-bottom:12px">Copia automática al arrancar y <b>cada 5 minutos</b> (de 02:00 a 06:00, menos a menudo). Se guardan escalonadas (2 h al minuto · 48 h cada 30 min · 30 días por día) y las antiguas se borran solas. Las <b>🛡 protegidas</b> (previas a mantenimiento o restauración) <b>no se borran nunca</b>. Con <b>↩ Restaurar</b> vuelves la intranet a ese punto: antes se guarda sola una copia del estado actual (reversible) y el servicio se reinicia solo (~1 min).</p>
       <div class="table-wrap"><table class="dt"><thead><tr><th>Archivo</th><th>Fecha</th><th style="text-align:right">Tamaño</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">Aún no hay copias (se creará una en breve).</td></tr>'}</tbody></table></div>
 
       <h2 style="margin:26px 0 6px">☁️ Copia en la nube (fuera del servidor)</h2>
@@ -1516,6 +1522,26 @@ on(/^#\/backups$/, async () => {
       </div>`, ['Copias de seguridad']);
     const bn = el('bkNow');
     if (bn) bn.onclick = async () => { bn.disabled = true; bn.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST' }); toast('Copia creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
+    const bp = el('bkPre');
+    if (bp) bp.onclick = async () => { bp.disabled = true; bp.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST', body: { pre: true } }); toast('Copia previa a mantenimiento creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
+    // Restaurar desde una copia: doble confirmación (es una acción fuerte) y reinicio automático.
+    $$('[data-restore]').forEach(btn => btn.onclick = () => {
+      const name = btn.dataset.restore;
+      modal('↩ Restaurar desde copia', `
+        <p style="margin-bottom:10px">Vas a <b>restaurar toda la intranet</b> al estado de la copia:</p>
+        <p style="margin:0 0 10px"><b>${esc(name)}</b></p>
+        <p class="hint" style="margin-bottom:10px">Se <b>sobrescriben</b> todos los datos actuales (bodas, pagos, tarifas…) con los de esa copia. Antes, el sistema guarda <b>automáticamente</b> una copia del estado actual ("previa a restauración"), por si necesitas volver atrás. El servicio se <b>reiniciará solo</b> y estará disponible en ~1 minuto.</p>
+        <div class="field"><label>Para confirmar, escribe <b>RESTAURAR</b></label><input class="control" id="rstConfirm" autocomplete="off" placeholder="RESTAURAR"></div>`, {
+        okText: '↩ Restaurar ahora', danger: true, onOk: async () => {
+          if (((el('rstConfirm') || {}).value || '').trim().toUpperCase() !== 'RESTAURAR') { toast('Escribe RESTAURAR para confirmar', 'err'); return true; }
+          try {
+            await api('backups/restore', { method: 'POST', body: { name } });
+            shell(`${pageHead('Restaurando…', 'La intranet se está restaurando y reiniciando.')}<div class="panel"><div class="panel__body"><p>⏳ <b>Restaurando desde ${esc(name)}…</b></p><p class="hint">El servicio se está reiniciando. Esta página se recargará sola en unos segundos. Si no, recárgala a mano en ~1 minuto.</p></div></div>`, ['Copias de seguridad']);
+            setTimeout(() => location.reload(), 45000);
+          } catch (e) { toast(e.message || 'Error', 'err'); return true; }
+        }
+      });
+    });
     const cbSave = el('cbSave');
     if (cbSave) cbSave.onclick = async () => {
       const body = { endpoint: el('cbEndpoint').value, bucket: el('cbBucket').value, region: el('cbRegion').value, keyId: el('cbKeyId').value, enabled: el('cbEnabled').checked };
@@ -1782,9 +1808,14 @@ on(/^#\/cuenta$/, async () => {
          <h4 style="margin:0 0 6px">🛠 Modo mantenimiento</h4>
          <p class="hint" style="margin-bottom:12px">Al activarlo, <b>todos</b> (novios, DJs y wedding planners) ven la pantalla de "En mantenimiento". <b>Tú y el resto de administración seguís entrando con normalidad</b> para hacer los cambios. Actívalo antes de una actualización y desactívalo al terminar.</p>
          <div id="mntState" style="margin-bottom:12px"></div>
+         <div class="btn-row" style="margin-bottom:8px"><button type="button" class="btn" id="mntBackup">💾 Crear copia previa a mantenimiento</button></div>
+         <p class="hint" style="margin-bottom:14px">Guarda un <b>punto de restauración conocido-bueno</b> justo antes de tocar nada. Sale <b>resaltada</b> en la lista de copias como "previa a mantenimiento" y <b>no se borra nunca</b>. Recomendado antes de cada cambio importante.</p>
+         <div id="mntBackupOut" style="margin-bottom:12px;display:none;font-size:13px"></div>
          <form id="mntForm" style="max-width:520px">
            <label class="chk" style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><input type="checkbox" id="mntOn"> <span>Modo mantenimiento <b>activado</b></span></label>
            <div class="field"><label>Mensaje para el cliente <span class="muted">(opcional; si lo dejas vacío, sale el mensaje por defecto)</span></label><textarea class="control" id="mntMsg" rows="2" maxlength="300" placeholder="Estamos pinchando los últimos ajustes para que todo suene perfecto. Dale al play en un momento. 🎧"></textarea></div>
+           <div class="field"><label>Permitir el acceso solo a estos emails <span class="muted">(separados por coma; vacío = entra toda la administración)</span></label><input class="control" id="mntAllow" placeholder="infoconectaso@gmail.com"></div>
+           <p class="hint" style="color:#b26a00;margin-top:-6px">⚠ Si pones un email aquí, <b>solo ese</b> podrá entrar (ni siquiera el resto de administración) y al activar se cerrará la sesión de todos los demás. Escribe bien el tuyo. Si te quedaras fuera, en la propia pantalla de mantenimiento tienes un botón de administración para desactivarlo.</p>
            <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Guardar</button> <button type="button" class="btn" id="mntPreview">👁 Previsualizar pantalla</button></div>
          </form>
          <div id="mntMsgOut" style="margin-top:10px;display:none;font-size:13px"></div>`
@@ -1923,17 +1954,19 @@ on(/^#\/cuenta$/, async () => {
   }
   const mntForm = el('mntForm');
   if (mntForm) {
-    const stateBox = el('mntState'), onBox = el('mntOn'), msgBox = el('mntMsg');
+    const stateBox = el('mntState'), onBox = el('mntOn'), msgBox = el('mntMsg'), allowBox = el('mntAllow');
     const paint = st => { if (!stateBox) return; stateBox.innerHTML = (st && st.on)
       ? '<div class="banner" style="padding:10px 14px;border-radius:10px;background:#FDECEA;color:#B71C1C;border:1px solid #F5C6CB"><b>🛠 Modo mantenimiento ACTIVO ahora mismo.</b> Los clientes ven la pantalla; administración entra con normalidad.</div>'
       : '<div class="banner" style="padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Intranet abierta con normalidad (mantenimiento desactivado).</div>'; };
-    api('maintenance').then(st => { if (onBox) onBox.checked = !!st.on; if (msgBox && st.msg) msgBox.value = st.msg; paint(st); }).catch(() => {});
+    api('maintenance').then(st => { if (onBox) onBox.checked = !!st.on; if (msgBox && st.msg) msgBox.value = st.msg; if (allowBox) allowBox.value = (st.allow || []).join(', '); paint(st); }).catch(() => {});
     mntForm.onsubmit = async e => {
       e.preventDefault();
       const on = !!(onBox && onBox.checked); const msg = ((msgBox && msgBox.value) || '').trim();
+      const allow = ((allowBox && allowBox.value) || '').trim();
+      if (on && allow) { const ok = allow.split(',').map(s => s.trim().toLowerCase()).filter(Boolean); if (!ok.some(e2 => e2 === String(S.user.email || '').toLowerCase())) { if (!confirm('El email con el que has entrado (' + S.user.email + ') NO está en la lista de permitidos. Si continúas, al activar se te cerrará la sesión y verás la pantalla de mantenimiento (con un botón de administración para desactivarlo). ¿Seguir?')) return; } }
       const out = el('mntMsgOut'); if (out) { out.style.display = 'block'; out.textContent = 'Guardando…'; }
       try {
-        const st = await api('maintenance', { method: 'POST', body: { on, msg } });
+        const st = await api('maintenance', { method: 'POST', body: { on, msg, allow } });
         paint(st);
         if (out) out.innerHTML = st.on ? '🛠 <b>Mantenimiento activado.</b> Ahora los clientes ven la pantalla; tú sigues entrando con normalidad.' : '✅ <b>Mantenimiento desactivado.</b> Todo vuelve a la normalidad.';
         toast(st.on ? 'Modo mantenimiento activado' : 'Modo mantenimiento desactivado', 'ok');
@@ -1950,6 +1983,14 @@ on(/^#\/cuenta$/, async () => {
       const done = () => { root.remove(); close.remove(); };
       close.onclick = done;
       const btn = root.querySelector('#mReload'); if (btn) btn.onclick = done;
+    };
+    const bkBtn = el('mntBackup');
+    if (bkBtn) bkBtn.onclick = async () => {
+      const out = el('mntBackupOut'); const t0 = bkBtn.textContent; bkBtn.disabled = true; bkBtn.textContent = 'Creando copia…';
+      if (out) { out.style.display = 'block'; out.textContent = 'Creando copia previa a mantenimiento…'; }
+      try { await api('backups/create', { method: 'POST', body: { pre: true } }); if (out) out.innerHTML = '✅ <b>Copia previa a mantenimiento creada.</b> La verás resaltada en <a href="#/backups">Copias de seguridad</a> y no se borra nunca.'; toast('Copia previa a mantenimiento creada', 'ok'); }
+      catch (e) { if (out) out.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(e.message) + '</span>'; }
+      bkBtn.disabled = false; bkBtn.textContent = t0;
     };
   }
   const tmForm = el('testMailForm');

@@ -53,7 +53,7 @@ async function api(path, { method = 'GET', body, form } = {}) {
     if (!res.ok) {
       const err = Object.assign(new Error((data && data.error) || ('Error ' + res.status)), { status: res.status, data });
       // Modo mantenimiento activado mientras el cliente estaba dentro: se le muestra la pantalla.
-      if (res.status === 503 && data && data.maintenance && S.user && S.user.role !== 'admin') { S.maintenance = { on: true, msg: data.error }; try { renderMaintenance(); } catch (e) {} throw err; }
+      if (res.status === 503 && data && data.maintenance && S.user) { S.maintenance = { on: true, blocked: true, msg: data.error }; try { renderMaintenance(); } catch (e) {} throw err; }
       if (isGet && res.status >= 500) { lastErr = err; continue; } // 5xx transitorio → reintenta
       throw err;
     }
@@ -481,7 +481,7 @@ function renderAuth() {
 async function afterLogin() {
   const me = await api('auth/me'); S.user = me.user; S.mailEnabled = me.mailEnabled; S.maintenance = me.maintenance || { on: false };
   // Modo mantenimiento: si está activo y NO eres admin, se muestra la pantalla de "volvemos pronto".
-  if (S.maintenance.on && S.user && S.user.role !== 'admin') { renderMaintenance(); return; }
+  if (S.maintenance.blocked && S.user) { renderMaintenance(); return; }
   await loadContext(); if (await tycGate()) return; if (!location.hash || location.hash === '#/recuperar') location.hash = '#/'; route();
   // Primero ofrecemos Face ID (si procede); si no, el aviso de instalar la app. Nunca los dos a la vez.
   setTimeout(() => { if (!maybeFaceIdPrompt()) maybeInstallPrompt(); }, 1400);
@@ -505,6 +505,18 @@ function renderMaintenance() {
   removeSpotlight();
   app.innerHTML = maintenanceMarkup((S.maintenance && S.maintenance.msg) || '');
   const r = el('mReload'); if (r) r.onclick = () => location.reload();
+  // Salvaguarda: si quien ve esta pantalla es administración (p. ej. bloqueado por la lista de
+  // emails), le damos un botón para desactivar el mantenimiento y no quedarse fuera.
+  if (S.user && S.user.role === 'admin') {
+    const wrap = document.querySelector('.mnt__wrap');
+    if (wrap) {
+      const b = document.createElement('button');
+      b.className = 'mnt__admin'; b.type = 'button';
+      b.textContent = 'Desactivar mantenimiento (administración)';
+      b.onclick = async () => { b.disabled = true; try { await api('maintenance', { method: 'POST', body: { on: false } }); } catch (e) {} location.reload(); };
+      wrap.appendChild(b);
+    }
+  }
 }
 function renderForgot() {
   app.innerHTML = authShell(`

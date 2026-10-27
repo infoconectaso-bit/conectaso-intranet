@@ -83,6 +83,13 @@ function sessionUser(req) {
   return users.get(row.id);
 }
 const endAllSessions = uid => st.delUser.run(uid);
+// Cierra la sesión de TODOS los usuarios menos los indicados (por id). Sin lista, cierra todas.
+// Se usa al activar el modo mantenimiento para echar a todos salvo los permitidos.
+function endSessionsExcept(keepUserIds) {
+  const keep = Array.from(new Set((keepUserIds || []).map(Number).filter(Boolean)));
+  if (!keep.length) { db.prepare('DELETE FROM sessions').run(); return; }
+  db.prepare('DELETE FROM sessions WHERE user_id NOT IN (' + keep.map(() => '?').join(',') + ')').run(...keep);
+}
 
 /* ---------- enlaces de invitación / restablecimiento ---------- */
 function createToken(userId, kind) {
@@ -116,4 +123,4 @@ function noteAttempt(key) { const a = attempts.get(key) || []; a.push(Date.now()
 function clearAttempts(key) { attempts.delete(key); }
 
 module.exports = { hashPassword, verifyPassword, passwordProblem, createSession, destroySession, sessionUser, endAllSessions,
-  createToken, checkToken, useToken, rateLimited, noteAttempt, clearAttempts, clientIp, parseCookies };
+  createToken, checkToken, useToken, rateLimited, noteAttempt, clearAttempts, clientIp, parseCookies, endSessionsExcept };

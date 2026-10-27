@@ -1071,3 +1071,5 @@ table.dt tbody tr.row-no td:first-child{box-shadow:inset 5px 0 0 #c01818}
 .mnt__btn:hover{transform:translateY(-2px);box-shadow:0 14px 38px rgba(232,44,136,.6)}
 .mnt__foot{margin-top:34px;font-size:12px;letter-spacing:1.5px;color:#7b7486;text-transform:uppercase}
 @media(max-width:520px){.mnt__h1{letter-spacing:-1.5px}.mnt__sub{font-size:16px}}
+.mnt__admin{margin-top:22px;display:block;margin-left:auto;margin-right:auto;background:transparent;color:#cfc7d6;border:1.5px solid rgba(255,255,255,.28);border-radius:999px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer}
+.mnt__admin:hover{border-color:#E82C88;color:#fff}

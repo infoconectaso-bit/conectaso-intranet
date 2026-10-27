@@ -8,6 +8,23 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
+// Restauración pendiente: si un admin pidió restaurar una copia, se dejó una marca y el servicio se
+// reinició. ANTES de abrir la base de datos, copiamos esa copia sobre la BD (así no se toca en caliente).
+(function applyPendingRestore() {
+  try {
+    const _dir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+    const marker = path.join(_dir, 'RESTORE_FROM');
+    if (!fs.existsSync(marker)) return;
+    const src = String(fs.readFileSync(marker, 'utf8')).trim();
+    const dbPath = process.env.DB_PATH || path.join(_dir, 'conectaso.db');
+    if (src && fs.existsSync(src)) {
+      fs.copyFileSync(src, dbPath);
+      ['-wal', '-shm'].forEach(ext => { try { fs.unlinkSync(dbPath + ext); } catch (e) {} });   // sin diario pendiente
+      console.log('[restore] Base de datos restaurada desde', src);
+    }
+    fs.unlinkSync(marker);
+  } catch (e) { console.error('[restore] error al restaurar:', e.message); }
+})();
 const { store, users, DATA_DIR } = require('./db');
 const auth = require('./auth');
 const mail = require('./mail');
@@ -32,8 +49,18 @@ function waAdd(uid, cred) { const all = waCreds(); (all[String(uid)] = all[Strin
 function waClear(uid) { const all = waCreds(); delete all[String(uid)]; store.setSetting('webauthnCreds', all); }
 function waSetCount(uid, credentialId, n) { const all = waCreds(); const c = (all[String(uid)] || []).find(x => x.credentialId === credentialId); if (c) { c.signCount = n; store.setSetting('webauthnCreds', all); } }
 
-// --- Modo mantenimiento: durante una actualización/volcado, bloquea a todos menos al admin ---
-function maintenanceState() { const m = store.setting('maintenance') || {}; return { on: !!m.on, msg: m.msg || 'Estamos haciendo una actualización. Volvemos enseguida. 🙏', at: m.at || null }; }
+// --- Modo mantenimiento: durante una actualización/volcado bloquea el acceso. Por defecto deja
+// pasar a cualquier administración; si se define una lista "allow" de emails, SOLO esos emails
+// entran (ni siquiera el resto de administración). ---
+function maintenanceState() { const m = store.setting('maintenance') || {}; return { on: !!m.on, msg: m.msg || 'Estamos haciendo una actualización. Volvemos enseguida. 🙏', at: m.at || null, allow: Array.isArray(m.allow) ? m.allow : [] }; }
+// ¿Este usuario queda bloqueado por el mantenimiento? Si hay lista de emails permitidos, solo esos
+// pasan; si no la hay, pasa cualquier administración.
+function maintenanceBlocks(user) {
+  const m = maintenanceState();
+  if (!m.on || !user) return false;
+  if (m.allow.length) return !m.allow.includes(String(user.email || '').trim().toLowerCase());
+  return user.role !== 'admin';
+}
 
 const PORT = +(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -190,7 +217,7 @@ async function api(req, res, url) {
   if (seg[0] === 'auth') {
     if (seg[1] === 'login' && method === 'POST') return login(req, res);
     if (seg[1] === 'logout' && method === 'POST') { auth.destroySession(req, res); return ok(res, { ok: true }); }
-    if (seg[1] === 'me' && method === 'GET') return ok(res, { user: user ? meView(user) : null, mailEnabled: mail.enabled(), maintenance: maintenanceState() });
+    if (seg[1] === 'me' && method === 'GET') { const _ms = maintenanceState(); return ok(res, { user: user ? meView(user) : null, mailEnabled: mail.enabled(), maintenance: { on: _ms.on, msg: _ms.msg, blocked: maintenanceBlocks(user) } }); }
     if (seg[1] === 'invite-info' && method === 'GET') return inviteInfo(req, res, url);
     if (seg[1] === 'activate' && method === 'POST') return activate(req, res);
     if (seg[1] === 'albaran-login' && method === 'POST') return albaranLogin(req, res);
@@ -271,15 +298,37 @@ async function api(req, res, url) {
 
   if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
 
-  // Modo mantenimiento: durante una actualización, los que NO son admin quedan bloqueados (ni
-  // lecturas ni escrituras) para que nadie toque datos mientras se actualiza. El admin sigue entrando.
-  { const _m = maintenanceState(); if (_m.on && user.role !== 'admin') return send(res, 503, { error: _m.msg, maintenance: true }); }
+  // Modo mantenimiento: durante una actualización, los usuarios bloqueados (todos, o todos menos
+  // la lista de emails permitidos) no pueden tocar nada. Salvaguarda: cualquier administración puede
+  // SIEMPRE llegar a la ruta /maintenance para desactivarlo y no quedarse fuera por un error.
+  if (maintenanceBlocks(user) && !(user.role === 'admin' && seg[0] === 'maintenance')) {
+    return send(res, 503, { error: maintenanceState().msg, maintenance: true });
+  }
 
   // --- Modo mantenimiento (solo admin): consultar y activar/desactivar ---
   if (seg[0] === 'maintenance') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     if (method === 'GET') return ok(res, maintenanceState());
-    if (method === 'POST') { const b = await readBody(req); store.setSetting('maintenance', { on: !!b.on, msg: (b.msg || '').trim().slice(0, 300) || undefined, at: b.on ? new Date().toISOString() : null }); store.audit(user.id, 'maintenance-' + (b.on ? 'on' : 'off')); return ok(res, maintenanceState()); }
+    if (method === 'POST') {
+      const b = await readBody(req);
+      const allow = (Array.isArray(b.allow) ? b.allow : String(b.allow || '').split(','))
+        .map(s => String(s).trim().toLowerCase()).filter(e => e.indexOf('@') > 0);
+      store.setSetting('maintenance', { on: !!b.on, msg: (b.msg || '').trim().slice(0, 300) || undefined, at: b.on ? new Date().toISOString() : null, allow });
+      store.audit(user.id, 'maintenance-' + (b.on ? 'on' : 'off'));
+      // Al ACTIVAR: se cierra la sesión de todos menos los permitidos (la lista de emails, o toda la
+      // administración si no hay lista), para que nadie se quede dentro. Se conserva la del que lo activa.
+      if (b.on) {
+        try {
+          const all = users.all();
+          const keep = allow.length
+            ? all.filter(u => u.email && allow.includes(String(u.email).trim().toLowerCase())).map(u => u.id)
+            : all.filter(u => u.role === 'admin').map(u => u.id);
+          if (!keep.includes(user.id)) keep.push(user.id);
+          auth.endSessionsExcept(keep);
+        } catch (e) { console.error('[mantenimiento] logout masivo:', e.message); }
+      }
+      return ok(res, maintenanceState());
+    }
     return fail(res, 404, 'Ruta no encontrada');
   }
 
@@ -853,9 +902,28 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
   }
   if (seg[0] === 'backups' && seg[1] === 'create' && method === 'POST') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
-    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
-    try { const r = backup.snapshot('manual'); store.audit(user.id, 'backup-create'); return ok(res, { ok: true, backup: r }); }
+    const b = await readBody(req).catch(() => ({}));
+    const pre = !!(b && b.pre);   // copia "previa a mantenimiento" (punto de restauración conocido-bueno)
+    try { const r = backup.snapshot(pre ? 'pre-mantenimiento' : 'manual', pre ? 'pre' : null); store.audit(user.id, pre ? 'backup-premant' : 'backup-create'); return ok(res, { ok: true, backup: r, pre }); }
     catch (e) { return fail(res, 500, 'No se pudo crear la copia: ' + e.message); }
+  }
+  // --- RESTAURAR desde una copia (admin): guarda el estado actual, marca la restauración y reinicia.
+  // El swap real lo hace applyPendingRestore() al arrancar, antes de abrir la BD (seguro, no en caliente). ---
+  if (seg[0] === 'backups' && seg[1] === 'restore' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const b = await readBody(req);
+    const src = backup.fileFor(b && b.name);
+    if (!src) return fail(res, 404, 'Copia no encontrada.');
+    // 1) Copia del estado ACTUAL antes de restaurar (protegida, "previa a restauración"): reversible.
+    let safety = null;
+    try { safety = backup.snapshot('pre-restauracion', 'prr'); } catch (e) {}
+    // 2) Marca la restauración pendiente y programa el reinicio (el contenedor levanta solo: restart unless-stopped).
+    try { fs.writeFileSync(path.join(DATA_DIR, 'RESTORE_FROM'), src); }
+    catch (e) { return fail(res, 500, 'No se pudo preparar la restauración: ' + e.message); }
+    store.audit(user.id, 'backup-restore');
+    ok(res, { ok: true, restarting: true, restored: b.name, safety: safety && safety.name });
+    setTimeout(() => process.exit(0), 600);   // el servicio se reinicia y aplica la restauración al arrancar
+    return;
   }
   if (seg[0] === 'backups' && seg[1] === 'download' && method === 'GET') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');

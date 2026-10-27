@@ -23,7 +23,10 @@ let lastAlert = 0;      // control antispam de avisos
 
 const pad = n => String(n).padStart(2, '0');
 function stamp(d) { d = d || new Date(); return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()); }
-const RE = /^conectaso-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.db$/;
+// Las copias con sufijo de etiqueta son "protegidas" (punto de restauración conocido-bueno): se
+// resaltan en la lista y NUNCA se borran en la limpieza automática.
+//   -pre  = previa a mantenimiento      -prr = previa a una restauración
+const RE = /^conectaso-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})(?:-(pre|prr))?\.db$/;
 
 function listFiles() {
   let names = [];
@@ -32,7 +35,7 @@ function listFiles() {
     const m = RE.exec(f); let size = 0;
     try { size = fs.statSync(path.join(BACKUP_DIR, f)).size; } catch (e) {}
     const dt = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
-    return { name: f, size, time: dt.getTime(), day: m[1] + m[2] + m[3] };
+    return { name: f, size, time: dt.getTime(), day: m[1] + m[2] + m[3], tag: m[7] || '', pre: !!m[7] };
   }).sort((a, b) => b.time - a.time);
 }
 
@@ -54,6 +57,7 @@ function prune() {
   const now = Date.now(), H = 3600000, DAY = 86400000;
   const files = listFiles(); const keep = new Set(); const halfKept = {}, dayKept = {};
   files.forEach(f => {
+    if (f.pre) { keep.add(f.name); return; }   // copias "previa a mantenimiento": nunca se borran
     const age = now - f.time;
     if (age <= KEEP_ALL_H * H) { keep.add(f.name); return; }
     if (age <= KEEP_HALF_H * H) { const hk = Math.floor(f.time / HALF); if (!halfKept[hk]) { halfKept[hk] = 1; keep.add(f.name); } return; }
@@ -65,12 +69,14 @@ function prune() {
   let remaining = listFiles();   // ordenadas de más nueva a más vieja
   let total = remaining.reduce((s, f) => s + (f.size || 0), 0);
   for (let i = remaining.length - 1; i >= MIN_KEEP && total > MAX_TOTAL_BYTES; i--) {
+    if (remaining[i].pre) continue;   // nunca se borran las "previa a mantenimiento", ni por el tope
     try { fs.unlinkSync(path.join(BACKUP_DIR, remaining[i].name)); total -= remaining[i].size || 0; } catch (e) {}
   }
 }
 
-function snapshot(reason) {
-  const name = 'conectaso-' + stamp() + '.db';
+function snapshot(reason, tag) {
+  const suf = (tag === 'pre' || tag === 'prr') ? '-' + tag : '';
+  const name = 'conectaso-' + stamp() + suf + '.db';
   const dest = path.join(BACKUP_DIR, name);
   db.exec("VACUUM INTO '" + dest.replace(/'/g, "''") + "'");
   let size = 0; try { size = fs.statSync(dest).size; } catch (e) {}
@@ -127,7 +133,7 @@ function status() {
     count: files.length, totalBytes: totBytes, maxBytes: MAX_TOTAL_BYTES };
 }
 
-function list() { return listFiles().map(f => ({ name: f.name, size: f.size, date: new Date(f.time).toISOString() })); }
+function list() { return listFiles().map(f => ({ name: f.name, size: f.size, date: new Date(f.time).toISOString(), pre: !!f.pre, tag: f.tag || '' })); }
 function fileFor(name) { if (!RE.test(String(name || ''))) return null; const p = path.join(BACKUP_DIR, name); return fs.existsSync(p) ? p : null; }
 
 let timer = null;
