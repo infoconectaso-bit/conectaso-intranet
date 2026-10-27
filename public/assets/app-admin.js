@@ -887,7 +887,7 @@ on(/^#\/descuadres$/, async () => {
     const pm = r.payMismatches || [];
     const pmPanel = pm.length ? `
       <h3 class="form-sub" style="margin-top:24px">⚠ Descuadre pagado (Holded vs apuntado) (${pm.length})</h3>
-      <p class="hint" style="margin-bottom:10px">Bodas donde <b>lo pagado según Holded</b> no coincide con el <b>pagado apuntado a mano</b> en el evento. <b>Diferencia positiva</b> = han pagado más de lo apuntado (falta apuntarlo). Solo es para <b>verificar</b>: no cambia nada automáticamente.</p>
+      <p class="hint" style="margin-bottom:10px">Bodas donde <b>lo pagado según Holded</b> no coincide con el <b>pagado apuntado a mano</b> en el evento. <b>Diferencia positiva</b> = han pagado más de lo apuntado (falta apuntarlo). Las <b>rectificativas (CN)</b> ya se restan aquí (una CN de −150 baja el pagado de Holded en 150). Solo es para <b>verificar</b>: no cambia nada automáticamente.</p>
       <div class="panel"><div class="panel__body">${table('dtPayMis', { rows: pm, order: [0, 'desc'], filters: true, dense: true, len: 50, empty: '', cols: [
         { t: 'Fecha', get: i => i.fecha || '', html: i => esc(slash(i.fecha) || '—') },
         { t: 'Boda', nosort: true, nofilter: true, html: i => `<a href="#/eventos/${i.eventId}" title="${esc(i.conyuges || '')}">#${i.eventId}</a>` },
@@ -906,31 +906,17 @@ on(/^#\/descuadres$/, async () => {
       { t: 'Importe', get: i => i.total || 0, num: true, html: i => eur(i.total) },
       { t: '', nosort: true, nofilter: true, html: i => `<button class="btn btn--xs" data-restore-inv="${esc(i.invId)}">↩ Restaurar</button> <a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver factura">📄</a>` },
     ] })}</div></div></details>` : '';
-    const rc = r.rectificativas || [];
-    const rcUnm = rc.filter(i => !i.matched);
-    const rcPanel = rc.length ? `
-      <h3 class="form-sub" style="margin-top:24px">🧾 Rectificativas (CN) — ${rc.length}${rcUnm.length ? ` · <span style="color:#D50000">${rcUnm.length} sin cuadrar</span>` : ' · todas cuadran'}</h3>
-      <p class="hint" style="margin-bottom:10px">Las <b>rectificativas</b> (nº empieza por <b>CN</b>, importe en negativo) compensan a la factura positiva que corrigen (<b>+100 / −100</b>). Las que <b>cuadran</b> se quitan solas del listado de arriba; revisa las marcadas <b>Revisar</b> (no encontré una positiva del mismo cliente con el mismo importe).</p>
-      <div class="panel"><div class="panel__body">${table('dtRectif', { rows: rc, order: [0, 'desc'], filters: true, dense: true, len: 50, empty: '', rowClass: i => i.matched ? 'row-ok' : 'row-no', cols: [
-        { t: 'Fecha', get: i => i.date || '', html: i => esc(slash(i.date) || '—') },
-        { t: 'Cliente', get: i => i.contact || '', html: i => `<b>${esc(i.contact || '—')}</b>` },
-        { t: 'Rectificativa (CN)', get: i => i.cn || '', html: i => `${esc(i.cn || '—')} &nbsp;<b style="color:#c01818">${eur(i.cnTotal)}</b>` },
-        { t: 'Compensa a', nosort: true, nofilter: true, html: i => i.matched ? `${esc(i.pos || '—')} &nbsp;<b style="color:#0f7a36">${eur(i.posTotal)}</b>` : '<b style="color:#D50000">⚠ sin positiva que cuadre</b>' },
-        { t: 'Estado', get: i => i.matched ? 1 : 0, html: i => i.matched ? '<span class="tag tag--green">✓ Cuadra</span>' : '<span class="tag tag--red">Revisar</span>' },
-      ] })}</div></div>` : '';
     const sugList = sv.filter(i => i.suggestedEventId && !i.catWarn);
     shell(`${pageHead('Descuadre facturas / eventos', 'Facturas de Holded que NO están vinculadas a ningún evento (posible falta de vinculación).')}
       <div class="grid-3" style="margin-bottom:14px">
         <div class="stat stat--pink"><div class="k">Facturas sin vincular</div><div class="v">${r.sinVincularN || 0}</div></div>
         <div class="stat stat--blue"><div class="k">Facturas vinculadas a boda</div><div class="v">${r.linkedInv || 0}</div></div>
-        <div class="stat"><div class="k">Excluidas (empresas + pasadas + sin pagar + CN cuadradas)</div><div class="v">${(r.empresaInv || 0) + (r.antiguasInv || 0) + (r.pasadasInv || 0) + (r.sinPagarInv || 0) + (r.compensadasInv || 0)}</div></div>
+        <div class="stat"><div class="k">Excluidas (empresas + pasadas + sin pagar)</div><div class="v">${(r.empresaInv || 0) + (r.antiguasInv || 0) + (r.pasadasInv || 0) + (r.sinPagarInv || 0)}</div></div>
       </div>
-      ${rcUnm.length ? `<div class="alert alert--warn" style="margin-bottom:12px">🧾 Hay <b>${rcUnm.length}</b> rectificativa(s) <b>CN sin cuadrar</b>. Revísalas en el apartado "Rectificativas (CN)" más abajo.</div>` : ''}
       <p class="hint" style="margin-bottom:8px">Salen facturas a <b>personas</b>, de <b>bodas por celebrar</b> y <b>con algún pago</b> (las <b>sin pagar</b> no salen: la reserva no está confirmada y aún no hay evento). Cuando el concepto trae la <b>fecha y el lugar</b>, te propongo la boda y la vinculas con un clic (↩). Si el <b>pack</b> no coincide, sale un aviso. También puedes vincular a mano (🔗).</p>
       ${csLine}
       ${sugList.length ? `<div class="btn-row" style="margin-bottom:12px"><button class="btn btn--primary" id="linkAllSug">↩ Vincular todas las sugeridas sin aviso (${sugList.length})</button> <span class="hint">Las que tienen aviso ⚠ se quedan sin vincular para que las revises.</span></div>` : ''}
       <div class="panel"><div class="panel__body">${table('dtDescuadres', { rows: sv, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas sin vincular. 🎉' })}</div></div>
-      ${rcPanel}
       ${swPanel}
       ${pmPanel}
       ${igPanel}`, ['Descuadres']);
