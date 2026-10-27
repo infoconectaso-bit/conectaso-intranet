@@ -1039,12 +1039,12 @@ img.mant-thumb{cursor:zoom-in}
 .pw-eye:hover{opacity:1}
 
 /* Fotomatón: filas enteras verde (fotos subidas) / rojo (pendientes de subir) */
-.dt tbody tr.row-ok td{background:#e8f6ec}
-.dt tbody tr.row-ok:hover td{background:#dcf0e2}
-.dt tbody tr.row-no td{background:#fdeaea}
-.dt tbody tr.row-no:hover td{background:#f9dcdc}
-.dt tbody tr.row-ok td:first-child{box-shadow:inset 4px 0 0 #1c9b4b}
-.dt tbody tr.row-no td:first-child{box-shadow:inset 4px 0 0 #d50000}
+.dt tbody tr.row-ok td{background:#bce9c8}
+.dt tbody tr.row-ok:hover td{background:#aae0b8}
+.dt tbody tr.row-no td{background:#f7bcbc}
+.dt tbody tr.row-no:hover td{background:#f3a9a9}
+.dt tbody tr.row-ok td:first-child{box-shadow:inset 5px 0 0 #0f7a36}
+.dt tbody tr.row-no td:first-child{box-shadow:inset 5px 0 0 #c01818}
 .foto-stat-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
 /* Tarjeta de descarga de fotos del fotomatón (vista de la pareja) */
 .foto-dl{background:linear-gradient(180deg,#fff,#fdf2f8);border:1px solid #f3cfe3}

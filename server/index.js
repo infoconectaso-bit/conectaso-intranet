@@ -1873,6 +1873,9 @@ function eventHasFotomaton(ev, fids) {
   const ids = fids || fotoServiceIds();
   return Array.isArray(ev.services) && ev.services.some(s => s && ids.has(s.servicio));
 }
+// Bodas en esta fecha o anteriores se consideran "ya entregadas" (las fotos se mandaron a mano
+// antes de existir esta pestaña): salen en verde aunque no tengan enlace y no se persiguen.
+const FOTOS_LEGACY_CUTOFF = '2026-09-30';
 // Listado para la pestaña Fotomatón: cada boda con su enlace de galería y estado (subida / pendiente).
 function fotomatonList() {
   const fids = fotoServiceIds();
@@ -1881,14 +1884,23 @@ function fotomatonList() {
     const ids = [e.userId].concat(e.coUsers || []).filter(Boolean);
     const emails = []; const seen = new Set();
     ids.forEach(uid => { const u = users.get(uid); if (u && u.email && !seen.has(u.email.toLowerCase())) { seen.add(u.email.toLowerCase()); emails.push(u.email); } });
+    const fecha = e.fecha || '';
+    const hasLink = !!e.fotosLink;
+    const legacy = !hasLink && !!fecha && fecha.slice(0, 10) <= FOTOS_LEGACY_CUTOFF;
     return {
-      id: e.id, conyuges: e.conyuges || '', fecha: e.fecha || '', lugar: finca,
+      id: e.id, conyuges: e.conyuges || '', fecha, lugar: finca,
       djName: (users.get(e.djId) || {}).name || '',
-      realized: evRealized(e), uploaded: !!e.fotosLink, fotosLink: e.fotosLink || '',
-      fotosSentAt: e.fotosSentAt || '', emails,
+      realized: evRealized(e), hasLink, legacy, uploaded: hasLink || legacy,
+      fotosLink: e.fotosLink || '', fotosSentAt: e.fotosSentAt || '', emails,
     };
   }).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
-  return { events: rows, total: rows.length, uploaded: rows.filter(r => r.uploaded).length, pending: rows.filter(r => !r.uploaded).length };
+  const real = rows.filter(r => r.realized);
+  return {
+    events: rows, total: rows.length, cutoff: FOTOS_LEGACY_CUTOFF,
+    uploaded: real.filter(r => r.uploaded).length,
+    pending: real.filter(r => !r.uploaded).length,
+    upcoming: rows.filter(r => !r.realized).length,
+  };
 }
 
 function enrichEvent(out, ev, user) {

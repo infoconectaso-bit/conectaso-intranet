@@ -954,47 +954,75 @@ on(/^#\/descuadres$/, async () => {
 });
 
 /* =========================================================================
-   FOTOMATÓN (admin): listado de bodas con fotomatón y estado de subida de fotos.
-   Línea entera en VERDE = fotos subidas (hay enlace de galería); en ROJO =
-   celebrada y pendiente de subir. Las que aún no se han celebrado salen neutras.
+   FOTOMATÓN (admin): dos sub-pestañas — Realizadas (línea entera VERDE = fotos
+   subidas o ya entregadas; ROJO = pendiente de subir) y Próximas (aún sin
+   celebrar). Las bodas de sept. 2026 hacia atrás se dan por entregadas (verde).
    ========================================================================= */
 on(/^#\/fotomaton$/, async () => {
   if (!isAdmin()) { location.hash = '#/'; return; }
+  let tab = 'real';
   async function draw() {
     loading(['Fotomatón']);
-    const r = await api('fotomaton').catch(() => ({ events: [], total: 0, uploaded: 0, pending: 0 }));
+    const r = await api('fotomaton').catch(() => ({ events: [], cutoff: '' }));
     const rows = r.events || [];
-    const pendReal = rows.filter(e => e.realized && !e.uploaded).length;
-    const subidas = rows.filter(e => e.uploaded).length;
-    const proximas = rows.filter(e => !e.realized).length;
-    const estado = e => !e.realized ? '<span class="tag tag--blue">Próxima</span>'
-      : (e.uploaded ? '<span class="tag tag--green">✓ Fotos subidas</span>' : '<span class="tag tag--red">⬆ Pendiente de subir</span>');
-    const cols = [
-      { t: 'Fecha', get: i => i.fecha || '', html: i => `<b>${esc(slash(i.fecha) || '—')}</b>` },
-      { t: 'Boda', get: i => i.conyuges || '', html: i => `<a href="#/eventos/${i.id}" title="Abrir la boda">${esc(i.conyuges || '—')}</a><div class="hint">#${i.id}</div>` },
-      { t: 'Lugar', get: i => i.lugar || '', html: i => esc(i.lugar || '—') },
-      { t: 'DJ', get: i => i.djName || '', html: i => esc(i.djName || '—') },
-      { t: 'Estado', get: i => i.uploaded ? 2 : (i.realized ? 0 : 1), html: estado },
+    const real = rows.filter(e => e.realized);
+    const prox = rows.filter(e => !e.realized);
+    const pendReal = real.filter(e => !e.uploaded).length;
+    const subidas = real.filter(e => e.uploaded).length;
+
+    const estadoReal = e => e.hasLink ? '<span class="tag tag--green">✓ Fotos subidas</span>'
+      : (e.legacy ? '<span class="tag tag--green">✓ Ya entregadas</span>'
+        : '<span class="tag tag--red">⬆ Pendiente de subir</span>');
+    const colFecha = { t: 'Fecha', get: i => i.fecha || '', html: i => `<b>${esc(slash(i.fecha) || '—')}</b>` };
+    const colBoda = { t: 'Boda', get: i => i.conyuges || '', html: i => `<a href="#/eventos/${i.id}" title="Abrir la boda">${esc(i.conyuges || '—')}</a><div class="hint">#${i.id}</div>` };
+    const colLugar = { t: 'Lugar', get: i => i.lugar || '', html: i => esc(i.lugar || '—') };
+    const colDj = { t: 'DJ', get: i => i.djName || '', html: i => esc(i.djName || '—') };
+    const colsReal = [
+      colFecha, colBoda, colLugar, colDj,
+      { t: 'Estado', get: i => i.hasLink ? 2 : (i.legacy ? 1 : 0), html: estadoReal },
       { t: 'Galería', nosort: true, nofilter: true, html: i => i.fotosLink
         ? `<a class="btn btn--xs" href="${esc(i.fotosLink)}" target="_blank" rel="noopener" title="Abrir la galería de fotos">🔗 Abrir</a>`
-        : '<span class="hint">— sin enlace —</span>' },
+        : (i.legacy ? '<span class="hint">entregada a mano</span>' : '<span class="hint">— sin enlace —</span>') },
       { t: 'Email enviado', get: i => i.fotosSentAt || '', html: i => i.fotosSentAt
         ? `<span class="tag tag--green" title="${esc(i.fotosSentAt)}">✓ ${esc(slash(i.fotosSentAt.slice(0, 10)))}</span>`
         : '<span class="hint">—</span>' },
       { t: 'Acciones', nosort: true, nofilter: true, html: i => {
+        if (i.legacy && !i.hasLink) return `<button class="btn btn--xs" data-setlink="${i.id}" title="Si quieres, puedes subir también el enlace de esta boda antigua">➕ Enlace</button>`;
         const emails = (i.emails || []).length;
-        return `<button class="btn btn--xs ${i.fotosLink ? '' : 'btn--primary'}" data-setlink="${i.id}" title="Pegar o cambiar el enlace de la galería de Google Drive">${i.fotosLink ? '✏️ Enlace' : '➕ Añadir enlace'}</button>`
-          + (i.fotosLink ? ` <button class="btn btn--xs btn--primary" data-sendmail="${i.id}" title="Enviar el email de fotos listas a los novios"${emails ? '' : ' disabled'}>📧 Enviar aviso${emails ? ` (${emails})` : ''}</button>` : '');
+        return `<button class="btn btn--xs ${i.hasLink ? '' : 'btn--primary'}" data-setlink="${i.id}" title="Pegar o cambiar el enlace de la galería de Google Drive">${i.hasLink ? '✏️ Enlace' : '➕ Añadir enlace'}</button>`
+          + (i.hasLink ? ` <button class="btn btn--xs btn--primary" data-sendmail="${i.id}" title="Enviar el email de fotos listas a los novios"${emails ? '' : ' disabled'}>📧 Enviar aviso${emails ? ` (${emails})` : ''}</button>` : '');
       } },
     ];
-    shell(`${pageHead('Fotomatón', 'Bodas con fotomatón (servicio, extra o con logo en discoteca) y estado de las fotos. Verde = fotos subidas · Rojo = celebrada y pendiente de subir.')}
+    const colsProx = [
+      colFecha, colBoda, colLugar, colDj,
+      { t: '', nosort: true, nofilter: true, html: i => '<span class="tag tag--blue">Próxima</span>' },
+    ];
+    const tabs = `<div class="tabs" style="margin-bottom:16px">
+      <button type="button" data-ftab="real" class="${tab === 'real' ? 'on' : ''}">Realizadas (${real.length})</button>
+      <button type="button" data-ftab="prox" class="${tab === 'prox' ? 'on' : ''}">Próximas (${prox.length})</button></div>`;
+    const realHtml = `
       <div class="grid-3" style="margin-bottom:14px">
-        <div class="stat stat--pink"><div class="k"><span class="foto-stat-dot" style="background:#d50000"></span>Pendientes de subir</div><div class="v">${pendReal}</div></div>
-        <div class="stat"><div class="k"><span class="foto-stat-dot" style="background:#1c9b4b"></span>Con fotos subidas</div><div class="v">${subidas}</div></div>
-        <div class="stat stat--blue"><div class="k"><span class="foto-stat-dot" style="background:#2f6fed"></span>Próximas (aún sin celebrar)</div><div class="v">${proximas}</div></div>
+        <div class="stat stat--pink"><div class="k"><span class="foto-stat-dot" style="background:#c62828"></span>Pendientes de subir</div><div class="v">${pendReal}</div></div>
+        <div class="stat"><div class="k"><span class="foto-stat-dot" style="background:#138a3e"></span>Subidas / entregadas</div><div class="v">${subidas}</div></div>
+        <div class="stat"><div class="k">Total realizadas</div><div class="v">${real.length}</div></div>
       </div>
-      <p class="hint" style="margin-bottom:12px">Flujo: tras la boda, subes las fotos a una carpeta de Google Drive y pegas aquí el <b>enlace para compartir</b> (➕). La boda pasa a <b>verde</b> y la pareja ya puede descargarlas desde su evento. Con <b>📧 Enviar aviso</b> les llega el email a <b>todos los correos de la boda</b> (titular y pareja invitada). El aviso es siempre manual, no se envía solo.</p>
-      <div class="panel"><div class="panel__body">${table('dtFoto', { rows, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, rowClass: i => !i.realized ? '' : (i.uploaded ? 'row-ok' : 'row-no'), empty: 'Todavía no hay bodas con fotomatón.' })}</div></div>`, ['Fotomatón']);
+      <p class="hint" style="margin-bottom:12px">Tras la boda, subes las fotos a una carpeta de Google Drive y pegas aquí el <b>enlace para compartir</b> (➕). La boda pasa a <b>verde</b> y la pareja ya puede descargarlas desde su evento. Con <b>📧 Enviar aviso</b> les llega el email a <b>todos los correos de la boda</b> (titular y pareja invitada); es siempre manual. Las bodas de <b>sept. 2026 hacia atrás</b> se dan por <b>ya entregadas</b> (verde) y no hay que subirlas.</p>
+      <div class="panel"><div class="panel__body">${table('dtFotoReal', { rows: real, order: [0, 'desc'], filters: true, dense: true, len: 50, cols: colsReal, rowClass: i => i.uploaded ? 'row-ok' : 'row-no', empty: 'Todavía no hay bodas realizadas con fotomatón.' })}</div></div>`;
+    const proxHtml = `
+      <p class="hint" style="margin-bottom:12px">Bodas con fotomatón <b>aún sin celebrar</b>. Cuando pase la fecha, pasarán a <b>Realizadas</b> para subir sus fotos.</p>
+      <div class="panel"><div class="panel__body">${table('dtFotoProx', { rows: prox, order: [0, 'asc'], filters: true, dense: true, len: 50, cols: colsProx, empty: 'No hay próximas bodas con fotomatón.' })}</div></div>`;
+    shell(`${pageHead('Fotomatón', 'Bodas con fotomatón (servicio, extra o con logo en discoteca) y estado de sus fotos.')}
+      ${tabs}
+      <div id="ftReal" style="display:${tab === 'real' ? 'block' : 'none'}">${realHtml}</div>
+      <div id="ftProx" style="display:${tab === 'prox' ? 'block' : 'none'}">${proxHtml}</div>`, ['Fotomatón']);
+
+    $$('[data-ftab]').forEach(b => b.onclick = () => {
+      tab = b.dataset.ftab;
+      const rr = el('ftReal'), pp = el('ftProx');
+      if (rr) rr.style.display = tab === 'real' ? 'block' : 'none';
+      if (pp) pp.style.display = tab === 'prox' ? 'block' : 'none';
+      $$('[data-ftab]').forEach(x => x.classList.toggle('on', x.dataset.ftab === tab));
+    });
 
     const setLink = id => {
       const ev = rows.find(x => x.id === id) || {};
@@ -1034,10 +1062,12 @@ on(/^#\/fotomaton$/, async () => {
         }
       });
     };
-    bindTable('dtFoto', () => {
+    const wireFoto = () => {
       $$('[data-setlink]').forEach(b => b.onclick = () => setLink(+b.dataset.setlink));
       $$('[data-sendmail]').forEach(b => b.onclick = () => sendMail(+b.dataset.sendmail));
-    });
+    };
+    bindTable('dtFotoReal', wireFoto);
+    bindTable('dtFotoProx', () => {});
   }
   draw();
 });
