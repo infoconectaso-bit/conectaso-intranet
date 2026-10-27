@@ -1958,7 +1958,8 @@ on(/^#\/cuenta$/, async () => {
     const paint = st => { if (!stateBox) return; stateBox.innerHTML = (st && st.on)
       ? '<div class="banner" style="padding:10px 14px;border-radius:10px;background:#FDECEA;color:#B71C1C;border:1px solid #F5C6CB"><b>🛠 Modo mantenimiento ACTIVO ahora mismo.</b> Los clientes ven la pantalla; administración entra con normalidad.</div>'
       : '<div class="banner" style="padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Intranet abierta con normalidad (mantenimiento desactivado).</div>'; };
-    api('maintenance').then(st => { if (onBox) onBox.checked = !!st.on; if (msgBox && st.msg) msgBox.value = st.msg; if (allowBox) allowBox.value = (st.allow || []).join(', '); paint(st); }).catch(() => {});
+    const DEFAULT_ALLOW = 'infoconectaso@gmail.com';   // email que queda puesto por defecto
+    api('maintenance').then(st => { if (onBox) onBox.checked = !!st.on; if (msgBox && st.msg) msgBox.value = st.msg; if (allowBox) allowBox.value = (st.allow && st.allow.length) ? st.allow.join(', ') : DEFAULT_ALLOW; paint(st); }).catch(() => { if (allowBox) allowBox.value = DEFAULT_ALLOW; });
     mntForm.onsubmit = async e => {
       e.preventDefault();
       const on = !!(onBox && onBox.checked); const msg = ((msgBox && msgBox.value) || '').trim();
