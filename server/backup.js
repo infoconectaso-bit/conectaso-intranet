@@ -36,14 +36,36 @@ function listFiles() {
   }).sort((a, b) => b.time - a.time);
 }
 
+// Política de retención (escalonada) para no acumular copias sin parar:
+//   - últimas 3 h: TODAS (grano de 5 min, para recuperar un error reciente al minuto)
+//   - de 3 h a 48 h: 1 por hora
+//   - de 48 h a 30 días: 1 por día
+//   - más de 30 días: se borran
+// Además, un TOPE DURO de tamaño total: si aún se pasara, se borran las más antiguas
+// (sin tocar nunca las MIN_KEEP más recientes). Con una BD de ~14 MB esto ocupa ~1,5 GB.
+const KEEP_ALL_H = +(process.env.BACKUP_KEEP_ALL_H || 3);      // horas con todas las copias
+const KEEP_HOURLY_H = +(process.env.BACKUP_KEEP_HOURLY_H || 48); // horas con 1/hora
+const KEEP_DAILY_D = +(process.env.BACKUP_KEEP_DAILY_D || 30);   // días con 1/día
+const MAX_TOTAL_BYTES = Math.round(+(process.env.BACKUP_MAX_GB || 15) * 1024 * 1024 * 1024); // tope duro
+const MIN_KEEP = 12;   // nunca se borran las 12 copias más recientes, pase lo que pase
+function totalBytes() { return listFiles().reduce((s, f) => s + (f.size || 0), 0); }
 function prune() {
-  const now = Date.now(), DAY = 86400000;
-  const files = listFiles(); const keep = new Set(); const dailyKept = {};
+  const now = Date.now(), H = 3600000, DAY = 86400000;
+  const files = listFiles(); const keep = new Set(); const hourKept = {}, dayKept = {};
   files.forEach(f => {
-    if (now - f.time <= 1 * DAY) { keep.add(f.name); return; }                 // últimas 24 h: todas
-    if (now - f.time <= 30 * DAY) { if (!dailyKept[f.day]) { dailyKept[f.day] = 1; keep.add(f.name); } return; } // 1/día, 30 días
+    const age = now - f.time;
+    if (age <= KEEP_ALL_H * H) { keep.add(f.name); return; }
+    if (age <= KEEP_HOURLY_H * H) { const hk = Math.floor(f.time / H); if (!hourKept[hk]) { hourKept[hk] = 1; keep.add(f.name); } return; }
+    if (age <= KEEP_DAILY_D * DAY) { if (!dayKept[f.day]) { dayKept[f.day] = 1; keep.add(f.name); } return; }
+    // más de 30 días: no se guarda
   });
   files.forEach(f => { if (!keep.has(f.name)) { try { fs.unlinkSync(path.join(BACKUP_DIR, f.name)); } catch (e) {} } });
+  // Tope duro de tamaño: si tras la poda aún se pasa, se borran de la más vieja a la más nueva.
+  let remaining = listFiles();   // ordenadas de más nueva a más vieja
+  let total = remaining.reduce((s, f) => s + (f.size || 0), 0);
+  for (let i = remaining.length - 1; i >= MIN_KEEP && total > MAX_TOTAL_BYTES; i--) {
+    try { fs.unlinkSync(path.join(BACKUP_DIR, remaining[i].name)); total -= remaining[i].size || 0; } catch (e) {}
+  }
 }
 
 function snapshot(reason) {
@@ -99,7 +121,9 @@ function status() {
   const errT = lastError ? new Date(lastError.date).getTime() : 0;
   const healthy = okT >= errT;                               // el último intento fue correcto
   const stale = !okT || (Date.now() - okT > 30 * 60 * 1000); // sin copia correcta en > 30 min
-  return { healthy, stale, lastOk: lastOk || (files[0] ? { name: files[0].name, date: new Date(files[0].time).toISOString() } : null), lastError };
+  const totBytes = files.reduce((s, f) => s + (f.size || 0), 0);
+  return { healthy, stale, lastOk: lastOk || (files[0] ? { name: files[0].name, date: new Date(files[0].time).toISOString() } : null), lastError,
+    count: files.length, totalBytes: totBytes, maxBytes: MAX_TOTAL_BYTES };
 }
 
 function list() { return listFiles().map(f => ({ name: f.name, size: f.size, date: new Date(f.time).toISOString() })); }

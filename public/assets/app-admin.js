@@ -1437,6 +1437,14 @@ on(/^#\/backups$/, async () => {
     if (st.lastError && !st.healthy) banner = `<div class="banner banner--err" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FDECEA;color:#B71C1C;border:1px solid #F5C6CB"><b>⚠ La última copia automática falló</b> (${fmtDate(st.lastError.date)}). ${esc(st.lastError.message || '')}. Se ha avisado por email a administración. Revisa el servidor (espacio en disco).</div>`;
     else if (st.stale) banner = `<div class="banner" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FFF8E1;color:#8a6d00;border:1px solid #FFE49A"><b>⚠ Hace más de 30 minutos que no se hace una copia correcta.</b> Comprueba que el servidor está funcionando.</div>`;
     else banner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Copias funcionando correctamente.</div>`;
+    const locBytes = st.totalBytes || 0, locMax = st.maxBytes || 0;
+    const locPct = locMax ? Math.min(100, Math.round(locBytes / locMax * 100)) : 0;
+    const locCol = locPct >= 90 ? '#B71C1C' : (locPct >= 70 ? '#C77700' : '#1B5E20');
+    const localBar = locMax ? `<div style="max-width:560px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>Copias en el servidor${st.count != null ? ' (' + st.count + ')' : ''}</span><span><b>${fmtSize(locBytes)}</b> de ${fmtSize(locMax)} máx · ${locPct}%</span></div>
+      <div style="height:12px;border-radius:999px;background:rgba(0,0,0,.08);overflow:hidden"><div style="height:100%;width:${Math.max(2, locPct)}%;background:${locCol};transition:width .3s"></div></div>
+      <p class="hint" style="margin-top:6px">Se guardan escalonadas (3 h al minuto · 48 h por hora · 30 días por día) y las antiguas se borran solas. Nunca superan el máximo.</p>
+    </div>` : '';
     let cloudBanner = '';
     if (!cfg.enabled) cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#EEF2F7;color:#334;border:1px solid #D6DEE8">La copia en la nube está <b>desactivada</b>. Rellena los datos y marca «Activar».</div>`;
     else if (cloud.reachError) cloudBanner = `<div class="banner banner--err" style="margin-bottom:12px;padding:12px 14px;border-radius:10px;background:#FDECEA;color:#B71C1C;border:1px solid #F5C6CB"><b>⚠ No se pudo contactar con la nube.</b> ${esc(cloud.reachError)}. Revisa el endpoint, la región y las claves.</div>`;
@@ -1455,6 +1463,7 @@ on(/^#\/backups$/, async () => {
     const rows = list.map(b => `<tr><td><b>${esc(b.name)}</b></td><td>${fmtDate(b.date)}</td><td style="text-align:right">${fmtSize(b.size)}</td><td style="text-align:right"><a class="btn btn--sm" href="/api/backups/download?name=${encodeURIComponent(b.name)}" download>⬇ Descargar</a></td></tr>`).join('');
     shell(`${pageHead('Copias de seguridad', 'Copias automáticas de la base de datos (bodas, usuarios, tarifas…).')}
       ${banner}
+      ${localBar}
       <div class="grid-3" style="margin-bottom:14px">
         <div class="stat stat--blue"><div class="k">Última copia</div><div class="v" style="font-size:18px">${last ? fmtDate(last.date) : '—'}</div></div>
         <div class="stat"><div class="k">Copias guardadas</div><div class="v">${r.count || 0}</div></div>
