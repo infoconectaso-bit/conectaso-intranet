@@ -37,25 +37,26 @@ function listFiles() {
 }
 
 // Política de retención (escalonada) para no acumular copias sin parar:
-//   - últimas 3 h: TODAS (grano de 5 min, para recuperar un error reciente al minuto)
-//   - de 3 h a 48 h: 1 por hora
+//   - últimas 2 h: TODAS (grano de 5 min, para recuperar un error muy reciente al minuto)
+//   - de 2 h a 48 h: 1 cada 30 min (máxima pérdida posible de datos: 30 min)
 //   - de 48 h a 30 días: 1 por día
 //   - más de 30 días: se borran
 // Además, un TOPE DURO de tamaño total: si aún se pasara, se borran las más antiguas
-// (sin tocar nunca las MIN_KEEP más recientes). Con una BD de ~14 MB esto ocupa ~1,5 GB.
-const KEEP_ALL_H = +(process.env.BACKUP_KEEP_ALL_H || 3);      // horas con todas las copias
-const KEEP_HOURLY_H = +(process.env.BACKUP_KEEP_HOURLY_H || 48); // horas con 1/hora
+// (sin tocar nunca las MIN_KEEP más recientes). Con una BD de ~14 MB esto ocupa ~2 GB.
+const KEEP_ALL_H = +(process.env.BACKUP_KEEP_ALL_H || 2);        // horas con todas las copias (grano 5 min)
+const KEEP_HALF_H = +(process.env.BACKUP_KEEP_HALF_H || 48);     // horas con 1 cada 30 min
 const KEEP_DAILY_D = +(process.env.BACKUP_KEEP_DAILY_D || 30);   // días con 1/día
 const MAX_TOTAL_BYTES = Math.round(+(process.env.BACKUP_MAX_GB || 15) * 1024 * 1024 * 1024); // tope duro
 const MIN_KEEP = 12;   // nunca se borran las 12 copias más recientes, pase lo que pase
+const HALF = 30 * 60 * 1000;   // media hora
 function totalBytes() { return listFiles().reduce((s, f) => s + (f.size || 0), 0); }
 function prune() {
   const now = Date.now(), H = 3600000, DAY = 86400000;
-  const files = listFiles(); const keep = new Set(); const hourKept = {}, dayKept = {};
+  const files = listFiles(); const keep = new Set(); const halfKept = {}, dayKept = {};
   files.forEach(f => {
     const age = now - f.time;
     if (age <= KEEP_ALL_H * H) { keep.add(f.name); return; }
-    if (age <= KEEP_HOURLY_H * H) { const hk = Math.floor(f.time / H); if (!hourKept[hk]) { hourKept[hk] = 1; keep.add(f.name); } return; }
+    if (age <= KEEP_HALF_H * H) { const hk = Math.floor(f.time / HALF); if (!halfKept[hk]) { halfKept[hk] = 1; keep.add(f.name); } return; }
     if (age <= KEEP_DAILY_D * DAY) { if (!dayKept[f.day]) { dayKept[f.day] = 1; keep.add(f.name); } return; }
     // más de 30 días: no se guarda
   });
@@ -137,8 +138,16 @@ function start() {
   // Limpieza inmediata en la nube al arrancar: borra las copias sobrantes enseguida tras un despliegue,
   // sin esperar al ciclo horario (así el espacio baja cuanto antes y no se llega al límite de 10 GB).
   setTimeout(() => { try { const cloud = require('./cloud-backup'); if (cloud.enabled()) cloud.pruneAll().then(r => { if (r) console.log('[cloud-backup] limpieza al arrancar:', JSON.stringify(r)); }).catch(() => {}); } catch (e) {} }, 90000);
-  timer = setInterval(() => { safeSnapshot('auto'); }, INTERVAL_MIN * 60 * 1000);
-  console.log('[backup] copias automáticas activas (cada ' + INTERVAL_MIN + ' min). Carpeta:', BACKUP_DIR);
+  timer = setInterval(() => {
+    // De madrugada (02:00–06:00) hay poca actividad: copia solo cada ~30 min en vez de cada 5.
+    const h = new Date().getHours();
+    if (h >= 2 && h < 6) {
+      const lastT = lastOk ? new Date(lastOk.date).getTime() : 0;
+      if (Date.now() - lastT < 29 * 60 * 1000) return;   // ya hay una copia de hace menos de 30 min
+    }
+    safeSnapshot('auto');
+  }, INTERVAL_MIN * 60 * 1000);
+  console.log('[backup] copias automáticas activas (cada ' + INTERVAL_MIN + ' min; de 02:00 a 06:00 cada ~30 min). Carpeta:', BACKUP_DIR);
 }
 
 module.exports = { snapshot, safeSnapshot, list, fileFor, status, start, BACKUP_DIR };

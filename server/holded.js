@@ -195,7 +195,7 @@ async function _rebuildIndex() {
   });
   invoices.forEach(inv => { const e = byId[inv.contact_id]; if (e) e.invoices.push(inv); });
   // Las rectificativas (notas de crédito) van al mismo contacto, para que compensen a su factura.
-  (creditNotes || []).forEach(cn => { const e = byId[cn.contact_id]; if (e) e.invoices.push(cn); });
+  (creditNotes || []).forEach(cn => { const cid = cn.contact_id || cn.contactId || cn.contact || cn.contactID; const e = byId[cid]; if (e) e.invoices.push(cn); });
   // Presupuestos indexados por número (para "tirar del hilo" cuando una factura los referencia).
   // A prueba de fallos: si el token no tiene acceso a presupuestos, se queda vacío y no afecta a nada.
   let estByNum = {};

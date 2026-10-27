@@ -1443,7 +1443,7 @@ on(/^#\/backups$/, async () => {
     const localBar = locMax ? `<div style="max-width:560px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>Copias en el servidor${st.count != null ? ' (' + st.count + ')' : ''}</span><span><b>${fmtSize(locBytes)}</b> de ${fmtSize(locMax)} máx · ${locPct}%</span></div>
       <div style="height:12px;border-radius:999px;background:rgba(0,0,0,.08);overflow:hidden"><div style="height:100%;width:${Math.max(2, locPct)}%;background:${locCol};transition:width .3s"></div></div>
-      <p class="hint" style="margin-top:6px">Se guardan escalonadas (3 h al minuto · 48 h por hora · 30 días por día) y las antiguas se borran solas. Nunca superan el máximo.</p>
+      <p class="hint" style="margin-top:6px">Se guardan escalonadas (2 h al minuto · 48 h cada 30 min · 30 días por día; de 02:00 a 06:00 menos copias) y las antiguas se borran solas. Nunca superan el máximo.</p>
     </div>` : '';
     let cloudBanner = '';
     if (!cfg.enabled) cloudBanner = `<div class="banner" style="margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#EEF2F7;color:#334;border:1px solid #D6DEE8">La copia en la nube está <b>desactivada</b>. Rellena los datos y marca «Activar».</div>`;
