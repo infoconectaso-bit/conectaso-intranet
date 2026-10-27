@@ -79,6 +79,27 @@ async function listEstimates({ maxPages = 50, limit = 200 } = {}) {
   }
   return out;
 }
+/** Lista las FACTURAS RECTIFICATIVAS / NOTAS DE CRÉDITO (tipo de documento aparte en Holded).
+ * Mismo formato que facturas. A prueba de fallos: si el endpoint no existe o el token no tiene
+ * acceso, devuelve [] y no rompe nada. Cada documento se marca con _isCreditNote para tratarlo
+ * siempre como rectificativa (importe en negativo) aunque Holded lo dé en positivo. */
+async function listCreditNotes({ maxPages = 50, limit = 200 } = {}) {
+  const out = [];
+  let cursor = null;
+  try {
+    for (let p = 0; p < maxPages; p++) {
+      const qs = new URLSearchParams({ limit: String(limit) });
+      if (cursor) qs.set('cursor', cursor);
+      const page = await apiGet('/creditnotes?' + qs.toString());
+      const arr = (page && Array.isArray(page.items)) ? page.items : (Array.isArray(page) ? page : (page && page.data) || []);
+      arr.forEach(cn => { if (cn) cn._isCreditNote = true; });
+      out.push(...arr);
+      cursor = page && page.cursor;
+      if (!cursor || (page && page.has_more === false) || !arr.length) break;
+    }
+  } catch (e) { return out; }   // endpoint no disponible: se ignora
+  return out;
+}
 // Número de documento normalizado (para casar "presupuesto nº P-123" con el presupuesto real).
 const normNum = s => String(s || '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
 // Texto-concepto de un documento (factura o presupuesto): descripción, observaciones, líneas, campos.
@@ -159,7 +180,7 @@ function parseAmount(v) {
 }
 
 async function _rebuildIndex() {
-  const [contacts, invoices] = await Promise.all([listContacts(), listInvoices()]);
+  const [contacts, invoices, creditNotes] = await Promise.all([listContacts(), listInvoices(), listCreditNotes()]);
   // Un mismo NIF/email/nombre puede estar en VARIOS contactos (Holded permite duplicados), así que
   // cada clave apunta a una LISTA de contactos y luego se unen sus facturas.
   const byId = {}, byEmail = {}, byNif = {}, byName = {};
@@ -173,12 +194,14 @@ async function _rebuildIndex() {
     if (c.name) push(byName, normName(c.name), c.id);
   });
   invoices.forEach(inv => { const e = byId[inv.contact_id]; if (e) e.invoices.push(inv); });
+  // Las rectificativas (notas de crédito) van al mismo contacto, para que compensen a su factura.
+  (creditNotes || []).forEach(cn => { const e = byId[cn.contact_id]; if (e) e.invoices.push(cn); });
   // Presupuestos indexados por número (para "tirar del hilo" cuando una factura los referencia).
   // A prueba de fallos: si el token no tiene acceso a presupuestos, se queda vacío y no afecta a nada.
   let estByNum = {};
   try { const estimates = await listEstimates(); estimates.forEach(e => { const num = normNum(e.document_number || e.number || e.docNumber); if (num) estByNum[num] = docConcept(e); }); }
   catch (e) { estByNum = {}; }
-  _idx = { byId, byEmail, byNif, byName, estByNum, contactsN: contacts.length, invoicesN: invoices.length, estimatesN: Object.keys(estByNum).length, builtAt: Date.now() };
+  _idx = { byId, byEmail, byNif, byName, estByNum, contactsN: contacts.length, invoicesN: invoices.length, creditNotesN: (creditNotes || []).length, estimatesN: Object.keys(estByNum).length, builtAt: Date.now() };
   _idxAt = Date.now();
   return _idx;
 }
@@ -212,7 +235,8 @@ function mapInvoice(inv) {
   const num = rawNum.toUpperCase();
   const typeStr = String(inv.docType || inv.type || inv.kind || inv.doctype || inv.documentType || '').toLowerCase();
   const isCredit =
-    /(^|[^A-Z0-9])(CN|CR|ABONO|RECT)[-\s]?\d/.test(num) || /^CN/.test(num)
+    inv._isCreditNote === true   // viene del endpoint de notas de crédito de Holded
+    || /(^|[^A-Z0-9])(CN|CR|ABONO|RECT)[-\s]?\d/.test(num) || /^CN/.test(num)
     || /credit|rectific|abono|refund|nota.?credit/.test(typeStr)
     || rawTotal < 0 || rawBase < 0;
   const sgn = isCredit ? -1 : 1;
@@ -380,4 +404,4 @@ async function testPayslips() {
   return { ok: true, probes };
 }
 
-module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listEstimates, estimateConcept, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };
+module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listEstimates, listCreditNotes, estimateConcept, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };

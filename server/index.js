@@ -539,6 +539,8 @@ async function api(req, res, url) {
       }
       const q = String(url.searchParams.get('num') || '').trim().toLowerCase();
       const idx = await holded.buildIndex(url.searchParams.get('refresh') === '1');
+      // Sin número: resumen de qué se ha descargado de Holded (para confirmar rectificativas).
+      if (!q) return ok(res, { contactsN: idx.contactsN, invoicesN: idx.invoicesN, creditNotesN: idx.creditNotesN, estimatesN: idx.estimatesN, builtAt: idx.builtAt });
       const hits = [];
       Object.values(idx.byId).forEach(c => (c.invoices || []).forEach(raw => {
         const num = String(raw.document_number || raw.docNumber || raw.number || '');
