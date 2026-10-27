@@ -1010,6 +1010,31 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   };
   const reloadAccess = async () => { try { const r = await api('events/' + ev.id); ev.accessUsers = r.event.accessUsers; const blk = form.querySelector('.access-block'); if (blk) { blk.outerHTML = accessBlock(ev); wireAccess(); } } catch (e) {} };
   wireAccess();
+  // Aviso NO bloqueante de conflicto de DJ: al asignar un DJ que ya está en otra boda ese día, avisa
+  // (pero NO impide el cambio; si al final queda conflicto, sale en "DJs duplicados" de Inicio).
+  const djSel = form.querySelector('[name="dj_vinculated"]');
+  if (djSel && S.user.role === 'admin') {
+    const setWarn = html => {
+      let w = el('djConflictWarn');
+      if (!html) { if (w) w.remove(); return; }
+      if (!w) { w = document.createElement('div'); w.id = 'djConflictWarn'; w.className = 'alert alert--warn'; w.style.marginTop = '8px'; (djSel.closest('.field') || djSel.parentNode).appendChild(w); }
+      w.innerHTML = html;
+    };
+    const checkDj = async () => {
+      const dj = +djSel.value; setWarn('');
+      if (!dj) return;
+      const dEl = form.querySelector('[name="wedding_date"]');
+      const date = (((dEl && dEl.value) || ev.fecha) || '').slice(0, 10);
+      if (!date) return;
+      try {
+        const r = await api('dj-check?dj=' + dj + '&date=' + encodeURIComponent(date) + '&ev=' + ev.id);
+        const cf = (r && r.conflicts) || [];
+        if (cf.length) setWarn('⚠ <b>' + esc(r.workerName || 'Ese DJ') + '</b> ya está ese día en ' + cf.map(c => `<a href="#/eventos/${c.id}">#${c.id}</a>${c.conyuges ? ' ' + esc(c.conyuges) : ''}`).join(', ') + '. Puedes asignarlo igualmente; si queda doble, lo verás en «DJs duplicados» de Inicio.');
+      } catch (e) {}
+    };
+    djSel.addEventListener('change', checkDj);
+    checkDj();   // avisa también al abrir la ficha si ya hay conflicto
+  }
   // botones de pago (pasarela Holded, pendiente de conectar): total o en 2 plazos
   const payPend = (ev.pago && ev.pago.pendiente) || 0;
   const payFirst = Math.round(payPend * 50) / 100;

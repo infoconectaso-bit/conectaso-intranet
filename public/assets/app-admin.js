@@ -1112,8 +1112,9 @@ async function renderNominas(uid, admin, workers) {
       <table class="dt"><thead><tr><th>Mes</th><th>Archivo</th><th></th></tr></thead><tbody>
       ${byYear[y].sort((a, b) => (b.period || '').localeCompare(a.period || '')).map(f => { const mm = +(f.period || '').slice(5, 7); const mn = mm ? NOM_MESES[mm - 1] : (f.period || '—'); return `<tr><td>${esc(mn)}</td><td>${esc(f.name)}</td><td style="text-align:right"><a class="btn btn--sm" href="/api/files/${f.id}" target="_blank">Ver / descargar</a>${admin ? ` <button class="btn btn--sm btn--red" data-delnom="${f.id}">Borrar</button>` : ''}</td></tr>`; }).join('')}
       </tbody></table></div></div>`).join('') : '<div class="empty"><span class="script">Sin nóminas</span>Aún no hay nóminas subidas.</div>';
+  const holdedSync = admin ? `<div class="btn-row" style="margin-bottom:14px"><a class="btn" href="/api/holded-payslip-sync" target="_blank" rel="noopener">⬇ Sincronizar nóminas desde Holded</a> <span class="hint">Trae de Holded las nóminas que falten (p. ej. la de Damaris de julio). Primero te muestra una <b>prueba</b> con lo que cuadra; luego confirmas la descarga. Las que ya están no se duplican.</span></div>` : '';
   shell(`${pageHead('Nóminas', admin ? 'Sube y consulta las nóminas del equipo (PDF), por año y mes.' : 'Tus nóminas, por año y mes. Puedes verlas y descargarlas.')}
-    ${workerSel}${uploadForm}${list}`, ['Nóminas']);
+    ${holdedSync}${workerSel}${uploadForm}${list}`, ['Nóminas']);
   const ws = el('nomWorker'); if (ws) ws.onchange = () => renderNominas(+ws.value, admin, workers);
   const uf = el('nomUpload');
   if (uf) uf.onsubmit = async e => {

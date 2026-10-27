@@ -467,7 +467,7 @@ async function api(req, res, url) {
   if (seg[0] === 'tyc') return tycApi(req, res, user, seg, method);
 
   // --- avisos del panel de inicio (admin) ---
-  if (['price-alerts', 'vacation-conflicts', 'itv-alerts', 'staff-conflicts', 'price-fix', 'dup-ack', 'salary-matrix', 'fotomaton'].includes(seg[0])) return dashboardAlerts(req, res, user, seg, method);
+  if (['price-alerts', 'vacation-conflicts', 'itv-alerts', 'staff-conflicts', 'price-fix', 'dup-ack', 'salary-matrix', 'fotomaton', 'dj-check'].includes(seg[0])) return dashboardAlerts(req, res, user, seg, method);
 
   // --- solicitudes de servicios extras (admin) ---
   if (seg[0] === 'extra-requests') return extraRequestsApi(req, res, user);
@@ -1886,6 +1886,24 @@ function salaryMatrix() {
 async function dashboardAlerts(req, res, user, seg, method) {
   if (!user || user.role !== 'admin') return fail(res, 403, 'Sin acceso');
   if (seg[0] === 'staff-conflicts') return ok(res, staffConflicts());
+  // Aviso NO bloqueante al asignar un DJ: ¿ya está ese día en otra boda? (solo informa)
+  if (seg[0] === 'dj-check' && method === 'GET') {
+    const _q = new URL(req.url, 'http://localhost').searchParams;
+    const dj = +_q.get('dj') || 0;
+    const date = String(_q.get('date') || '').slice(0, 10);
+    const exEv = +_q.get('ev') || 0;
+    if (!dj || !date) return ok(res, { conflicts: [] });
+    if (MULTI_SAMEDAY_OK[String(dj)]) return ok(res, { conflicts: [] });       // puede hacer 2/día siempre
+    const wu = users.get(dj); if (wu && wu.role === 'planner') return ok(res, { conflicts: [] });
+    const out = [];
+    store.all('events').forEach(e => {
+      if (+e.id === exEv) return;
+      if (String(e.fecha || '').slice(0, 10) !== date) return;
+      const on = (+e.djId === dj) || (e.services || []).some(s => +s.resp === dj || +s.resp2 === dj);
+      if (on) out.push({ id: e.id, conyuges: e.conyuges || '', lugar: (store.get('locations', e.lugar) || {}).name || e.lugarOtro || '' });
+    });
+    return ok(res, { conflicts: out, workerName: uName(dj) });
+  }
   if (seg[0] === 'fotomaton' && method === 'GET') return ok(res, fotomatonList());
   if (seg[0] === 'vacation-conflicts') return ok(res, vacationConflicts());
   if (seg[0] === 'itv-alerts') return ok(res, itvAlerts());
