@@ -53,8 +53,10 @@ async function accessToken() {
   const j = await tokenRequest(new URLSearchParams({ grant_type: 'refresh_token', refresh_token: c.refreshToken }));
   _access = { token: j.access_token, exp: Date.now() + ((j.expires_in || 3600) - 60) * 1000 };
   if (j.refresh_token && j.refresh_token !== c.refreshToken) saveConfig({ refreshToken: j.refresh_token });
+  if (j.scope != null) saveConfig({ scope: j.scope });   // el refresco también informa del scope real del token
   return _access.token;
 }
+function forceRefresh() { _access = null; }   // obliga a pedir un token nuevo (para diagnóstico)
 function disconnect() { _access = null; saveConfig({ refreshToken: '', account: '', enabled: false }); }
 
 /* ---------- API con reintentos (rate-limit 429, 5xx) ---------- */
@@ -214,7 +216,7 @@ async function unfollowPlaylist(id) { return spFetch('DELETE', '/playlists/' + i
 
 module.exports = {
   DEFAULT_CLIENT_ID, SCOPES, getConfig, saveConfig, configured, connected,
-  authUrl, exchangeCode, accessToken, disconnect,
+  authUrl, exchangeCode, accessToken, disconnect, forceRefresh,
   me, search, getTrack, toItem, resolveItem, score, norm,
   createPlaylist, updateDetails, replaceTracks, playlistExists, unfollowPlaylist,
 };

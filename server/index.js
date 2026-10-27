@@ -568,7 +568,9 @@ async function api(req, res, url) {
   if (seg[0] === 'spotify' && seg[1] === 'diag' && method === 'GET') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     if (!spotify.connected()) return ok(res, { connected: false });
-    const out = { connected: true, scope: spotify.getConfig().scope || '(desconocido)' };
+    const out = { connected: true, ver: 'diag3', requested: spotify.SCOPES };
+    try { spotify.forceRefresh(); await spotify.accessToken(); } catch (e) { out.refreshError = e.message; }
+    out.scope = spotify.getConfig().scope || '(desconocido)';
     try { const m = await spotify.me(); out.account = { id: m.id, name: m.display_name, product: m.product }; out.meOk = true; }
     catch (e) { out.meOk = false; out.meError = e.message; out.meStatus = e.status; return ok(res, out); }
     try {
