@@ -200,15 +200,18 @@ async function resolveItem(it) {
 }
 
 /* ---------- Playlists ---------- */
+// NOTA: desde el cambio de la API de Spotify de feb-2026, las apps en "Development mode" DEBEN usar
+// los endpoints nuevos (/me/playlists y /playlists/{id}/items); los antiguos (/users/{id}/playlists y
+// /playlists/{id}/tracks) devuelven 403. Ref: developer.spotify.com .../february-2026-migration-guide
 async function createPlaylist(userId, name, description, isPublic) {
-  return apiPost('/users/' + encodeURIComponent(userId) + '/playlists', { name: String(name).slice(0, 100), description: String(description || '').slice(0, 300), public: !!isPublic });
+  return apiPost('/me/playlists', { name: String(name).slice(0, 100), description: String(description || '').slice(0, 300), public: !!isPublic });
 }
 async function updateDetails(playlistId, patch) { return apiPut('/playlists/' + playlistId, patch); }
 // Reemplaza TODAS las pistas de la playlist por las indicadas (hasta 100 por llamada).
 async function replaceTracks(playlistId, uris) {
   const first = uris.slice(0, 100);
-  await apiPut('/playlists/' + playlistId + '/tracks', { uris: first });
-  for (let i = 100; i < uris.length; i += 100) await apiPost('/playlists/' + playlistId + '/tracks', { uris: uris.slice(i, i + 100) });
+  await apiPut('/playlists/' + playlistId + '/items', { uris: first });
+  for (let i = 100; i < uris.length; i += 100) await apiPost('/playlists/' + playlistId + '/items', { uris: uris.slice(i, i + 100) });
 }
 async function playlistExists(id) { try { await apiGet('/playlists/' + id + '?fields=id'); return true; } catch (e) { return false; } }
 async function unfollowPlaylist(id) { return spFetch('DELETE', '/playlists/' + id + '/followers'); }
