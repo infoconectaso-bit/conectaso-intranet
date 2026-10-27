@@ -576,6 +576,7 @@ async function api(req, res, url) {
   if (seg[0] === 'spotify' && seg[1] === 'callback' && method === 'GET') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     const q = new URL(req.url, 'http://localhost').searchParams;
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const page = (title, msg, ok2) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui,sans-serif;background:#0c0910;color:#fff;display:grid;place-items:center;height:100vh;margin:0;text-align:center"><div style="max-width:420px;padding:24px"><div style="font-size:42px">${ok2 ? '✅' : '⚠️'}</div><h1 style="font-size:22px">${title}</h1><p style="color:#cfc7d6">${msg}</p><a href="/" style="display:inline-block;margin-top:14px;background:#1db954;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:700">Volver a la intranet</a></div></body>`); };
     if (q.get('error')) return page('No se pudo conectar', 'Spotify rechazó el acceso: ' + esc(q.get('error')) + '.', false);
     const st = store.setting('spotifyState') || {};
