@@ -15,7 +15,7 @@ const TOKEN = 'https://accounts.spotify.com/api/token';
 const API = 'https://api.spotify.com/v1';
 const SCOPES = 'playlist-modify-private playlist-modify-public';
 
-function getConfig() { const c = store.setting('spotifyConfig') || {}; return { enabled: !!c.enabled, clientId: c.clientId || DEFAULT_CLIENT_ID, clientSecret: c.clientSecret || '', refreshToken: c.refreshToken || '', account: c.account || '', redirect: c.redirect || '' }; }
+function getConfig() { const c = store.setting('spotifyConfig') || {}; return { enabled: !!c.enabled, clientId: c.clientId || DEFAULT_CLIENT_ID, clientSecret: c.clientSecret || '', refreshToken: c.refreshToken || '', account: c.account || '', accountId: c.accountId || '', redirect: c.redirect || '', scope: c.scope || '' }; }
 function saveConfig(patch) { const c = store.setting('spotifyConfig') || {}; store.setSetting('spotifyConfig', Object.assign({}, c, patch)); }
 // "configurado" = tiene ID y secreto; "conectado" = además tiene refresh_token (cuenta autorizada).
 function configured() { const c = getConfig(); return !!(c.clientId && c.clientSecret); }
