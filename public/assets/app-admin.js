@@ -1777,7 +1777,17 @@ on(/^#\/cuenta$/, async () => {
            <div class="field"><label>Token de API de Holded</label><input class="control" type="password" id="hdApiKey" autocomplete="off" placeholder="(pega aquí el token)"></div>
            <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Guardar</button> <button type="button" class="btn" id="hdTest">Probar conexión</button></div>
          </form>
-         <div id="holdedCfgMsg" style="margin-top:10px;display:none;font-size:13px"></div>`
+         <div id="holdedCfgMsg" style="margin-top:10px;display:none;font-size:13px"></div>
+         <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
+         <h4 style="margin:0 0 6px">🛠 Modo mantenimiento</h4>
+         <p class="hint" style="margin-bottom:12px">Al activarlo, <b>todos</b> (novios, DJs y wedding planners) ven la pantalla de "En mantenimiento". <b>Tú y el resto de administración seguís entrando con normalidad</b> para hacer los cambios. Actívalo antes de una actualización y desactívalo al terminar.</p>
+         <div id="mntState" style="margin-bottom:12px"></div>
+         <form id="mntForm" style="max-width:520px">
+           <label class="chk" style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><input type="checkbox" id="mntOn"> <span>Modo mantenimiento <b>activado</b></span></label>
+           <div class="field"><label>Mensaje para el cliente <span class="muted">(opcional; si lo dejas vacío, sale el mensaje por defecto)</span></label><textarea class="control" id="mntMsg" rows="2" maxlength="300" placeholder="Estamos pinchando los últimos ajustes para que todo suene perfecto. Dale al play en un momento. 🎧"></textarea></div>
+           <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Guardar</button> <button type="button" class="btn" id="mntPreview">👁 Previsualizar pantalla</button></div>
+         </form>
+         <div id="mntMsgOut" style="margin-top:10px;display:none;font-size:13px"></div>`
       : `<form id="advForm" style="max-width:420px"><div class="field"><label>Contraseña</label><input class="control" type="password" id="advPass" autocomplete="off"></div>
           <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn--primary">Desbloquear</button>
           <button type="button" class="btn btn--sm" id="advForgot">¿Olvidaste la contraseña?</button></div></form>
@@ -1909,6 +1919,37 @@ on(/^#\/cuenta$/, async () => {
         const r = await api('holded-test', { method: 'POST', body: {} });
         m.innerHTML = r.ok ? '✅ Conexión correcta con Holded.' : '<span style="color:#d9534f;font-weight:700">No conecta: ' + esc(r.error || '') + '</span>';
       } catch (err) { m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>'; }
+    };
+  }
+  const mntForm = el('mntForm');
+  if (mntForm) {
+    const stateBox = el('mntState'), onBox = el('mntOn'), msgBox = el('mntMsg');
+    const paint = st => { if (!stateBox) return; stateBox.innerHTML = (st && st.on)
+      ? '<div class="banner" style="padding:10px 14px;border-radius:10px;background:#FDECEA;color:#B71C1C;border:1px solid #F5C6CB"><b>🛠 Modo mantenimiento ACTIVO ahora mismo.</b> Los clientes ven la pantalla; administración entra con normalidad.</div>'
+      : '<div class="banner" style="padding:10px 14px;border-radius:10px;background:#E8F5E9;color:#1B5E20;border:1px solid #BEE3C2">✅ Intranet abierta con normalidad (mantenimiento desactivado).</div>'; };
+    api('maintenance').then(st => { if (onBox) onBox.checked = !!st.on; if (msgBox && st.msg) msgBox.value = st.msg; paint(st); }).catch(() => {});
+    mntForm.onsubmit = async e => {
+      e.preventDefault();
+      const on = !!(onBox && onBox.checked); const msg = ((msgBox && msgBox.value) || '').trim();
+      const out = el('mntMsgOut'); if (out) { out.style.display = 'block'; out.textContent = 'Guardando…'; }
+      try {
+        const st = await api('maintenance', { method: 'POST', body: { on, msg } });
+        paint(st);
+        if (out) out.innerHTML = st.on ? '🛠 <b>Mantenimiento activado.</b> Ahora los clientes ven la pantalla; tú sigues entrando con normalidad.' : '✅ <b>Mantenimiento desactivado.</b> Todo vuelve a la normalidad.';
+        toast(st.on ? 'Modo mantenimiento activado' : 'Modo mantenimiento desactivado', 'ok');
+      } catch (err) { if (out) out.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message) + '</span>'; }
+    };
+    const prev = el('mntPreview');
+    if (prev) prev.onclick = () => {
+      const msg = ((msgBox && msgBox.value) || '').trim();
+      const holder = document.createElement('div'); holder.innerHTML = CS.maintenanceMarkup(msg);
+      const root = holder.firstElementChild; if (!root) return;
+      const close = document.createElement('button'); close.textContent = '✕ Cerrar vista previa';
+      close.style.cssText = 'position:fixed;top:16px;right:16px;z-index:100000;background:#fff;color:#130F17;border:0;border-radius:999px;padding:10px 16px;font-weight:800;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.35)';
+      document.body.appendChild(root); document.body.appendChild(close);
+      const done = () => { root.remove(); close.remove(); };
+      close.onclick = done;
+      const btn = root.querySelector('#mReload'); if (btn) btn.onclick = done;
     };
   }
   const tmForm = el('testMailForm');

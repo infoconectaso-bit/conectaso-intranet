@@ -486,13 +486,24 @@ async function afterLogin() {
   // Primero ofrecemos Face ID (si procede); si no, el aviso de instalar la app. Nunca los dos a la vez.
   setTimeout(() => { if (!maybeFaceIdPrompt()) maybeInstallPrompt(); }, 1400);
 }
+function maintenanceMarkup(msg) {
+  const m = esc(msg || 'Estamos pinchando los últimos ajustes para que todo suene perfecto. Dale al play en un momento. 🎧');
+  return `<div class="mnt">
+    <div class="mnt__bg"></div><div class="mnt__grain"></div>
+    <div class="mnt__wrap">
+      <img class="mnt__logo" src="/assets/brand/logo-principal-blanco.svg" alt="Conecta So" onerror="this.style.display='none'">
+      <div class="mnt__eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="mnt__kick"><b></b>En mantenimiento</div>
+      <h1 class="mnt__h1">Volvemos<br><span>en un beat</span></h1>
+      <p class="mnt__sub">${m}</p>
+      <button class="mnt__btn" id="mReload">↻ Reintentar</button>
+      <div class="mnt__foot">conectaso.es&nbsp;&nbsp;·&nbsp;&nbsp;info@conectaso.es</div>
+    </div>
+  </div>`;
+}
 function renderMaintenance() {
   removeSpotlight();
-  app.innerHTML = authShell(`
-    <h1>🛠 En mantenimiento</h1>
-    <div class="sub">${esc((S.maintenance && S.maintenance.msg) || 'Estamos haciendo una actualización. Volvemos enseguida.')}</div>
-    <p class="hint" style="margin-top:14px">Gracias por tu paciencia. Si es urgente, escríbenos a <b>info@conectaso.es</b>.</p>
-    <button class="btn btn--primary btn--block" id="mReload" style="margin-top:16px">Reintentar</button>`);
+  app.innerHTML = maintenanceMarkup((S.maintenance && S.maintenance.msg) || '');
   const r = el('mReload'); if (r) r.onclick = () => location.reload();
 }
 function renderForgot() {
@@ -1021,7 +1032,7 @@ function eventMiniList(list) {
 /* El resto de páginas se cargan desde módulos añadidos abajo */
 window.__CS = { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
   estado, locName, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, tycTitleYear, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$,
-  waSupported, passkeyRegister, passkeyLogin };
+  waSupported, passkeyRegister, passkeyLogin, maintenanceMarkup };
 
 boot();
 })();

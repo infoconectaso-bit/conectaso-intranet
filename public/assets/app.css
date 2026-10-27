@@ -1049,3 +1049,25 @@ table.dt tbody tr.row-no td:first-child{box-shadow:inset 5px 0 0 #c01818}
 /* Tarjeta de descarga de fotos del fotomatón (vista de la pareja) */
 .foto-dl{background:linear-gradient(180deg,#fff,#fdf2f8);border:1px solid #f3cfe3}
 .foto-dl h4{color:#E82C88}
+
+/* ===== Pantalla "En mantenimiento" (temática DJ, oscura + neón) ===== */
+.mnt{position:fixed;inset:0;z-index:99999;background:#0c0910;color:#fff;overflow:hidden;display:flex;align-items:center;justify-content:center;font-family:"Archivo","Inter",system-ui,-apple-system,"Segoe UI",sans-serif}
+.mnt__bg{position:absolute;inset:0;background:radial-gradient(55% 45% at 50% -5%,rgba(232,44,136,.40),transparent 70%),radial-gradient(45% 40% at 85% 108%,rgba(232,44,136,.22),transparent 70%),radial-gradient(40% 40% at 10% 90%,rgba(120,60,255,.16),transparent 70%);animation:mntPulse 6s ease-in-out infinite}
+.mnt__grain{position:absolute;inset:0;opacity:.05;background-image:radial-gradient(#fff 1px,transparent 1px);background-size:3px 3px;mix-blend-mode:overlay}
+@keyframes mntPulse{0%,100%{opacity:.85;transform:scale(1)}50%{opacity:1;transform:scale(1.04)}}
+.mnt__wrap{position:relative;text-align:center;padding:40px 22px;max-width:760px}
+.mnt__logo{height:40px;width:auto;margin-bottom:34px;opacity:.96}
+.mnt__eq{display:flex;gap:7px;justify-content:center;align-items:flex-end;height:52px;margin-bottom:26px}
+.mnt__eq i{width:8px;border-radius:5px;background:linear-gradient(180deg,#ff6cbb,#E82C88);box-shadow:0 0 14px rgba(232,44,136,.7);animation:mntBar 900ms ease-in-out infinite}
+.mnt__eq i:nth-child(1){animation-delay:-200ms}.mnt__eq i:nth-child(2){animation-delay:-500ms}.mnt__eq i:nth-child(3){animation-delay:-100ms}.mnt__eq i:nth-child(4){animation-delay:-700ms}.mnt__eq i:nth-child(5){animation-delay:-350ms}.mnt__eq i:nth-child(6){animation-delay:-600ms}.mnt__eq i:nth-child(7){animation-delay:-50ms}
+@keyframes mntBar{0%,100%{height:12px;opacity:.75}50%{height:52px;opacity:1}}
+.mnt__kick{display:inline-block;font-size:12.5px;letter-spacing:4px;font-weight:800;color:#E82C88;text-transform:uppercase;margin-bottom:18px}
+.mnt__kick b{display:inline-block;width:8px;height:8px;border-radius:50%;background:#E82C88;box-shadow:0 0 10px #E82C88;margin-right:8px;vertical-align:middle;animation:mntBlink 1.2s ease-in-out infinite}
+@keyframes mntBlink{0%,100%{opacity:1}50%{opacity:.25}}
+.mnt__h1{font-size:clamp(46px,11vw,104px);line-height:.9;font-weight:900;letter-spacing:-3px;margin:0 0 20px;text-transform:uppercase}
+.mnt__h1 span{color:#E82C88;text-shadow:0 0 34px rgba(232,44,136,.55)}
+.mnt__sub{font-size:17.5px;line-height:1.6;color:#d4ccdd;max-width:480px;margin:0 auto 30px}
+.mnt__btn{appearance:none;cursor:pointer;background:#E82C88;color:#fff;border:0;font-weight:800;font-size:15px;letter-spacing:.3px;padding:15px 30px;border-radius:999px;box-shadow:0 10px 30px rgba(232,44,136,.45);transition:transform .15s ease,box-shadow .15s ease}
+.mnt__btn:hover{transform:translateY(-2px);box-shadow:0 14px 38px rgba(232,44,136,.6)}
+.mnt__foot{margin-top:34px;font-size:12px;letter-spacing:1.5px;color:#7b7486;text-transform:uppercase}
+@media(max-width:520px){.mnt__h1{letter-spacing:-1.5px}.mnt__sub{font-size:16px}}
