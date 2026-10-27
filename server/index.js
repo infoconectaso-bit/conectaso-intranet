@@ -515,6 +515,28 @@ async function api(req, res, url) {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     if (!holded.enabled()) return ok(res, { enabled: false });
     try {
+      // ?event=<id>: muestra las facturas que el sistema asocia a esa boda, con su signo y si es
+      // rectificativa, igual que la pestaña de facturación del evento. Para entender el 300/150.
+      const evParam = url.searchParams.get('event');
+      if (evParam) {
+        const ev = store.get('events', +evParam);
+        if (!ev) return ok(res, { error: 'No existe la boda #' + evParam });
+        const emails = [], nifs = [], names = [];
+        const pushU = uid => { const u = users.get(uid); if (u && u.email) emails.push(u.email); };
+        if (ev.userId) pushU(ev.userId);
+        (ev.coUsers || []).forEach(pushU);
+        (ev.spouses || []).forEach(s => { if (s && s.email) emails.push(s.email); if (s && s.dni) nifs.push(s.dni); if (s && s.name) names.push(s.name); });
+        if (ev.conyuges) String(ev.conyuges).split(/\s+y\s+|&/i).forEach(n => { const t = n.trim(); if (t) names.push(t); });
+        const force = url.searchParams.get('refresh') === '1';
+        const r = await holded.invoicesForClient({ emails, nifs, names }, force, { includeName: true });
+        let invoices = r.invoices.slice();
+        const links = store.setting('invoiceLinks') || {};
+        const linkedIds = Object.keys(links).filter(k => +links[k] === +evParam);
+        if (linkedIds.length) { try { const extra = await holded.invoicesByIds(linkedIds, force); const have = new Set(invoices.map(i => String(i.id))); extra.forEach(i => { if (!have.has(String(i.id))) { i.linked = true; invoices.push(i); } }); } catch (e) {} }
+        const rows = invoices.map(i => ({ number: i.number, credit: i.credit, base: i.total, totalConIva: i.totalConIva, paid: i.paid, pending: i.pending, status: i.status }));
+        const sum = invoices.reduce((a, i) => ({ base: a.base + i.total, paid: a.paid + i.paid }), { base: 0, paid: 0 });
+        return ok(res, { event: +evParam, conyuges: ev.conyuges || '', matchedBy: r.matchedBy, contact: r.contact, apuntado_pagado: +ev.pagado || 0, apuntado_total: +ev.pagoCliente || 0, holded_base: Math.round(sum.base * 100) / 100, holded_pagado: Math.round(sum.paid * 100) / 100, rows });
+      }
       const q = String(url.searchParams.get('num') || '').trim().toLowerCase();
       const idx = await holded.buildIndex(url.searchParams.get('refresh') === '1');
       const hits = [];
