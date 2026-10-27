@@ -24,7 +24,9 @@ function connected() { const c = getConfig(); return !!(c.clientId && c.clientSe
 /* ---------- OAuth ---------- */
 function authUrl(redirect, state) {
   const c = getConfig();
-  const p = new URLSearchParams({ response_type: 'code', client_id: c.clientId, scope: SCOPES, redirect_uri: redirect, state: state || '' });
+  // show_dialog=true fuerza a Spotify a volver a pedir el consentimiento (con los permisos actuales),
+  // evitando que se reutilice una autorización antigua sin los permisos de crear playlists.
+  const p = new URLSearchParams({ response_type: 'code', client_id: c.clientId, scope: SCOPES, redirect_uri: redirect, state: state || '', show_dialog: 'true' });
   return AUTH + '?' + p.toString();
 }
 async function tokenRequest(body) {
@@ -40,8 +42,8 @@ async function exchangeCode(code, redirect) {
   const j = await tokenRequest(new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirect }));
   if (!j.refresh_token) throw new Error('Spotify no devolvió refresh_token.');
   _access = { token: j.access_token, exp: Date.now() + (j.expires_in - 60) * 1000 };
-  saveConfig({ refreshToken: j.refresh_token, enabled: true });
-  try { const me = await apiGet('/me'); saveConfig({ account: me.display_name || me.id || '' }); return me; } catch (e) { return null; }
+  saveConfig({ refreshToken: j.refresh_token, enabled: true, scope: j.scope || '' });
+  try { const me = await apiGet('/me'); saveConfig({ account: me.display_name || me.id || '', accountId: me.id || '' }); return me; } catch (e) { return null; }
 }
 let _access = null;   // { token, exp } en memoria
 async function accessToken() {
@@ -208,10 +210,11 @@ async function replaceTracks(playlistId, uris) {
   for (let i = 100; i < uris.length; i += 100) await apiPost('/playlists/' + playlistId + '/tracks', { uris: uris.slice(i, i + 100) });
 }
 async function playlistExists(id) { try { await apiGet('/playlists/' + id + '?fields=id'); return true; } catch (e) { return false; } }
+async function unfollowPlaylist(id) { return spFetch('DELETE', '/playlists/' + id + '/followers'); }
 
 module.exports = {
   DEFAULT_CLIENT_ID, SCOPES, getConfig, saveConfig, configured, connected,
   authUrl, exchangeCode, accessToken, disconnect,
   me, search, getTrack, toItem, resolveItem, score, norm,
-  createPlaylist, updateDetails, replaceTracks, playlistExists,
+  createPlaylist, updateDetails, replaceTracks, playlistExists, unfollowPlaylist,
 };
