@@ -568,16 +568,16 @@ async function api(req, res, url) {
   if (seg[0] === 'spotify' && seg[1] === 'diag' && method === 'GET') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     if (!spotify.connected()) return ok(res, { connected: false });
-    const out = { connected: true, ver: 'diag3', requested: spotify.SCOPES };
+    const out = { connected: true, ver: 'diag4', requested: spotify.SCOPES };
     try { spotify.forceRefresh(); await spotify.accessToken(); } catch (e) { out.refreshError = e.message; }
     out.scope = spotify.getConfig().scope || '(desconocido)';
-    try { const m = await spotify.me(); out.account = { id: m.id, name: m.display_name, product: m.product }; out.meOk = true; }
+    try { const m = await spotify.me(); out.account = { id: m.id, name: m.display_name, product: m.product, email: m.email || '(no visible; reconecta para verlo)', country: m.country }; out.meOk = true; }
     catch (e) { out.meOk = false; out.meError = e.message; out.meStatus = e.status; return ok(res, out); }
     try {
       const pl = await spotify.createPlaylist(out.account.id, 'Prueba Conecta (se borra sola)', 'test', false);
       out.createOk = true;
       try { await spotify.unfollowPlaylist(pl.id); out.cleaned = true; } catch (e) { out.cleaned = false; }
-    } catch (e) { out.createOk = false; out.createError = e.message; out.createStatus = e.status; }
+    } catch (e) { out.createOk = false; out.createError = e.message; out.createStatus = e.status; out.createRaw = (e.raw || '').slice(0, 300); }
     return ok(res, out);
   }
   if (seg[0] === 'spotify' && seg[1] === 'auth' && method === 'GET') {

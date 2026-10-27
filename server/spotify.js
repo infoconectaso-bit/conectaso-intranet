@@ -13,7 +13,7 @@ const DEFAULT_CLIENT_ID = 'a5c8f1a344494988ad9d39187b040eb2';
 const AUTH = 'https://accounts.spotify.com/authorize';
 const TOKEN = 'https://accounts.spotify.com/api/token';
 const API = 'https://api.spotify.com/v1';
-const SCOPES = 'playlist-modify-private playlist-modify-public';
+const SCOPES = 'playlist-modify-private playlist-modify-public user-read-email';
 
 function getConfig() { const c = store.setting('spotifyConfig') || {}; return { enabled: !!c.enabled, clientId: c.clientId || DEFAULT_CLIENT_ID, clientSecret: c.clientSecret || '', refreshToken: c.refreshToken || '', account: c.account || '', accountId: c.accountId || '', redirect: c.redirect || '', scope: c.scope || '' }; }
 function saveConfig(patch) { const c = store.setting('spotifyConfig') || {}; store.setSetting('spotifyConfig', Object.assign({}, c, patch)); }
@@ -73,8 +73,7 @@ async function spFetch(method, path, body) {
     const txt = await r.text(); let j = null; try { j = txt ? JSON.parse(txt) : null; } catch (e) { j = null; }
     if (!r.ok) {
       let base = (j && j.error && (j.error.message || j.error)) || r.statusText || ('HTTP ' + r.status);
-      if (r.status === 403) base += ' — la cuenta conectada debe ser la DUEÑA de la app de Spotify o estar añadida en "User Management" del panel de developer.spotify.com';
-      const e = new Error(base + ' (HTTP ' + r.status + ')'); e.status = r.status; throw e;
+      const e = new Error(base + ' (HTTP ' + r.status + ')'); e.status = r.status; e.raw = txt; throw e;
     }
     return j;
   }
