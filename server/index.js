@@ -858,6 +858,8 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       const MESES = { enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12, ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, sep: 9, set: 9, oct: 10, nov: 11, dic: 12, gener: 1, febrer: 2, marc: 3, maig: 5, juny: 6, juliol: 7, agost: 8, setembre: 9, novembre: 11, desembre: 12 };
       const parseConceptDate = txt => {
         let m = txt.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/); if (m) { let y = +m[3]; if (y < 100) y += 2000; return y + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); }
+        // Formato pegado "26/0627" o "26/062026": día / mes(2) + año(2 o 4) juntos, sin segunda barra.
+        m = txt.match(/\b(\d{1,2})[\/\-.](\d{2})(\d{2}|\d{4})\b/); if (m) { const mo = +m[2]; if (mo >= 1 && mo <= 12) { let y = +m[3]; if (y < 100) y += 2000; return y + '-' + String(mo).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); } }
         m = txt.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/); if (m) return m[1] + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[3]).padStart(2, '0');
         // "24 de octubre de 2026", "24 octubre 2026", "24 oct 2026", "24 d'octubre de 2026"
         m = normNm(txt).match(/\b(\d{1,2})\s*(?:de\s+|d\s*)?([a-z]+)\.?\s*(?:de\s+|del\s+)?(\d{4})\b/);
@@ -903,6 +905,13 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         if (!ev && c.vat_number) ev = evByKey['n:' + normN(c.vat_number)];
         if (!ev && c.name) ev = evByKey['m:' + normNm(c.name)];
         const company = isCompany(c);
+        // Boda(s) a las que están vinculadas las facturas de este cliente (por contacto o a mano).
+        // Si solo hay UNA, una CN (rectificativa) sin vincular se netea igualmente en esa boda: así
+        // +300 y una CN de −150 cuadran aunque la CN no se haya vinculado a mano.
+        const linkOf = raw => links[raw.id] || (ev && ev.id) || null;
+        const linkedEvents = new Set();
+        (c.invoices || []).forEach(raw => { const e = linkOf(raw); if (e) linkedEvents.add(String(e)); });
+        const soleEvent = linkedEvents.size === 1 ? +[...linkedEvents][0] : null;
         (c.invoices || []).forEach(raw => {
           totalInv++;
           const inv = holded.mapInvoice(raw);
@@ -918,17 +927,16 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
               if (wdate && wdate >= _hoy) serviceWarnings.push({ number: inv.number, date: inv.date, wdate, contact: c.name || '', services: unknown, invId: inv.id, total: inv.total });
             }
           }
-          if (ev || links[raw.id]) {   // vinculada (auto o manual): acumula la base (sin IVA) por evento
+          let evId = links[raw.id] || (ev && ev.id) || null;
+          if (!evId && inv.credit && soleEvent) evId = soleEvent;   // CN suelta → se netea en la única boda del cliente
+          if (evId) {   // vinculada (auto, manual o CN heredada): acumula la base (sin IVA) por evento
             linkedInv++;
-            const evId = links[raw.id] || (ev && ev.id);
-            if (evId) {
-              const pe = (payByEvent[evId] = payByEvent[evId] || { base: 0, paid: 0, invs: [] });
-              // La base ya es con signo (la CN es negativa). Para el PAGADO, una rectificativa (CN) RESTA
-              // su importe: si Holded marca 300 pagado y hay una CN de −150, el pagado real son 150.
-              pe.base += inv.total;
-              pe.paid += inv.credit ? inv.total : inv.paid;
-              if (inv.number) pe.invs.push(inv.number);
-            }
+            const pe = (payByEvent[evId] = payByEvent[evId] || { base: 0, paid: 0, invs: [] });
+            // La base ya es con signo (la CN es negativa). Para el PAGADO, una rectificativa (CN) RESTA
+            // su importe: si Holded marca 300 pagado y hay una CN de −150, el pagado real son 150.
+            pe.base += inv.total;
+            pe.paid += inv.credit ? inv.total : inv.paid;
+            if (inv.number) pe.invs.push(inv.number);
             return;
           }
           if (inv.credit) return;   // rectificativa (CN, negativa) sin vincular: no se persigue en esta lista (se netea en el pago de su boda)
