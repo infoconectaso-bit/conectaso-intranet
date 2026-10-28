@@ -54,7 +54,7 @@ function sanitizeEvent(user, ev) {
   return out;
 }
 
-const EVENT_SUMMARY = ['id', 'tipo', 'conyuges', 'fecha', 'hora', 'lugar', 'lugarOtro', 'estado', 'metodo', 'pagoCliente', 'pagado',
+const EVENT_SUMMARY = ['id', 'unpaidIgnored', 'tipo', 'conyuges', 'fecha', 'hora', 'lugar', 'lugarOtro', 'estado', 'metodo', 'pagoCliente', 'pagado',
   'userId', 'coUsers', 'services', 'djId', 'wpId', 'editUser', 'guests', 'vehicleId'];
 function summarizeEvent(user, ev) {
   const s = {};

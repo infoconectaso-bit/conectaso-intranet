@@ -220,9 +220,15 @@ async function eventsList(done) {
     else if (DONE_VIEW.sel !== 'all') evs = evs.filter(e => (e.fecha || '').slice(0, 4) === DONE_VIEW.sel);
     const chip = (v, lab) => `<button type="button" class="yrchip${DONE_VIEW.sel === v ? ' on' : ''}" data-yr="${v}">${lab}</button>`;
     // Filtro "Impagadas" (bolita roja): importe indicado y pendiente > 0. Se combina con el año.
-    const isUnpaid = e => e.pagoCliente !== undefined && !!e.pagoCliente && ((+e.pagoCliente || 0) - (+e.pagado || 0)) > 0;
+    // Solo cuentan las de los últimos 3 meses y las que no se hayan omitido a mano.
+    const lim3 = new Date(); lim3.setMonth(lim3.getMonth() - 3); const lim3ISO = lim3.toISOString().slice(0, 10);
+    const isUnpaid = e => e.pagoCliente !== undefined && !!e.pagoCliente && ((+e.pagoCliente || 0) - (+e.pagado || 0)) > 0 && (e.fecha || '') >= lim3ISO && !e.unpaidIgnored;
     const nUnpaid = evs.filter(isUnpaid).length;
-    if (admin && DONE_VIEW.unpaid) evs = evs.filter(isUnpaid);
+    if (admin && DONE_VIEW.unpaid) {
+      evs = evs.filter(isUnpaid);
+      // Acciones rápidas en el listado de impagadas: marcar pagada (pagado = total) u omitir.
+      cols.splice(cols.length - 1, 0, { t: 'Cobro', nosort: true, html: e => `<div class="row-actions" style="gap:4px"><button class="btn btn--xs btn--primary" data-mark-paid="${e.id}" title="Pone el pagado igual al total">✓ Pagada</button><button class="btn btn--xs" data-skip-unpaid="${e.id}" title="Quitar de impagadas sin tocar importes">Omitir</button></div>` });
+    }
     const unpaidChip = admin ? `<button type="button" class="yrchip yrchip--unpaid${DONE_VIEW.unpaid ? ' on' : ''}" data-unpaid title="Mostrar solo las bodas con pago pendiente"><span class="dot" style="background:#D50000"></span> Impagadas (${nUnpaid})</button>` : '';
     yearBar = `<div class="yrbar">${chip('12m', 'Últimos 12 meses')}${years.map(y => chip(y, y)).join('')}${chip('all', 'Todos los años')}${unpaidChip}</div>`;
   }
@@ -242,6 +248,12 @@ async function eventsList(done) {
   if (admin) $$('[data-del-event]').forEach(b => b.onclick = () => confirmDeleteEvent(+b.dataset.delEvent, done));
   $$('[data-yr]').forEach(b => b.onclick = () => { DONE_VIEW.sel = b.dataset.yr; eventsList(true); });
   $$('[data-unpaid]').forEach(b => b.onclick = () => { DONE_VIEW.unpaid = !DONE_VIEW.unpaid; eventsList(true); });
+  const wireUnpaid = () => {
+    $$('[data-mark-paid]').forEach(b => b.onclick = () => { const id = +b.dataset.markPaid; const e = evs.find(x => x.id === id) || {};
+      modal('Marcar como pagada', `¿Marcar la boda #${id} como <b>pagada</b>? El pagado pasará a ser el total (${fmtEur(+e.pagoCliente || 0)}).`, { okText: 'Marcar pagada', onOk: async () => { try { await api('events/' + id, { method: 'PUT', body: { event: { pagado: +e.pagoCliente || 0 } } }); toast('Boda #' + id + ' marcada como pagada', 'ok'); eventsList(true); } catch (x) { toast(x.message || 'Error', 'err'); } } }); });
+    $$('[data-skip-unpaid]').forEach(b => b.onclick = async () => { const id = +b.dataset.skipUnpaid; try { await api('events/' + id, { method: 'PUT', body: { event: { unpaidIgnored: true } } }); toast('Boda #' + id + ' quitada de impagadas', 'ok'); eventsList(true); } catch (x) { toast(x.message || 'Error', 'err'); } });
+  };
+  if (done && admin && DONE_VIEW.unpaid) bindTable(tblId, wireUnpaid);
   $$('[data-noowner]').forEach(b => b.onclick = () => { TODO_VIEW.noOwner = !TODO_VIEW.noOwner; eventsList(false); });
 }
 const clientName = e => e.clienteNombre || e.conyuges || userName(e.userId) || 'Sin nombre';
