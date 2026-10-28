@@ -231,7 +231,7 @@ async function eventsList(done) {
     const noOwner = e => !e.userId;
     const nNo = evs.filter(noOwner).length;
     if (TODO_VIEW.noOwner) evs = evs.filter(noOwner);
-    yearBar = `<div class="yrbar"><button type="button" class="yrchip yrchip--unpaid${TODO_VIEW.noOwner ? ' on' : ''}" data-noowner title="Bodas sin titular (sin cliente asignado): no recibirían avisos"><span class="dot" style="background:#D50000"></span> Sin titular (${nNo})</button></div>`;
+    if (nNo || TODO_VIEW.noOwner) yearBar = `<div class="yrbar"><button type="button" class="yrchip yrchip--unpaid${TODO_VIEW.noOwner ? ' on' : ''}" data-noowner title="Bodas sin titular (sin cliente asignado): no recibirían avisos"><span class="dot" style="background:#D50000"></span> Sin titular (${nNo})</button></div>`;
   }
   const tblId = done ? 'dtDone_' + DONE_VIEW.sel + (DONE_VIEW.unpaid ? '_imp' : '') : ('dtTodo' + (TODO_VIEW.noOwner ? '_noown' : ''));
   // La columna "Fecha" cambia de índice según el rol (el admin tiene una columna "Tipo" extra).
