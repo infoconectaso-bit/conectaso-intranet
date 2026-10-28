@@ -86,6 +86,16 @@ const apiPut = (p, b) => spFetch('PUT', p, b);
 async function me() { return apiGet('/me'); }
 async function search(q) { const p = new URLSearchParams({ q, type: 'track', limit: '10', market: 'ES' }); const j = await apiGet('/search?' + p.toString()); return (j && j.tracks && j.tracks.items || []).filter(Boolean); }
 async function getTrack(id) { return apiGet('/tracks/' + id + '?market=ES'); }
+// Lee las canciones de una playlist. Compatible con el cambio de feb-2026 de Spotify (apps en Development
+// mode): el objeto usa 'items' en vez de 'tracks', y cada entrada 'item' en vez de 'track'. Se contemplan ambos.
+async function getPlaylistTracks(id) {
+  const pl = await apiGet('/playlists/' + id + '?market=ES');
+  const box = (pl && (pl.items || pl.tracks)) || {};
+  const arr = box.items || [];
+  const out = [];
+  arr.forEach(e => { const t = e && (e.item || e.track); if (t && t.id && t.type === 'track' && !t.is_local) out.push(t); });
+  return out;
+}
 
 /* ---------- Motor de emparejado (portado de la herramienta del compañero) ---------- */
 function norm(s) {
@@ -137,6 +147,7 @@ function score(item, t) {
 
 /* ---------- Parseo de una canción de la intranet (nombre + enlace) ---------- */
 const TRACK_RE = /(?:open\.spotify\.com\/(?:intl-[a-z-]+\/)?(?:embed\/)?track\/|spotify:track:)([A-Za-z0-9]{22})/;
+const PLAYLIST_RE = /(?:open\.spotify\.com\/(?:intl-[a-z-]+\/)?(?:embed\/)?playlist\/|spotify:playlist:)([A-Za-z0-9]{22})/;
 const YT_RE = /(?:youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i;
 const SEPS = ['\t', ' - ', ' – ', ' — ', ' | ', ' / ', ' by '];
 function splitArtistTitle(s) {
@@ -150,6 +161,7 @@ function toItem(m) {
   const base = { title: m.title || '', song, url };
   if (url) {
     const mt = url.match(TRACK_RE); if (mt) return Object.assign(base, { kind: 'id', id: mt[1] });
+    const mp = url.match(PLAYLIST_RE); if (mp) return Object.assign(base, { kind: 'playlist', plId: mp[1] });
     const yt = url.match(YT_RE); if (yt) return Object.assign(base, { kind: 'yt', ytId: yt[1] });
   }
   if (song) { const { a, b } = splitArtistTitle(song); return Object.assign(base, { kind: 'text', a, b, q: song, pq: song }); }
@@ -194,6 +206,14 @@ async function resolveItem(it) {
   if (it.kind === 'id') {
     try { const t = await getTrack(it.id); return { status: 'ok', track: t, score: 1, candidates: [t], scored: [{ t, s: 1 }] }; }
     catch (e) { return { status: 'bad', error: 'El enlace de Spotify no es válido' }; }
+  }
+  if (it.kind === 'playlist') {
+    // El enlace es una playlist de Spotify. Leemos sus canciones: si tiene una, es esa; si tiene varias,
+    // se ofrecen como candidatas para que el DJ elija cuál (igual que hacía el script del compañero).
+    let tracks; try { tracks = await getPlaylistTracks(it.plId); } catch (e) { return { status: 'bad', error: 'No se pudo leer la playlist de Spotify (¿privada o de otra cuenta?)' }; }
+    if (!tracks.length) return { status: 'bad', error: 'La playlist no tiene canciones legibles' };
+    const scored = tracks.slice(0, 6).map(t => ({ t, s: 1 }));
+    return { status: tracks.length === 1 ? 'ok' : 'warn', track: scored[0].t, score: 1, candidates: scored.map(c => c.t), scored };
   }
   if (it.kind === 'yt') {
     try { const m = await ytMeta(it.ytId); Object.assign(it, ytClean(m.title, m.author)); }

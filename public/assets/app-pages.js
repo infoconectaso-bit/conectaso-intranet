@@ -1064,7 +1064,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
     // Pinta el selector VISUAL: cada canción con sus candidatas como tarjetas (carátula + % en color),
     // la mejor preseleccionada; se toca para elegir, o "Omitir" para no añadirla.
     const pillBg = sc => sc >= 80 ? '#1DB954' : sc >= 55 ? '#E8A32B' : '#C0504D';
-    const srcLabel = k => k === 'yt' ? '▶️ YouTube' : k === 'id' ? '🟢 Enlace Spotify' : '✍️ Texto';
+    const srcLabel = k => k === 'yt' ? '▶️ YouTube' : k === 'id' ? '🟢 Enlace Spotify' : k === 'playlist' ? '🟢 Playlist Spotify' : '✍️ Texto';
     let sel = [];
     const renderChooser = (data) => {
       const songs = data.songs || [];
