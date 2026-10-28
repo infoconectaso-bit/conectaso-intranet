@@ -540,6 +540,27 @@ async function handle(req, res, seg, method, url) {
       return send(res, 200, { ok: true, generado: new Date().toISOString(), holdedIdx: { contactos: idx.contactsN, facturas: idx.invoicesN, rectificativas: idx.creditNotesN }, sinMatch: TARGET.filter(t => !matchLoc(t).length), todasLasMasias: locs.map(l => ({ id: l.id, name: l.name })).filter(l => l.name), result });
     }
 
+    // FACTURACIÓN POR MASÍA desde la PROPIA INTRANET (no Holded). Media por boda de cada campo de
+    // importe, para las bodas realizadas de un año dado. Así vemos qué campo recoge el total real.
+    if (action === 'venue-money') {
+      const store = dbm0.store; const time = require('./time');
+      const today = time.bizToday(); const year = String(body.year || '2026');
+      const venueMap = body.venueMap || {};
+      const evByLoc = {}; store.all('events').forEach(e => { const l = +e.lugar || 0; (evByLoc[l] = evByLoc[l] || []).push(e); });
+      const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+      const out = [];
+      for (const t of Object.keys(venueMap)) {
+        const ids = new Set((venueMap[t] || []).map(Number));
+        const evs = []; ids.forEach(id => (evByLoc[id] || []).forEach(e => evs.push(e)));
+        const real = evs.filter(e => e.fecha && e.fecha.slice(0, 4) === year && e.fecha < today);
+        const stat = field => { const vals = real.map(e => num(e[field])).filter(v => v > 1); const sum = vals.reduce((a, b) => a + b, 0); const s = vals.slice().sort((a, b) => a - b); return { n: vals.length, media: vals.length ? Math.round(sum / vals.length) : 0, mediana: s.length ? s[Math.floor(s.length / 2)] : 0, total: Math.round(sum), min: s[0] || 0, max: s[s.length - 1] || 0 }; };
+        out.push({ masia: t, bodas: real.length,
+          pagoCliente: stat('pagoCliente'), pagado: stat('pagado'), totalCost: stat('totalCost'), pagoRestaurante: stat('pagoRestaurante'),
+          muestra: real.slice(0, 8).map(e => ({ id: e.id, fecha: e.fecha, pagoCliente: e.pagoCliente, pagado: e.pagado, totalCost: e.totalCost, pagoRestaurante: e.pagoRestaurante })) });
+      }
+      return send(res, 200, { ok: true, year, result: out });
+    }
+
     // Gestiona la lista de exclusión FIJA del volcado (ids que no se deben traer nunca).
     if (action === 'set-exclude') {
       const store = dbm0.store;
