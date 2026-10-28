@@ -419,9 +419,10 @@ async function handle(req, res, seg, method, url) {
     // AUDITORÍA 1 a 1: el navegador (sesión en la intranet real) envía las fichas CRUDAS vivas y el
     // servidor las mapea y compara campo a campo con la réplica. Devuelve informe SIN datos personales
     // (nombres/emails solo como coincide/difiere; importes, fechas, ids y recuentos sí, no son PII).
-    if (action === 'compare') {
+    if (action === 'compare' || action === 'compare-staged') {
       const store = dbm0.store, users = dbm0.users;
-      const raws = Array.isArray(body.raws) ? body.raws : [];
+      let raws = Array.isArray(body.raws) ? body.raws : [];
+      if (action === 'compare-staged') { try { raws = fs.readFileSync(STAGE, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch (e) { raws = []; } }
       const norm = v => String(v == null ? '' : v).trim();
       const results = [];
       for (const raw of raws) {
@@ -472,6 +473,13 @@ async function handle(req, res, seg, method, url) {
         results.push({ id: R.id, conyuges: (E.conyuges || R.conyuges || '').slice(0, 28), ok: diffs.length === 0, diffs, titular });
       }
       try { fs.writeFileSync(path.join(dbm0.DATA_DIR, 'volcado-compare.json'), JSON.stringify({ at: new Date().toISOString(), results })); } catch (e) { }
+      if (action === 'compare-staged') {
+        // Resumen sin datos personales: cuántas bodas difieren en cada campo (sin contar el estado) y sus ids.
+        const hist = {}, ids = {};
+        results.forEach(r => (r.diffs || []).forEach(d => { if (d.campo === 'estado') return; hist[d.campo] = (hist[d.campo] || 0) + 1; (ids[d.campo] = ids[d.campo] || []).length < 60 && ids[d.campo].push(r.id); }));
+        const detalle = {}; ['servicios', 'coUsers', 'lugar', 'tipo', 'djId', 'wpId', 'hora', 'metodo'].forEach(k => { detalle[k] = results.filter(r => (r.diffs || []).some(d => d.campo === k)).slice(0, 15).map(r => ({ id: r.id, d: r.diffs.filter(d => d.campo === k).map(d => d.real + ' → ' + d.replica) })); });
+        return send(res, 200, { ok: true, n: results.length, errores: results.filter(r => r.error).length, hist, ids, detalle });
+      }
       return send(res, 200, { ok: true, n: results.length });
     }
 
