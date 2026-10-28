@@ -1477,12 +1477,16 @@ on(/^#\/backups$/, async () => {
       nasBar = `<div class="banner" style="max-width:560px;margin-bottom:14px;padding:10px 14px;border-radius:10px;background:#EEF2F7;color:#334;border:1px solid #D6DEE8">El NAS aún no ha informado de su espacio. Aparecerá aquí en cuanto se ejecute la copia (o púlsala a mano en el NAS).</div>`;
     }
     const tagLabel = t => t === 'pre' ? 'previa a mantenimiento' : t === 'prr' ? 'previa a restauración' : '';
-    const rows = list.map(b => {
+    const rowHtml = (b, hidden) => {
       const lbl = tagLabel(b.tag);
-      const tr = b.pre ? ' style="background:#eafaf0"' : '';
+      const style = (hidden ? 'display:none;' : '') + (b.pre ? 'background:#eafaf0' : '');
+      const attr = `${hidden ? ' class="bk-more"' : ''}${style ? ` style="${style}"` : ''}`;
       const nameCell = `<b>${esc(b.name)}</b>${lbl ? ` <span class="tag tag--green" style="margin-left:6px;white-space:nowrap">🛡 ${esc(lbl)}</span>` : ''}`;
-      return `<tr${tr}><td>${nameCell}</td><td>${fmtDate(b.date)}</td><td style="text-align:right">${fmtSize(b.size)}</td><td style="text-align:right;white-space:nowrap"><button class="btn btn--sm" data-restore="${esc(b.name)}" title="Restaurar la intranet a este punto">↩ Restaurar</button> <a class="btn btn--sm" href="/api/backups/download?name=${encodeURIComponent(b.name)}" download>⬇ Descargar</a></td></tr>`;
-    }).join('');
+      return `<tr${attr}><td>${nameCell}</td><td>${fmtDate(b.date)}</td><td style="text-align:right">${fmtSize(b.size)}</td><td style="text-align:right;white-space:nowrap"><button class="btn btn--sm" data-restore="${esc(b.name)}" title="Restaurar la intranet a este punto">↩ Restaurar</button> <a class="btn btn--sm" href="/api/backups/download?name=${encodeURIComponent(b.name)}" download>⬇ Descargar</a></td></tr>`;
+    };
+    const SHOWN = 10;
+    const rows = list.slice(0, SHOWN).map(b => rowHtml(b, false)).join('') + list.slice(SHOWN).map(b => rowHtml(b, true)).join('');
+    const moreBtn = list.length > SHOWN ? `<div class="btn-row" style="margin-top:10px"><button class="btn btn--sm" id="bkMore">Ver todas (${list.length})</button></div>` : '';
     shell(`${pageHead('Copias de seguridad', 'Copias automáticas de la base de datos (bodas, usuarios, tarifas…).')}
       ${banner}
       ${localBar}
@@ -1494,6 +1498,7 @@ on(/^#\/backups$/, async () => {
       <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--primary" id="bkNow">💾 Crear copia ahora</button> <button class="btn" id="bkPre">🛡 Crear copia previa a mantenimiento</button></div>
       <p class="hint" style="margin-bottom:12px">Copia automática al arrancar y <b>cada 5 minutos</b> (de 02:00 a 06:00, menos a menudo). Se guardan escalonadas (2 h al minuto · 48 h cada 30 min · 30 días por día) y las antiguas se borran solas. Las <b>🛡 protegidas</b> (previas a mantenimiento o restauración) <b>no se borran nunca</b>. Con <b>↩ Restaurar</b> vuelves la intranet a ese punto: antes se guarda sola una copia del estado actual (reversible) y el servicio se reinicia solo (~1 min).</p>
       <div class="table-wrap"><table class="dt"><thead><tr><th>Archivo</th><th>Fecha</th><th style="text-align:right">Tamaño</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">Aún no hay copias (se creará una en breve).</td></tr>'}</tbody></table></div>
+      ${moreBtn}
 
       <h2 style="margin:26px 0 6px">☁️ Copia en la nube (fuera del servidor)</h2>
       <p class="hint" style="margin-bottom:12px">Segunda copia automática en <b>Backblaze B2</b> (región Europa). Si el servidor se estropeara, los datos seguirían a salvo aquí. Cada copia local (cada 7 min) se sube también a la nube, y las antiguas se borran solas. La clave secreta se guarda <b>solo en tu servidor</b>; no se muestra una vez guardada.</p>
@@ -1548,6 +1553,8 @@ on(/^#\/backups$/, async () => {
     if (bn) bn.onclick = async () => { bn.disabled = true; bn.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST' }); toast('Copia creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
     const bp = el('bkPre');
     if (bp) bp.onclick = async () => { bp.disabled = true; bp.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST', body: { pre: true } }); toast('Copia previa a mantenimiento creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
+    const bkMore = el('bkMore');
+    if (bkMore) bkMore.onclick = () => { const hidden = $$('.bk-more'); const show = bkMore.dataset.open !== '1'; hidden.forEach(tr => tr.style.display = show ? '' : 'none'); bkMore.dataset.open = show ? '1' : '0'; bkMore.textContent = show ? 'Ver menos' : `Ver todas (${hidden.length})`; };
     // Copia local al NAS: obtener el enlace seguro + el script para el Programador de tareas.
     const showNas = (d) => {
       const rep = ['# informa del espacio del NAS al panel',
