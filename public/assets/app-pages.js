@@ -1675,7 +1675,7 @@ on(/^#\/eventos\/(\d+)\/pdf$/, async m => {
       <h3>3. Aperitivo</h3>${area('aperitif')}
       <h3>4. Banquete</h3>${area('banquet')}
       <h3>5. Entregas</h3>${ent}
-      <h3>6. Fiesta</h3>${area('disco')}<div>Enlace a playlist : ${val((ev.disco || {}).playlist)}</div>
+      <h3>6. Fiesta</h3>${area('disco')}<div>Enlace a playlist : ${val((ev.disco || {}).playlist)} ${linkChip((ev.disco || {}).playlist)}</div>
       <h3>7. Extras</h3>${extrasList || '<div>No se ha marcado ninguno.</div>'}
     </div>`, ['Eventos', '#' + ev.id, 'PDF']);
 });
@@ -1724,7 +1724,7 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
       if (!rows) return; n++;
       html += `<tr class="sec"><td></td><td colspan="3" class="sname">${n} · ${esc(s.title)}</td></tr>` + rows;
     });
-    if (pl) html += `<tr class="sec"><td></td><td colspan="3" class="sname">Playlist general</td></tr><tr><td class="mic"><span class="box"></span></td><td class="mom">Ambiente / fiesta</td><td>${esc(pl)}</td><td class="notes"><span class="sp">Spotify</span></td></tr>`;
+    if (pl) html += `<tr class="sec"><td></td><td colspan="3" class="sname">Playlist general</td></tr><tr><td class="mic"><span class="box"></span></td><td class="mom">Ambiente / fiesta</td><td>${esc(pl)}</td><td class="notes">${linkChip(pl) || '<span class="sp">Spotify</span>'}</td></tr>`;
     return html;
   };
   const escRows = escaleta();
