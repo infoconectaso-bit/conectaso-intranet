@@ -95,10 +95,13 @@ function runReminders() {
       assignedStaff(ev).forEach(id => { const u = users.get(id); if (u && u.email) send(u.email, emails.djAlbaranEmail(u, ev, magicLink(base, id, 'albaran', ev.id), base)); });
       markSent(ev, 'albaran'); n++;
     }
-    // Falta ≤1 mes y el DJ NO ha marcado "Meeting realizado" (estado < 3) → aviso al DJ, UNA vez
-    // al día, hasta que cambie el estado. estados: 0 No contactado admin · 1 No contactado dj ·
-    // 2 Contactado · 3 Meeting realizado · 4 Completado.
-    if (d >= 0 && d <= 30 && (+ev.estado || 0) < 3 && ev.djId) {
+    // Falta ≤1 mes y el DJ NO ha marcado "Meeting realizado" → aviso al DJ, UNA vez al día, hasta que
+    // cambie el estado. INTERRUPTOR: solo si el ajuste 'djMeetingAviso' está activado (por defecto NO,
+    // para no enviar correos sin el OK explícito de Adrià).
+    // OJO: con la lista de estados SIN "No contactado admin" (4 estados), "Meeting realizado" es el
+    // índice 2, así que el umbral correcto es estado < 2.
+    const UMBRAL_MEETING = (() => { const e = store.setting('estados') || []; const i = e.findIndex(x => /meeting/i.test(x && x.n || '')); return i >= 0 ? i : 3; })();
+    if (store.setting('djMeetingAviso') === true && d >= 0 && d <= 30 && (+ev.estado || 0) < UMBRAL_MEETING && ev.djId) {
       const last = ev.reminders && ev.reminders.djMeeting;   // fecha (YYYY-MM-DD) del último aviso
       if (last !== today) {
         const dj = users.get(+ev.djId);
