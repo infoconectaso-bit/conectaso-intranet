@@ -1,7 +1,7 @@
 # Cuentas: app independiente (otro contenedor, otro puerto, otros datos). Sin dependencias npm.
 FROM node:22-bookworm-slim
 WORKDIR /app
-COPY server.js ./
+COPY server.js reset-acceso.txt ./
 COPY public ./public
 ENV DATA_DIR=/data
 ENV PORT=8083

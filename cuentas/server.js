@@ -26,6 +26,15 @@ function load() {
   return d;
 }
 let DB = load();
+// Reinicio del acceso (usuario y contraseña) sin tocar los movimientos: si reset-acceso.txt trae
+// un código nuevo, se borra el acceso una sola vez y la app vuelve a pedir crearlo.
+try {
+  const code = fs.readFileSync(path.join(__dirname, 'reset-acceso.txt'), 'utf8').trim();
+  if (code && DB.resetAplicado !== code) {
+    DB.acceso = null; DB.sessions = {}; DB.resetAplicado = code;
+    console.log('Acceso reiniciado (los movimientos se conservan).');
+  }
+} catch (e) { /* sin archivo: nada que hacer */ }
 function save() {
   const tmp = FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(DB, null, 2));
@@ -39,6 +48,7 @@ function save() {
   } catch (e) { /* la copia es opcional */ }
 }
 const nid = () => crypto.randomBytes(9).toString('base64url');
+if (DB.acceso === null && DB.resetAplicado) save();
 
 /* ---------- acceso y sesiones ---------- */
 function hash(pw) {
