@@ -193,15 +193,18 @@ async function _rebuildIndex() {
     [c.code, c.vat_number].filter(Boolean).forEach(n => push(byNif, normNif(n), c.id));
     if (c.name) push(byName, normName(c.name), c.id);
   });
-  invoices.forEach(inv => { const e = byId[inv.contact_id]; if (e) e.invoices.push(inv); });
+  // Facturas cuyo contacto no está en la lista de contactos (borrado, sin contacto…): se guardan aparte
+  // en "orphans" para poder ENLAZARLAS a mano por su número aunque no casen con ningún cliente.
+  const orphans = [];
+  invoices.forEach(inv => { const e = byId[inv.contact_id]; if (e) e.invoices.push(inv); else orphans.push(inv); });
   // Las rectificativas (notas de crédito) van al mismo contacto, para que compensen a su factura.
-  (creditNotes || []).forEach(cn => { const cid = cn.contact_id || cn.contactId || cn.contact || cn.contactID; const e = byId[cid]; if (e) e.invoices.push(cn); });
+  (creditNotes || []).forEach(cn => { const cid = cn.contact_id || cn.contactId || cn.contact || cn.contactID; const e = byId[cid]; if (e) e.invoices.push(cn); else orphans.push(cn); });
   // Presupuestos indexados por número (para "tirar del hilo" cuando una factura los referencia).
   // A prueba de fallos: si el token no tiene acceso a presupuestos, se queda vacío y no afecta a nada.
   let estByNum = {};
   try { const estimates = await listEstimates(); estimates.forEach(e => { const num = normNum(e.document_number || e.number || e.docNumber); if (num) estByNum[num] = docConcept(e); }); }
   catch (e) { estByNum = {}; }
-  _idx = { byId, byEmail, byNif, byName, estByNum, contactsN: contacts.length, invoicesN: invoices.length, creditNotesN: (creditNotes || []).length, estimatesN: Object.keys(estByNum).length, builtAt: Date.now() };
+  _idx = { byId, byEmail, byNif, byName, estByNum, orphans, contactsN: contacts.length, invoicesN: invoices.length, creditNotesN: (creditNotes || []).length, estimatesN: Object.keys(estByNum).length, builtAt: Date.now() };
   _idxAt = Date.now();
   return _idx;
 }
@@ -291,8 +294,26 @@ async function invoicesByIds(ids, force) {
   if (!want.size) return [];
   const idx = await buildIndex(force);
   const out = [], seen = new Set();
-  Object.values(idx.byId).forEach(c => (c.invoices || []).forEach(raw => { const k = String(raw.id); if (want.has(k) && !seen.has(k)) { seen.add(k); out.push(mapInvoice(raw)); } }));
+  const take = raw => { const k = String(raw.id); if (want.has(k) && !seen.has(k)) { seen.add(k); out.push(mapInvoice(raw)); } };
+  Object.values(idx.byId).forEach(c => (c.invoices || []).forEach(take));
+  (idx.orphans || []).forEach(take);
   return out;
+}
+
+/** Busca facturas/rectificativas por su NÚMERO (p. ej. "F260123" o "CN260004"), en todos los contactos
+ * y también en las que no tienen contacto. Ignora espacios, guiones y mayúsculas. Si no hay coincidencia
+ * exacta, prueba con las que TERMINAN en lo escrito (para poder poner solo "123"). */
+async function findInvoicesByNumber(number, force) {
+  const want = normNum(number);
+  if (!want) return [];
+  const idx = await buildIndex(force);
+  const all = [];
+  Object.values(idx.byId).forEach(c => (c.invoices || []).forEach(raw => all.push({ raw, contact: c.name || '' })));
+  (idx.orphans || []).forEach(raw => all.push({ raw, contact: raw.contactName || raw.contact_name || '' }));
+  const numOf = raw => normNum(raw.document_number || raw.docNumber || raw.number);
+  let hits = all.filter(x => numOf(x.raw) === want);
+  if (!hits.length) hits = all.filter(x => { const n = numOf(x.raw); return n && n.endsWith(want); });
+  return hits.map(x => Object.assign(mapInvoice(x.raw), { contact: x.contact }));
 }
 
 /** Todas las facturas con importe pendiente (impagos), enriquecidas con el contacto.
@@ -404,4 +425,4 @@ async function testPayslips() {
   return { ok: true, probes };
 }
 
-module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listEstimates, listCreditNotes, estimateConcept, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };
+module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listEstimates, listCreditNotes, estimateConcept, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, findInvoicesByNumber, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };

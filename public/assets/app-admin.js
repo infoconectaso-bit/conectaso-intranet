@@ -895,7 +895,17 @@ on(/^#\/descuadres$/, async () => {
         { t: 'Pagado en Holded', get: i => i.paidHolded || 0, num: true, html: i => eur(i.paidHolded) },
         { t: 'Apuntado (evento)', get: i => i.pagado || 0, num: true, html: i => eur(i.pagado) },
         { t: 'Diferencia', get: i => i.diff || 0, num: true, html: i => `<b style="color:#D50000">${(i.diff > 0 ? '+' : '')}${eur(i.diff)}</b>` },
+        { t: 'Facturas', get: i => (i.invs || []).join(' '), html: i => `<span class="hint">${esc((i.invs || []).join(', ') || '—')}</span>` },
+        { t: '', nosort: true, nofilter: true, html: i => `<button class="btn btn--xs" data-pm-link="${i.eventId}" title="Indicar el nº de una factura de Holded para importarla a esta boda">🔗 Enlazar factura</button> <button class="btn btn--icon" data-pm-ignore="${i.eventId}" data-diff="${i.diff}" title="Obviar este descuadre (vuelve a salir si la diferencia cambia)">🚫</button>` },
       ] })}</div></div>` : '';
+    const pmi = r.payIgnoradas || [];
+    const pmiPanel = pmi.length ? `<details style="margin-top:12px"><summary class="hint" style="cursor:pointer">🚫 Descuadres de pagado obviados (${pmi.length}) — ver / restaurar</summary><div class="panel" style="margin-top:8px"><div class="panel__body">${table('dtPayIgn', { rows: pmi, order: [0, 'desc'], filters: false, dense: true, len: 50, empty: '', cols: [
+      { t: 'Fecha', get: i => i.fecha || '', html: i => esc(slash(i.fecha) || '—') },
+      { t: 'Boda', nosort: true, nofilter: true, html: i => `<a href="#/eventos/${i.eventId}" title="${esc(i.conyuges || '')}">#${i.eventId}</a>` },
+      { t: 'Lugar', get: i => i.lugar || '', html: i => esc(i.lugar || '—') },
+      { t: 'Diferencia', get: i => i.diff || 0, num: true, html: i => `${(i.diff > 0 ? '+' : '')}${eur(i.diff)}` },
+      { t: '', nosort: true, nofilter: true, html: i => `<button class="btn btn--xs" data-pm-restore="${i.eventId}">↩ Restaurar</button>` },
+    ] })}</div></div></details>` : '';
     const cs = r.conceptStats || {};
     const csLine = cs.total ? `<p class="hint" style="margin-bottom:12px">📄 Concepto leído de Holded en <b>${cs.withConcept || 0}/${cs.total}</b> facturas · fecha detectada en <b>${cs.withDate || 0}</b>.${cs.sample ? ` <span class="muted">Ejemplo de concepto: "${esc(String(cs.sample).slice(0, 120))}"</span>` : ''}</p>` : '';
     const ig = r.ignoradas || [];
@@ -920,7 +930,34 @@ on(/^#\/descuadres$/, async () => {
       <div class="panel"><div class="panel__body">${table('dtDescuadres', { rows: sv, order: [0, 'desc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas sin vincular. 🎉' })}</div></div>
       ${swPanel}
       ${pmPanel}
+      ${pmiPanel}
       ${igPanel}`, ['Descuadres']);
+    // --- Descuadre pagado: obviar / restaurar / enlazar factura por número ---
+    const pmIgnore = async (eventId, ignore, diff) => { try { await api('holded-descuadres/pay-ignore', { method: 'POST', body: { eventId, ignore, diff } }); toast(ignore ? 'Descuadre obviado' : 'Descuadre restaurado', 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };
+    const pmLinkNumber = (eventId) => {
+      modal('Enlazar factura de Holded a la boda #' + eventId, `<p class="hint" style="margin-bottom:10px">Escribe el <b>número de la factura</b> tal como sale en Holded (p. ej. <b>F260123</b>, o una rectificativa <b>CN260004</b>). La busco en Holded y la importo a esta boda: su importe entra en el evento y en el descuadre. <b>No cambia el pagado apuntado.</b></p><div class="field"><label>Nº de factura</label><input class="control" id="pmInvNum" placeholder="p. ej. F260123"></div>`, {
+        okText: 'Buscar y enlazar', onOk: async () => {
+          const number = ((el('pmInvNum') || {}).value || '').trim(); if (!number) { toast('Pon el número de la factura', 'err'); return true; }
+          const send = async invId => {
+            const res = await api('holded-descuadres/link-number', { method: 'POST', body: { eventId, number, invId } });
+            if (res.choose) {
+              const bg2 = modal('Hay varias facturas con ese número', `<p class="hint" style="margin-bottom:10px">¿Cuál es?</p>${res.options.map(o => `<button class="btn btn--sm" data-pick-inv="${esc(o.invId)}" style="display:block;margin:0 0 6px 0;text-align:left">${esc(o.number)} · ${esc(slash(o.date) || '')} · ${esc(o.contact || '—')} · ${eur(o.total)}${o.credit ? ' (CN)' : ''}</button>`).join('')}`);
+              bg2.querySelectorAll('[data-pick-inv]').forEach(bb => bb.onclick = async () => { try { await send(bb.dataset.pickInv); bg2.remove(); } catch (e) { toast(e.message || 'Error', 'err'); } });
+              return null;
+            }
+            toast(`✅ Factura ${res.number}${res.credit ? ' (rectificativa)' : ''} de ${eur(res.total)} enlazada a ${res.conyuges || ('#' + eventId)}`, 'ok');
+            draw();
+            return res;
+          };
+          try { await send(); } catch (e) { toast(e.message || 'Error', 'err'); return true; }
+        }
+      });
+    };
+    bindTable('dtPayMis', () => {
+      $$('[data-pm-ignore]').forEach(b => b.onclick = () => pmIgnore(+b.dataset.pmIgnore, true, +b.dataset.diff));
+      $$('[data-pm-link]').forEach(b => b.onclick = () => pmLinkNumber(+b.dataset.pmLink));
+    });
+    bindTable('dtPayIgn', () => { $$('[data-pm-restore]').forEach(b => b.onclick = () => pmIgnore(+b.dataset.pmRestore, false)); });
     const linkInv = async (invId, id) => { try { const res = await api('holded-descuadres/link', { method: 'POST', body: { invId, eventId: id } }); toast('✅ Factura vinculada' + (res.conyuges ? ' a ' + res.conyuges : ' a la boda #' + id), 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };
     // Se re-enganchan tras cada orden/filtro/paginación de la tabla (si no, al re-dibujarse se perdían los clicks).
     const ignoreInv = async (invId, ignore) => { try { await api('holded-descuadres/ignore', { method: 'POST', body: { invId, ignore } }); toast(ignore ? 'Factura obviada' : 'Factura restaurada', 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };

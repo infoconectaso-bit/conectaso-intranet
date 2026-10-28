@@ -1095,6 +1095,22 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         const p = [raw.desc, raw.description, raw.notes, raw.notesText, raw.concept];
         (raw.customFields || []).forEach(v => p.push(v));
         (raw.products || raw.items || raw.lines || []).forEach(it => { if (it) { p.push(it.name); p.push(it.desc || it.description); } });
+        // Las OBSERVACIONES pueden venir de Holded con otro nombre de campo (observations, comments,
+        // footer, notes dentro de otro objeto…). Por si acaso, se recogen TODOS los textos de la factura
+        // salvo ids, fechas de emisión/vencimiento y similares (que confundirían la fecha de la boda).
+        const SKIP = /(^id$|_id$|^id_|date|_at$|created|updated|currency|status|^doc|number|^tax|total|subtotal|payments|^url|link|email|phone|^contact)/i;
+        const walk = (o, depth) => {
+          if (!o || depth > 3) return;
+          if (Array.isArray(o)) { o.forEach(v => walk(v, depth + 1)); return; }
+          if (typeof o !== 'object') return;
+          Object.keys(o).forEach(k => {
+            if (SKIP.test(k)) return;
+            const v = o[k];
+            if (typeof v === 'string') { if (v.length >= 4 && p.indexOf(v) < 0) p.push(v); }
+            else if (v && typeof v === 'object') walk(v, depth + 1);
+          });
+        };
+        walk(raw, 0);
         let txt = p.filter(Boolean).join(' · ');
         // Si en las observaciones se referencia un PRESUPUESTO, añadimos su concepto (fecha/lugar).
         const pm = txt.match(/(?:presup|pressup)[a-z]*\.?\s*(?:n[ºo.]*\s*)?([\w-]*\d[\w-]*)/i);
@@ -1231,6 +1247,14 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
           sinVincular.push({ number: inv.number, date: inv.date, total: inv.total, paid: inv.paid, pending: inv.pending, status: inv.status, contact: c.name || '', code: c.code || c.vat_number || '', invId: inv.id, suggestedEventId, suggestedLabel, catWarn, why, options, concept: String(_c || '').slice(0, 160) });
         });
       });
+      // Facturas SIN contacto en Holded que se han enlazado a mano por número: también cuentan en su boda.
+      (idx.orphans || []).forEach(raw => {
+        const evId = links[raw.id]; if (!evId) return;
+        const inv = holded.mapInvoice(raw); linkedInv++;
+        const pe = (payByEvent[evId] = payByEvent[evId] || { base: 0, paid: 0, invs: [] });
+        pe.base += inv.total; pe.paid += inv.credit ? inv.total : inv.paid;
+        if (inv.number) pe.invs.push(inv.number);
+      });
       // 2ª pasada: rectificativas (CN) sin vincular. Si su concepto apunta a una boda que YA tiene
       // facturas vinculadas, se netean ahí (restan su importe del pagado y de la base). Así una CN que
       // está en otro contacto de Holded o que no se vinculó a mano también cuadra la boda.
@@ -1242,7 +1266,10 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       sinVincular.sort((a, b) => String(b.date).localeCompare(String(a.date)));
       serviceWarnings.sort((a, b) => String(b.date).localeCompare(String(a.date)));
       // Descuadre factura base (sin IVA) vs pagado del cliente, por boda vinculada.
-      const payMismatches = [];
+      const payMismatches = [], payIgnoradas = [];
+      // Descuadres "obviados" a mano: evento -> diferencia que tenía al obviarlo. Si la diferencia
+      // CAMBIA (entra otro pago, otra factura…), el descuadre vuelve a salir para revisarlo.
+      const payIgnored = store.setting('payMismatchIgnored') || {};
       Object.keys(payByEvent).forEach(evId => {
         const pe = payByEvent[evId]; const ev2 = store.get('events', +evId); if (!ev2) return;
         if (!(ev2.fecha && ev2.fecha >= _hoy)) return;         // solo bodas a futuro (de hoy en adelante)
@@ -1252,12 +1279,14 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
         const diff = Math.round((paidHolded - pagado) * 100) / 100;
         if (Math.abs(diff) > 1) {
           const loc = store.get('locations', ev2.lugar) || {};
-          payMismatches.push({ eventId: +evId, conyuges: ev2.conyuges || '', fecha: ev2.fecha || '', lugar: loc.name || ev2.lugarOtro || '', base, paidHolded, pagado, diff, invs: pe.invs });
+          const row = { eventId: +evId, conyuges: ev2.conyuges || '', fecha: ev2.fecha || '', lugar: loc.name || ev2.lugarOtro || '', base, paidHolded, pagado, diff, invs: pe.invs };
+          const ig = payIgnored[evId];
+          if (ig != null && Math.abs((+ig) - diff) < 0.01) payIgnoradas.push(row); else payMismatches.push(row);
         }
       });
       payMismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
       ignoradas.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, pasadasInv, sinPagarInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings, payMismatches, ignoradas, conceptStats: { total: totalInv, withConcept: cWithConcept, withDate: cWithDate, sample: cSample } });
+      return ok(res, { enabled: true, totalInv, linkedInv, empresaInv, antiguasInv, pasadasInv, sinPagarInv, sinVincularN: sinVincular.length, sinVincular, serviceWarnings, payMismatches, payIgnoradas, ignoradas, conceptStats: { total: totalInv, withConcept: cWithConcept, withDate: cWithDate, sample: cSample } });
     } catch (e) { return ok(res, { enabled: true, error: e.message, sinVincular: [] }); }
   }
   // --- VINCULAR una factura de Holded a un evento existente (o desvincular) ---
@@ -1275,6 +1304,44 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
     store.setSetting('invoiceLinks', links);
     store.audit(user.id, 'invoice-link', 'events', b.eventId ? +b.eventId : null);
     return ok(res, { ok: true, eventId: b.eventId ? +b.eventId : null, conyuges: b.eventId ? ((store.get('events', +b.eventId) || {}).conyuges || '') : '' });
+  }
+  // --- ENLAZAR por NÚMERO de factura de Holded a una boda (desde "Descuadre pagado") ---
+  // Busca la factura por su número en todo Holded (también las que no casan con ningún contacto) y la
+  // vincula a la boda: así su importe entra en el evento y en el cálculo del descuadre.
+  if (seg[0] === 'holded-descuadres' && seg[1] === 'link-number' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    if (!holded.enabled()) return fail(res, 400, 'La integración de Holded no está activada.');
+    const b = await readBody(req);
+    const eventId = +b.eventId;
+    const ev = eventId && store.get('events', eventId);
+    if (!ev) return fail(res, 404, 'No existe una boda con ese número.');
+    const number = String(b.number || '').trim();
+    if (!number) return fail(res, 400, 'Pon el número de la factura.');
+    let hits = await holded.findInvoicesByNumber(number);
+    if (!hits.length) hits = await holded.findInvoicesByNumber(number, true);   // quizá es nueva: relee Holded
+    if (!hits.length) return fail(res, 404, 'No encuentro ninguna factura con el número "' + number + '" en Holded.');
+    if (hits.length > 1 && !b.invId) return ok(res, { ok: false, choose: true, options: hits.map(h => ({ invId: h.id, number: h.number, date: h.date, contact: h.contact, total: h.total, credit: h.credit })) });
+    const inv = b.invId ? hits.find(h => String(h.id) === String(b.invId)) : hits[0];
+    if (!inv) return fail(res, 404, 'Factura no encontrada.');
+    const links = store.setting('invoiceLinks') || {};
+    links[inv.id] = eventId;
+    store.setSetting('invoiceLinks', links);
+    // Si estaba obviada en "sin vincular", deja de estarlo (ya tiene boda).
+    const igl = (store.setting('invoiceIgnored') || []).map(String).filter(x => x !== String(inv.id));
+    store.setSetting('invoiceIgnored', igl);
+    store.audit(user.id, 'invoice-link', 'events', eventId);
+    return ok(res, { ok: true, number: inv.number, contact: inv.contact, total: inv.total, paid: inv.paid, credit: inv.credit, eventId, conyuges: ev.conyuges || '' });
+  }
+  // --- OBVIAR / RESTAURAR un descuadre de pagado (Holded vs apuntado) ---
+  if (seg[0] === 'holded-descuadres' && seg[1] === 'pay-ignore' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const b = await readBody(req);
+    const eventId = +b.eventId; if (!eventId) return fail(res, 400, 'Falta la boda.');
+    const map = store.setting('payMismatchIgnored') || {};
+    if (b.ignore === false) delete map[eventId]; else map[eventId] = Math.round((+b.diff || 0) * 100) / 100;
+    store.setSetting('payMismatchIgnored', map);
+    store.audit(user.id, 'paymismatch-ignore', 'events', eventId);
+    return ok(res, { ok: true, ignored: b.ignore !== false });
   }
   // --- OBVIAR / RESTAURAR una factura de la lista de sin vincular (no hace falta vincularla) ---
   if (seg[0] === 'holded-descuadres' && seg[1] === 'ignore' && method === 'POST') {
