@@ -121,6 +121,7 @@ function mapEvent(raw) {
   // co-titulares únicos
   ev.coUsers = [...new Set(ev.coUsers)];
   // limpieza de ids temporales de opcionales/archivos
+  ev.optionals = ev.optionals.filter(o => o.kind !== 'readings' || ['title', 'value', 'link', 'comment'].some(f => String(o[f] || '').trim()));   // lecturas vacías fuera
   ev.optionals.forEach(o => { o.id = o.rid ? 900000 + o.rid : (+o._id || 0); delete o._id; delete o.rid; if (o.kind === 'readings' && !o.title) o.title = 'Lectura'; });
   ev.files.forEach(f => { f.id = +f._id || 0; delete f._id; });
   ev.conyuges = [ev.spouses[0].name, ev.spouses[1].name].filter(Boolean).join(' y ');
