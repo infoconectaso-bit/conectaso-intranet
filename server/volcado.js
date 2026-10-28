@@ -540,6 +540,27 @@ async function handle(req, res, seg, method, url) {
       return send(res, 200, { ok: true, generado: new Date().toISOString(), holdedIdx: { contactos: idx.contactsN, facturas: idx.invoicesN, rectificativas: idx.creditNotesN }, sinMatch: TARGET.filter(t => !matchLoc(t).length), todasLasMasias: locs.map(l => ({ id: l.id, name: l.name })).filter(l => l.name), result });
     }
 
+    // BUSCA CONTACTOS-EMPRESA en Holded por patrones de nombre (Sinso Food, Badoques, Hotel Edelweiss
+    // SL, Jon Barques, Colonias…) y devuelve sus totales facturados (sin IVA, rectificativas restadas),
+    // todo el histórico y solo 2026. Para identificar qué contacto = qué masía.
+    if (action === 'holded-find-contacts') {
+      const holded = require('./holded');
+      if (!holded.enabled()) return send(res, 200, { ok: false, error: 'Holded no activado' });
+      let idx; try { idx = await holded.buildIndex(body.refresh === true); } catch (e) { return send(res, 200, { ok: false, error: 'Holded: ' + e.message }); }
+      const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const pats = (body.patterns || []).map(norm).filter(Boolean);
+      const sum = arr => Math.round(arr.reduce((a, i) => a + (+i.total || 0), 0) * 100) / 100;
+      const out = [];
+      Object.values(idx.byId).forEach(c => {
+        const nm = norm(c.name); if (!nm || !pats.some(p => nm.includes(p))) return;
+        const invs = (c.invoices || []).map(holded.mapInvoice);
+        const y26 = invs.filter(i => String(i.date).slice(0, 4) === '2026');
+        out.push({ id: c.id, name: c.name, nInv: invs.length, totalSinIva: sum(invs), nInv2026: y26.length, totalSinIva2026: sum(y26) });
+      });
+      out.sort((a, b) => b.totalSinIva2026 - a.totalSinIva2026);
+      return send(res, 200, { ok: true, nMatch: out.length, contactos: out.slice(0, 50) });
+    }
+
     // FACTURACIÓN POR MASÍA desde la PROPIA INTRANET (no Holded). Media por boda de cada campo de
     // importe, para las bodas realizadas de un año dado. Así vemos qué campo recoge el total real.
     if (action === 'venue-money') {
