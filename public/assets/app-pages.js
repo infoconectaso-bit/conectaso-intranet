@@ -1314,7 +1314,29 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
   form.addEventListener('click', e => { const t = e.target.closest('[data-cmt-toggle]'); if (!t) return; e.preventDefault(); const box = t.closest('[data-cmt]'); const body = box.querySelector('.cmt-body'); const open = box.classList.toggle('open'); body.style.display = open ? '' : 'none'; if (open) { const i = body.querySelector('input,textarea'); if (i) i.focus(); } });
   // añadir / quitar momentos · subir / bajar
   form.addEventListener('click', e => {
-    const add = e.target.closest('[data-add-opt]'); if (add) { const box = form.querySelector(`[data-sortbox="${add.dataset.addOpt}"]`); box.insertAdjacentHTML('beforeend', optRow({ sec: add.dataset.addOpt }, { readonly: false })); if (form._updProgress) form._updProgress(); }
+    const add = e.target.closest('[data-add-opt]'); if (add) {
+      const box = form.querySelector(`[data-sortbox="${add.dataset.addOpt}"]`);
+      box.insertAdjacentHTML('beforeend', optRow({ sec: add.dataset.addOpt }, { readonly: false }));
+      const nuevo = box.lastElementChild;
+      if (nuevo) {
+        // Aviso para que el momento se coloque en su sitio y no se quede abajo del todo.
+        if (!nuevo.querySelector('.m-newhint')) {
+          const h = document.createElement('div');
+          h.className = 'm-newhint';
+          h.style.cssText = 'display:flex;align-items:center;gap:8px;background:rgba(232,44,136,.10);border:1px solid rgba(232,44,136,.35);border-radius:10px;padding:8px 10px;margin:0 0 8px;font-size:13px;line-height:1.35';
+          h.innerHTML = 'Agarra este momento por los <b style="letter-spacing:1px">⠿</b> de arriba y <b>arrástralo hasta el punto de la boda donde corresponda</b> (no lo dejes aquí abajo). <button type="button" class="m-newhint-x" aria-label="Entendido" style="margin-left:auto;border:0;background:transparent;cursor:pointer;font-size:15px;line-height:1;color:inherit">✕</button>';
+          nuevo.insertBefore(h, nuevo.firstChild);
+          const quita = () => { h.style.transition = 'opacity .4s'; h.style.opacity = '0'; setTimeout(() => h.remove(), 400); };
+          h.querySelector('.m-newhint-x').onclick = quita;
+          setTimeout(quita, 6000);   // se oculta solo a los 6 s (aparece cada vez que se añade un momento)
+        }
+        nuevo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const o0 = nuevo.style.boxShadow;
+        nuevo.style.transition = 'box-shadow .3s'; nuevo.style.boxShadow = '0 0 0 2px rgba(232,44,136,.6)';
+        setTimeout(() => { nuevo.style.boxShadow = o0 || 'none'; }, 2400);
+      }
+      if (form._updProgress) form._updProgress();
+    }
     const delo = e.target.closest('[data-del-opt]'); if (delo) { delo.closest('[data-moment]').remove(); if (form._updProgress) form._updProgress(); }
     if (e.target.id === 'addSvc') { const staffOpts = [['', 'Selecciona un usuario']].concat((S.meta.staff || []).map(u => [u.id, u.name])); const svcOpts = [['', 'Selecciona un servicio']].concat((S.meta.extras || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es')).map(x => [x.id, x.name])); el('svcBox').insertAdjacentHTML('beforeend', svcRow({}, svcOpts, staffOpts)); enhanceSearchSelects(el('svcBox')); }
     const dsv = e.target.closest('[data-del-svc]'); if (dsv) dsv.closest('[data-svc]').remove();
