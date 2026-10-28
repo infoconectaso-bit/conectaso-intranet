@@ -95,6 +95,19 @@ function runReminders() {
       assignedStaff(ev).forEach(id => { const u = users.get(id); if (u && u.email) send(u.email, emails.djAlbaranEmail(u, ev, magicLink(base, id, 'albaran', ev.id), base)); });
       markSent(ev, 'albaran'); n++;
     }
+    // Falta ≤1 mes y el DJ NO ha marcado "Meeting realizado" (estado < 3) → aviso al DJ, UNA vez
+    // al día, hasta que cambie el estado. estados: 0 No contactado admin · 1 No contactado dj ·
+    // 2 Contactado · 3 Meeting realizado · 4 Completado.
+    if (d >= 0 && d <= 30 && (+ev.estado || 0) < 3 && ev.djId) {
+      const last = ev.reminders && ev.reminders.djMeeting;   // fecha (YYYY-MM-DD) del último aviso
+      if (last !== today) {
+        const dj = users.get(+ev.djId);
+        if (dj && dj.email) {
+          send(dj.email, emails.djMeetingEmail(dj, ev, magicLink(base, dj.id, 'albaran', ev.id), base, d));
+          ev.reminders = ev.reminders || {}; ev.reminders.djMeeting = today; store.put('events', ev); n++;
+        }
+      }
+    }
   });
   if (n) console.log('[recordatorios] ' + n + ' eventos procesados (' + today + ').');
 }

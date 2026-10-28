@@ -131,6 +131,25 @@ function coupleMusicEmail(ev, link, baseUrl) {
   return { subject: c.subject, text: plainFromCopy(c, link), html: shell({ logoUrl, title: c.title, lead: c.lead, bodyHtml: c.body, cta: c.cta, link, foot: c.foot }) };
 }
 
+// Aviso al DJ: falta ≤1 mes para la boda y NO consta el "Meeting realizado". Se repite a diario
+// hasta que el DJ cambie el estado. 'dias' = días que faltan para la boda.
+function djMeetingEmail(u, ev, link, baseUrl, dias) {
+  const logoUrl = baseUrl ? baseUrl.replace(/\/$/, '') + '/assets/brand/logo-email-blanco.png' : '';
+  const cuando = dias <= 0 ? '<b>hoy</b>' : (dias === 1 ? '<b>mañana</b>' : `en <b>${dias} días</b>`);
+  const c = {
+    subject: '⚠️ Aún no has hecho el meeting · Boda #' + ev.id + ' · Conecta Só',
+    title: '⚠️ Te falta el meeting con los novios',
+    lead: 'La boda se acerca y no consta el meeting como realizado.',
+    body: `<p style="margin:0 0 14px 0">Hola${u.name ? ' ' + esc(u.name) : ''},</p>
+<p style="margin:0 0 14px 0">La boda <b>${esc(ev.conyuges || ('#' + ev.id))}</b> es ${cuando} (<b>${slashDate(ev.fecha)}</b>) y <b>todavía no has marcado el meeting como realizado</b>.</p>
+<p style="margin:0 0 14px 0">Por favor, haz el meeting con los novios y <b>actualiza el estado de la boda a "Meeting realizado"</b>. Mientras no lo cambies, seguirás recibiendo este aviso cada día.</p>
+<p style="margin:0">Entra aquí para gestionarlo:</p>`,
+    cta: 'Ver la boda',
+    foot: 'Recibes este recordatorio porque eres el DJ asignado a esta boda.',
+  };
+  return { subject: c.subject, text: plainFromCopy(c, link), html: shell({ logoUrl, title: c.title, lead: c.lead, bodyHtml: c.body, cta: c.cta, link, foot: c.foot }) };
+}
+
 // Aviso al DJ/técnico cuando la boda ha finalizado, para rellenar su parte de trabajo.
 function djAlbaranEmail(u, ev, link, baseUrl) {
   const logoUrl = baseUrl ? baseUrl.replace(/\/$/, '') + '/assets/brand/logo-email-blanco.png' : '';
@@ -221,4 +240,4 @@ function coupleFotosEmail(ev, link, baseUrl, fincaName) {
   return { subject: '¡Vuestras fotos del fotomatón ya están listas! 📸 · Conecta Só', html, text: `¡Vuestras fotos del fotomatón ya están listas!\n\n${ev.conyuges || ''}${sub ? ' · ' + sub.replace(/·/g, '-') : ''}\n\nDescargadlas aquí: ${link}\n\nConecta Só · conectaso.es` };
 }
 
-module.exports = { inviteEmail, resetEmail, coupleReminderEmail, coupleMusicEmail, djAlbaranEmail, extraRequestEmail, coupleFotosEmail, shell, inviteCopy };
+module.exports = { inviteEmail, resetEmail, coupleReminderEmail, coupleMusicEmail, djMeetingEmail, djAlbaranEmail, extraRequestEmail, coupleFotosEmail, shell, inviteCopy };

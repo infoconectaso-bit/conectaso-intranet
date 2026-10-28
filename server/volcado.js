@@ -410,6 +410,70 @@ async function handle(req, res, seg, method, url) {
       }
       return send(res, 200, { ok: true, traidos, saltados, fallos, eventos: ids.length, errs });
     }
+
+    // AUDITORÍA 1 a 1: el navegador (sesión en la intranet real) envía las fichas CRUDAS vivas y el
+    // servidor las mapea y compara campo a campo con la réplica. Devuelve informe SIN datos personales
+    // (nombres/emails solo como coincide/difiere; importes, fechas, ids y recuentos sí, no son PII).
+    if (action === 'compare') {
+      const store = dbm0.store, users = dbm0.users;
+      const raws = Array.isArray(body.raws) ? body.raws : [];
+      const norm = v => String(v == null ? '' : v).trim();
+      const results = [];
+      for (const raw of raws) {
+        let m; try { m = mapEvent(raw); } catch (e) { results.push({ id: +raw.__id, error: 'map:' + e.message }); continue; }
+        const R = m.ev; R.id = +raw.__id;
+        const E = store.get('events', R.id);
+        if (!E) { results.push({ id: R.id, error: 'no existe en la réplica' }); continue; }
+        const diffs = [];
+        const cmp = (campo, a, b) => { if (norm(a) !== norm(b)) diffs.push({ campo, real: norm(a), replica: norm(b) }); };
+        cmp('fecha', R.fecha, E.fecha); cmp('hora', R.hora, E.hora); cmp('lugar', R.lugar, E.lugar);
+        cmp('tipo', R.tipo, E.tipo); cmp('estado', R.estado, E.estado);
+        cmp('djId', R.djId, E.djId); cmp('wpId', R.wpId, E.wpId);
+        cmp('pagado', R.pagado, E.pagado); cmp('pagoCliente', R.pagoCliente, E.pagoCliente);
+        cmp('totalCost', R.totalCost, E.totalCost); cmp('metodo', R.metodo, E.metodo);
+        cmp('pendiente', (+R.pagoCliente || 0) - (+R.pagado || 0), (+E.pagoCliente || 0) - (+E.pagado || 0));
+        // cónyuges: solo coincide/difiere (sin exponer nombres/emails)
+        const se = (ev, i, k) => norm(((ev.spouses || [])[i] || {})[k]);
+        for (const i of [0, 1]) {
+          if (se(R, i, 'name') !== se(E, i, 'name')) diffs.push({ campo: 'conyuge' + (i + 1) + '_nombre', real: 'difiere', replica: '' });
+          if (se(R, i, 'email').toLowerCase() !== se(E, i, 'email').toLowerCase()) diffs.push({ campo: 'conyuge' + (i + 1) + '_email', real: 'difiere', replica: '' });
+        }
+        // servicios (set servicio:resp:horas)
+        const svcKey = s => (s.servicio) + ':' + (s.resp || '') + ':' + (s.horas || '');
+        const sR = (R.services || []).map(svcKey).sort(), sE = (E.services || []).map(svcKey).sort();
+        if (JSON.stringify(sR) !== JSON.stringify(sE)) diffs.push({ campo: 'servicios', real: sR.join('|') || '(0)', replica: sE.join('|') || '(0)' });
+        // co-titulares
+        const cR = (R.coUsers || []).slice().sort((a, b) => a - b), cE = (E.coUsers || []).slice().sort((a, b) => a - b);
+        if (JSON.stringify(cR) !== JSON.stringify(cE)) diffs.push({ campo: 'coUsers', real: cR.join(',') || '(0)', replica: cE.join(',') || '(0)' });
+        // música: song/order/link/comment por momento
+        const mk = {}; const addM = (ev, s) => Object.keys(ev.music || {}).forEach(k => { const mm = ev.music[k] || {}; (mk[k] = mk[k] || {})[s] = mm; });
+        addM(R, 'r'); addM(E, 'e');
+        const musEj = []; let musDiff = 0;
+        Object.keys(mk).forEach(k => { const a = mk[k].r || {}, b = mk[k].e || {}; ['song', 'order', 'link', 'comment'].forEach(f => { if (norm(a[f]) !== norm(b[f])) { musDiff++; if (musEj.length < 8) musEj.push(k + '.' + f); } }); });
+        if (musDiff) diffs.push({ campo: 'musica', real: musDiff + ' difs', replica: musEj.join(', ') });
+        // opcionales (canciones personalizadas)
+        const optKey = o => norm(o.title) + '|' + norm(o.value) + '|' + norm(o.link) + '|' + norm(o.order) + '|' + norm(o.area);
+        const oR = (R.optionals || []).map(optKey).sort(), oE = (E.optionals || []).map(optKey).sort();
+        if (JSON.stringify(oR) !== JSON.stringify(oE)) diffs.push({ campo: 'opcionales', real: oR.length + '', replica: oE.length + '' });
+        // adjuntos: nombres reales (raw.__files) vs tabla files de la réplica
+        const realF = (raw.__files || []).map(x => decodeURIComponent(String(x)));
+        const repRows = dbm0.db.prepare('SELECT name FROM files WHERE collection=? AND record_id=?').all('events', R.id).map(r => r.name);
+        const faltan = realF.filter(n => !repRows.includes(n));
+        if (faltan.length) diffs.push({ campo: 'adjuntos', real: realF.length + ' reales, faltan ' + faltan.length, replica: repRows.length + ' en réplica' });
+        // titular (info, no cuenta como fallo): ¿el email del titular de la réplica coincide con un cónyuge real?
+        const uE = users.get(E.userId); const uMail = uE && uE.email ? uE.email.toLowerCase() : '';
+        const realMails = [norm(raw.first_spouse_email).toLowerCase(), norm(raw.second_spouse_email).toLowerCase()].filter(Boolean);
+        const titular = { userId: E.userId == null ? null : E.userId, emailCoincideConConyuge: uMail ? realMails.includes(uMail) : null };
+        results.push({ id: R.id, conyuges: (E.conyuges || R.conyuges || '').slice(0, 28), ok: diffs.length === 0, diffs, titular });
+      }
+      try { fs.writeFileSync(path.join(dbm0.DATA_DIR, 'volcado-compare.json'), JSON.stringify({ at: new Date().toISOString(), results })); } catch (e) { }
+      return send(res, 200, { ok: true, n: results.length });
+    }
+
+    if (action === 'compare-report') {
+      let rep = null; try { rep = JSON.parse(fs.readFileSync(path.join(dbm0.DATA_DIR, 'volcado-compare.json'), 'utf8')); } catch (e) { return send(res, 200, { ok: false, error: 'sin informe' }); }
+      return send(res, 200, { ok: true, report: rep });
+    }
   }
 
   // RECOLOCAR momentos personalizados en su sección real, leyendo cada ficha original.
