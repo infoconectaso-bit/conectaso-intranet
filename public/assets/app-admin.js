@@ -1461,6 +1461,21 @@ on(/^#\/backups$/, async () => {
         ${pct >= 80 ? '<p class="hint" style="color:#B71C1C;margin-top:6px">⚠ Te acercas al límite gratuito de 10 GB. Revisa el ciclo de vida del bucket (que borre versiones antiguas) o valora ampliar.</p>' : ''}
       </div>`;
     }
+    // Barra de espacio del NAS (dato real que informa el propio NAS en cada copia).
+    let nasBar = '';
+    const nas = r.nas;
+    if (nas && nas.totalKB) {
+      const pct = Math.min(100, Math.round(nas.usedKB / nas.totalKB * 100));
+      const col = pct >= 90 ? '#B71C1C' : (pct >= 70 ? '#C77700' : '#1B5E20');
+      const toB = kb => (kb || 0) * 1024;
+      nasBar = `<div style="max-width:560px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>Espacio del NAS${nas.copies ? ' · ' + nas.copies + ' copias' : ''}</span><span><b>${fmtSize(toB(nas.usedKB))}</b> de ${fmtSize(toB(nas.totalKB))} · ${pct}%</span></div>
+        <div style="height:12px;border-radius:999px;background:rgba(0,0,0,.08);overflow:hidden"><div style="height:100%;width:${Math.max(2, pct)}%;background:${col};transition:width .3s"></div></div>
+        <p class="hint" style="margin-top:6px">Dato real del NAS de la nave${nas.folderKB ? ` · la carpeta de copias ocupa <b>${fmtSize(toB(nas.folderKB))}</b>` : ''}${nas.at ? ` · último informe: ${fmtDate(nas.at)}` : ''}.</p>
+      </div>`;
+    } else {
+      nasBar = `<div class="banner" style="max-width:560px;margin-bottom:14px;padding:10px 14px;border-radius:10px;background:#EEF2F7;color:#334;border:1px solid #D6DEE8">El NAS aún no ha informado de su espacio. Aparecerá aquí en cuanto se ejecute la copia (o púlsala a mano en el NAS).</div>`;
+    }
     const tagLabel = t => t === 'pre' ? 'previa a mantenimiento' : t === 'prr' ? 'previa a restauración' : '';
     const rows = list.map(b => {
       const lbl = tagLabel(b.tag);
@@ -1503,7 +1518,8 @@ on(/^#\/backups$/, async () => {
       </div>
 
       <h2 style="margin:26px 0 6px">💽 Copia local en tu NAS (Synology)</h2>
-      <p class="hint" style="margin-bottom:12px">El NAS de la nave puede descargar <b>cada noche</b> una copia completa (base de datos + archivos) desde aquí, sin exponer el NAS a internet. Pulsa el botón para obtener el enlace seguro y el script que hay que pegar en el <b>Programador de tareas</b> del NAS.</p>
+      <p class="hint" style="margin-bottom:12px">El NAS de la nave descarga solo una copia desde aquí (sin exponerse a internet): <b>completa cada día</b> y <b>solo la base de datos cada 2 h</b>. Pulsa el botón para obtener el enlace seguro y los scripts para el <b>Programador de tareas</b> del NAS.</p>
+      ${nasBar}
       <div class="card" style="padding:16px;border:1px solid var(--line,#e5e7eb);border-radius:12px;max-width:680px">
         <div class="btn-row" style="flex-wrap:wrap;gap:8px"><button class="btn btn--primary" id="nasGet">🔑 Preparar enlace para el NAS</button> <button class="btn" id="nasRegen">♻ Regenerar clave</button></div>
         <div id="nasOut" style="margin-top:12px"></div>
@@ -1534,20 +1550,36 @@ on(/^#\/backups$/, async () => {
     if (bp) bp.onclick = async () => { bp.disabled = true; bp.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST', body: { pre: true } }); toast('Copia previa a mantenimiento creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
     // Copia local al NAS: obtener el enlace seguro + el script para el Programador de tareas.
     const showNas = (d) => {
+      const rep = ['# informa del espacio del NAS al panel',
+        'set -- $(df -k "$DEST" | tail -1 | awk \'{print $(NF-4),$(NF-3),$(NF-2)}\')',
+        'C=$(ls -1 "$DEST"/conectaso-*.gz 2>/dev/null | wc -l)',
+        'F=$(du -sk "$DEST" 2>/dev/null | awk \'{print $1}\')',
+        'REP="' + d.base + '/api/backups/nas-report?token=' + d.token + '&total=$1&used=$2&avail=$3&copies=$C&folder=$F"',
+        'if command -v curl >/dev/null 2>&1; then curl -fsS "$REP" >/dev/null 2>&1; else wget -q "$REP" -O /dev/null; fi'];
       const full = d.url + '?token=' + d.token;
-      const script = ['#!/bin/sh',
+      const dbu = d.url + '?token=' + d.token + '&what=db';
+      const scriptFull = ['#!/bin/sh',
         'DEST="/volume1/copias-intranet"',
         'mkdir -p "$DEST"',
         'OUT="$DEST/conectaso-$(date +%Y%m%d-%H%M).tar.gz"',
         'if command -v curl >/dev/null 2>&1; then curl -fsS "' + full + '" -o "$OUT"; else wget -q "' + full + '" -O "$OUT"; fi',
-        '# conserva las ultimas 30 copias (~15 dias con 2 al dia) y borra las mas viejas',
-        'ls -1t "$DEST"/conectaso-*.tar.gz 2>/dev/null | tail -n +31 | while read f; do rm -f "$f"; done'].join('\n');
+        '# conserva las ultimas 90 copias completas (~3 meses con 1 al dia)',
+        'ls -1t "$DEST"/conectaso-*.tar.gz 2>/dev/null | tail -n +91 | while read f; do rm -f "$f"; done'].concat(rep).join('\n');
+      const scriptDb = ['#!/bin/sh',
+        'DEST="/volume1/copias-intranet"',
+        'mkdir -p "$DEST"',
+        'OUT="$DEST/conectaso-db-$(date +%Y%m%d-%H%M).db.gz"',
+        'if command -v curl >/dev/null 2>&1; then curl -fsS "' + dbu + '" -o "$OUT"; else wget -q "' + dbu + '" -O "$OUT"; fi',
+        '# conserva las ultimas 1100 copias de BD (~3 meses cada 2 h)',
+        'ls -1t "$DEST"/conectaso-db-*.db.gz 2>/dev/null | tail -n +1101 | while read f; do rm -f "$f"; done'].concat(rep).join('\n');
       const out = el('nasOut'); if (!out) return;
       out.innerHTML = `<p style="margin:0 0 6px"><b>Enlace seguro</b> (no lo compartas, da acceso a las copias):</p>
         <textarea class="inp" rows="2" readonly style="width:100%;font-family:monospace;font-size:12px" onclick="this.select()">${esc(full)}</textarea>
-        <p style="margin:12px 0 6px"><b>Script para el NAS</b> (Programador de tareas → Tarea programada → Script definido por el usuario):</p>
-        <textarea class="inp" rows="6" readonly style="width:100%;font-family:monospace;font-size:12px" onclick="this.select()">${esc(script)}</textarea>
-        <p class="hint" style="margin-top:8px">Crea en el NAS una carpeta compartida llamada <b>copias-intranet</b> y una tarea programada que ejecute este script <b>2 veces al día</b> (p. ej. primera a las 03:30 y repetir cada 12 h). Mantendrá las <b>últimas 30</b> copias (~15 días).</p>`;
+        <p style="margin:14px 0 6px">① <b>Tarea DIARIA — copia completa</b> (archivos + base de datos). Prográmala <b>a diario a las 03:30</b>:</p>
+        <textarea class="inp" rows="8" readonly style="width:100%;font-family:monospace;font-size:12px" onclick="this.select()">${esc(scriptFull)}</textarea>
+        <p style="margin:14px 0 6px">② <b>Tarea CADA 2 HORAS — solo base de datos</b> (ligera). Prográmala <b>a diario, primera a las 00:00 y repetir cada 2 h</b>:</p>
+        <textarea class="inp" rows="8" readonly style="width:100%;font-family:monospace;font-size:12px" onclick="this.select()">${esc(scriptDb)}</textarea>
+        <p class="hint" style="margin-top:8px">Crea en el NAS la carpeta compartida <b>copias-intranet</b> y <b>dos tareas programadas</b> con estos scripts. Guarda ~3 meses de ambas y la barra de espacio de arriba se actualizará sola.</p>`;
     };
     const nasGet = el('nasGet');
     if (nasGet) nasGet.onclick = async () => { nasGet.disabled = true; try { const d = await api('backups/nas-config'); showNas(d); } catch (e) { toast(e.message || 'Error', 'err'); } nasGet.disabled = false; };

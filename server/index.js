@@ -304,8 +304,18 @@ async function api(req, res, url) {
     const given = String(req.headers['x-backup-token'] || '').trim() || new URL(req.url, 'http://x').searchParams.get('token') || '';
     if (!want || given !== want) return fail(res, 403, 'Clave no válida.');
     let snap; try { snap = backup.snapshot('nas'); } catch (e) { return fail(res, 500, 'No se pudo preparar la copia: ' + e.message); }
-    const rel = path.relative(DATA_DIR, path.join(backup.BACKUP_DIR, snap.name));
+    const dbPath = path.join(backup.BACKUP_DIR, snap.name);
     const stamp2 = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const what = new URL(req.url, 'http://x').searchParams.get('what') || '';
+    if (what === 'db') {
+      // Solo la base de datos (comprimida). Ligero: pensado para descargas frecuentes (cada hora).
+      res.writeHead(200, { 'Content-Type': 'application/gzip', 'Content-Disposition': 'attachment; filename="conectaso-db-' + stamp2 + '.db.gz"', 'Cache-Control': 'no-store' });
+      const gz = require('child_process').spawn('gzip', ['-c', dbPath]);
+      gz.stdout.pipe(res);
+      gz.on('error', () => { try { res.destroy(); } catch (_) {} });
+      return;
+    }
+    const rel = path.relative(DATA_DIR, dbPath);
     res.writeHead(200, { 'Content-Type': 'application/gzip', 'Content-Disposition': 'attachment; filename="conectaso-' + stamp2 + '.tar.gz"', 'Cache-Control': 'no-store' });
     const args = ['-czf', '-', '-C', DATA_DIR, 'uploads', rel];
     const tar = require('child_process').spawn('tar', args);
@@ -313,6 +323,16 @@ async function api(req, res, url) {
     tar.stderr.on('data', () => {});
     tar.on('error', () => { try { res.destroy(); } catch (_) {} });
     return;
+  }
+
+  // --- El NAS informa de su espacio (sin sesión: misma clave del enlace) ---
+  if (seg[0] === 'backups' && seg[1] === 'nas-report' && method === 'GET') {
+    const want = store.setting('nasPullToken') || '';
+    const q = new URL(req.url, 'http://x').searchParams;
+    if (!want || q.get('token') !== want) return fail(res, 403, 'Clave no válida.');
+    const num = k => { const v = parseInt(q.get(k) || '0', 10); return isNaN(v) ? 0 : v; };
+    store.setSetting('nasStatus', { totalKB: num('total'), usedKB: num('used'), availKB: num('avail'), copies: num('copies'), folderKB: num('folder'), at: new Date().toISOString() });
+    return ok(res, { ok: true });
   }
 
   if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
@@ -784,7 +804,7 @@ async function api(req, res, url) {
     const totalSize = items.reduce((s, b) => s + b.size, 0);
     let cloud = { configured: false };
     try { cloud = await cloudBackup.statusAsync(); } catch (e) { cloud = { configured: cloudBackup.enabled(), reachError: e.message }; }
-    return ok(res, { count: items.length, lastBackup: items[0] || null, totalSize, dir: backup.BACKUP_DIR, status: backup.status(), cloud, backups: items });
+    return ok(res, { count: items.length, lastBackup: items[0] || null, totalSize, dir: backup.BACKUP_DIR, status: backup.status(), cloud, backups: items, nas: store.setting('nasStatus') || null });
   }
   // --- COPIA EN LA NUBE (admin): configuración de Backblaze B2 (claves nunca se devuelven) ---
   if (seg[0] === 'cloud-backup-config') {
