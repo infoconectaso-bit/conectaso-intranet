@@ -1139,3 +1139,22 @@ html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok
 .yrchip--unpaid .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
 .yrchip--unpaid.on{background:#D50000;color:#fff;border-color:#D50000}
 .yrchip--unpaid.on .dot{background:#fff!important}
+
+/* Hoja de ruta v4: datos clave en portada, resumen = timing + servicios con responsable */
+.ruta-deck .cover-facts{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+.ruta-deck .cf{display:flex;flex-direction:column;gap:2px;background:#ffffff10;border:1px solid #ffffff24;border-radius:12px;padding:9px 14px;min-width:150px}
+.ruta-deck .cf-k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9d97a4}
+.ruta-deck .cf-v{font-family:var(--disp);font-size:16px;text-transform:uppercase;color:var(--cream);line-height:1.2}
+.ruta-deck .resumen-2col{grid-template-columns:.9fr 1.1fr;gap:20px}
+.ruta-deck .resumen-2col .card{padding:20px 24px}
+.ruta-deck .tl--compact .t{padding:7px 0}
+.ruta-deck .tl--compact .hh{font-size:20px;width:74px;min-width:74px}
+.ruta-deck .tl--compact .lbl{font-size:15px}
+.ruta-deck .tl--compact .sub{font-size:12px}
+.ruta-deck .svc-chip{align-items:center}
+.ruta-deck .svc-txt{display:flex;flex-direction:column;gap:3px;min-width:0}
+.ruta-deck .svc-nm{font-family:var(--disp);text-transform:uppercase;font-size:14px;line-height:1.2}
+.ruta-deck .svc-resp{font-family:var(--body);text-transform:none;font-size:12.5px;color:#cfc9d1}
+.ruta-deck .obs-aviso{margin-top:16px;max-width:760px}
+.ruta-deck .obs-aviso .note-tip{margin-top:0}
+.ruta-deck .slide.page{padding-bottom:110px}

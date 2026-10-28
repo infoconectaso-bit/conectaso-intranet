@@ -1746,8 +1746,8 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
   // Servicios del evento con un icono según lo que son (fotomatón, fuego frío, humo…).
   const SVC_ICONS = [[/fotomat|photo ?booth|cabina/, '📸'], [/photocall|photo ?call|photowall/, '🖼️'], [/fuego|chispa|pirotec|bengal|sparkular/, '🎆'], [/baja densidad|nube|humo|niebla|nebuliz/, '☁️'], [/co2|criog|chorro/, '💨'], [/confet/, '🎉'], [/saxo/, '🎷'], [/viol/, '🎻'], [/trompet/, '🎺'], [/percus|tambor|bater/, '🥁'], [/cantant|voz|karaoke|coro/, '🎤'], [/robot/, '🤖'], [/letra|love|neon/, '💡'], [/ilumin|luz|luces|led|foco|uplight/, '🔦'], [/proyec|pantalla|video/, '📽️'], [/micro|discurso|parlament/, '🎙️'], [/ceremon/, '💒'], [/sonido|altavoz|sonoriz|equipo/, '🔊'], [/\bdj\b|disco/, '🎧'], [/pista|baile|tarima/, '🕺'], [/carro|carrito|candy|helad/, '🛒'], [/guitarr/, '🎸'], [/piano/, '🎹'], [/flor/, '💐']];
   const svcIcon = nm => { const n = String(nm || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); const hit = SVC_ICONS.find(([re]) => re.test(n)); return hit ? hit[1] : '✨'; };
-  const svcList = [...new Set((ev.services || []).filter(s => s.servicio).map(s => extraName(s.servicio)).filter(Boolean))];
-  const svcHtml = svcList.length ? `<div class="card"><h3>Servicios <span class="ic">✨</span></h3><div class="svc-chips">${svcList.map(nm => `<div class="svc-chip"><span class="svc-ic">${svcIcon(nm)}</span><span>${esc(nm)}</span></div>`).join('')}</div></div>` : '';
+  const svcList = (ev.services || []).filter(s => s.servicio).map(s => ({ nm: extraName(s.servicio), resp: [s.resp, s.resp2].filter(Boolean).map(r => userName(r)).filter(Boolean).join(' · ') })).filter(x => x.nm);
+  const svcHtml = svcList.length ? `<div class="card"><h3>Servicios extra <span class="ic">✨</span></h3><div class="svc-chips">${svcList.map(x => `<div class="svc-chip"><span class="svc-ic">${svcIcon(x.nm)}</span><span class="svc-txt"><span class="svc-nm">${esc(x.nm)}</span><span class="svc-resp">${x.resp ? '👤 ' + esc(x.resp) : 'Sin asignar'}</span></span></div>`).join('')}</div></div>` : '';
   // Numeración de páginas del PDF (se evalúa en el orden del documento).
   let pageNo = 1;
   const pg = () => ('0' + (++pageNo)).slice(-2);
@@ -1762,6 +1762,11 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
           <div class="kick">Hoja de ruta · equipo</div>
           <h1>${esc(ev.conyuges || ('Boda #' + ev.id))}</h1>
           <div class="meta"><b>Boda #${ev.id}</b> · ${val(ev.tipo)}<br>${esc(fechaLarga(ev.fecha))}<br><b>${esc(destName)}</b></div>
+          <div class="cover-facts">
+            <div class="cf"><span class="cf-k">🎧 DJ / Técnico</span><span class="cf-v">${val(djOf(ev))}</span></div>
+            <div class="cf"><span class="cf-k">${hasCer ? '💒 Ceremonia' : '🥂 Aperitivo'}</span><span class="cf-v">${val(hasCer ? ev.hora : (apMin != null ? _min2hm(apMin) : ''))}</span></div>
+            ${ev.vehicleId ? `<div class="cf"><span class="cf-k">🚐 Furgoneta</span><span class="cf-v">${val(vehLabel(ev.vehicleId))}</span></div>` : ''}
+          </div>
         </div>
         <div class="card cover-norm"><h3>Normativa interna <span class="ic">📋</span></h3>
           <div class="norm-list">
@@ -1776,26 +1781,12 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
       </section>
 
       <section class="slide dark page">
-        <h2 style="margin-bottom:14px">Resumen del evento</h2>
-        <div class="grid3" style="margin-bottom:14px">
-          <div class="card"><h3>Localización <span class="ic">📍</span></h3>
-            <div class="row"><div class="k">Finca</div><div class="v">${val(destName)}</div></div>
-            <div class="row"><div class="k">${hasCer ? 'Hora ceremonia' : 'Hora aperitivo'}</div><div class="v sm">${val(hasCer ? ev.hora : (apMin != null ? _min2hm(apMin) : ''))}</div></div>
-          </div>
-          <div class="card"><h3>Equipo <span class="ic">🎧</span></h3>
-            <div class="row"><div class="k">DJ / Técnico</div><div class="v">${val(djOf(ev))}</div></div>
-            <div class="row"><div class="k">Tipo de servicio</div><div class="v sm">${val(ev.tipo)}</div></div>
-            ${ev.vehicleId ? `<div class="row"><div class="k">Furgoneta</div><div class="v sm">${val(vehLabel(ev.vehicleId))}</div></div>` : ''}
-          </div>
-          <div class="card"><h3>Contacto <span class="ic">📞</span></h3>
-            <div class="row"><div class="k">Email</div><div class="v sm">info@conectaso.es</div></div>
-            <div class="row"><div class="k">Web</div><div class="v sm">conectaso.es</div></div>
-          </div>
-        </div>
+        <h2 style="margin-bottom:18px">Timing y servicios</h2>
         <div class="resumen-2col${svcHtml ? '' : ' resumen-2col--solo'}">
-          <div class="card"><h3>Timing del día <span class="ic">⏱️</span></h3><div class="tl tl--compact">${tlHtml}</div>${obsAviso}</div>
+          <div class="card"><h3>Timing del día <span class="ic">⏱️</span></h3><div class="tl tl--compact">${tlHtml}</div></div>
           ${svcHtml}
         </div>
+        ${obsAviso ? `<div class="obs-aviso">${obsAviso}</div>` : ''}
         <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
       </section>
 
