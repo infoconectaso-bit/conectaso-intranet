@@ -148,6 +148,11 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
   </div>
 
 
+  <div class="notice" id="importBox" hidden>
+    <div id="importTxt" style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="importSi" type="button">Traspasar</button><button class="btn" id="importNo" type="button">Ahora no</button></div>
+  </div>
+
   <div class="summary">
     <div><span>Ingresos</span><b id="sIn" class="pos">0 €</b></div>
     <div><span>Gastos</span><b id="sOut" class="neg">0 €</b></div>
@@ -359,12 +364,30 @@ $('claveForm').addEventListener('submit',async e=>{
   catch(err){$('aerr').textContent=err.message}
 });
 
+/* traspaso: el enlace trae los datos tras la # (no se envían al servidor hasta que se pulsa Traspasar) */
+const PEND='cuentas_importar';
+if(location.hash.startsWith('#importar=')){try{sessionStorage.setItem(PEND,location.hash.slice(10))}catch(e){}history.replaceState(null,'',location.pathname+location.search)}
+function pendiente(){try{const t=sessionStorage.getItem(PEND);if(!t)return null;const j=decodeURIComponent(escape(atob(t.replace(/-/g,'+').replace(/_/g,'/'))));return JSON.parse(j)}catch(e){return null}}
+function ofrecerImportar(){
+  const lista=pendiente();if(!lista||!lista.length)return;
+  const box=$('importBox');box.hidden=false;
+  $('importTxt').textContent='Hay '+lista.length+' movimientos de la versión anterior listos para pasar aquí.';
+  $('importNo').onclick=()=>{try{sessionStorage.removeItem(PEND)}catch(e){}box.hidden=true};
+  $('importSi').onclick=async()=>{
+    $('importSi').disabled=true;
+    try{const r=await api('importar',{method:'POST',body:JSON.stringify({movimientos:lista})});
+      try{sessionStorage.removeItem(PEND)}catch(e){}box.hidden=true;
+      toast(r.nuevos+' movimientos pasados'+(r.repetidos?' ('+r.repetidos+' ya estaban)':''));await cargar();
+    }catch(e){$('importTxt').textContent=e.message;$('importSi').disabled=false}
+  };
+}
+
 /* arranque */
 (async()=>{
   const q=new URLSearchParams(location.search);
   try{
     const st=await (await fetch('api/estado',{credentials:'same-origin'})).json();
-    if(st.dentro){$('app').hidden=false;$('add').hidden=false;render();await cargar();return}
+    if(st.dentro){$('app').hidden=false;$('add').hidden=false;render();await cargar();ofrecerImportar();return}
     $('login').hidden=false;
     if(st.primeraVez){$('lTitle').textContent='Crea el acceso';$('lText').textContent='Elegid un usuario y una contraseña. Los usaréis los dos para entrar.';$('lBtn').textContent='Crear y entrar';$('lpass').autocomplete='new-password'}
     if(q.get('e'))$('lerr').textContent=q.get('e');

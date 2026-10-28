@@ -184,6 +184,21 @@ async function api(req, res, p) {
     if (DB.movimientos[mm[1]]) { delete DB.movimientos[mm[1]]; DB.borrado = Date.now(); save(); }
     return send(res, 200, { ok: true });
   }
+  // Traspaso de movimientos (p. ej. desde la versión anterior). No duplica los que ya están.
+  if (p === '/api/importar' && m === 'POST') {
+    const b = await body(req);
+    const lista = Array.isArray(b.movimientos) ? b.movimientos.slice(0, 500) : [];
+    const clave = x => [x.cuenta, x.tipo, x.concepto.toLowerCase(), x.importe, x.frecuencia, x.desde, x.hasta || ''].join('|');
+    const hay = new Set(Object.values(DB.movimientos).map(clave));
+    let nuevos = 0;
+    for (const raw of lista) {
+      const x = limpiar(raw || {}, null);
+      if (!x.concepto || !(x.importe > 0) || hay.has(clave(x))) continue;
+      DB.movimientos[x.id] = x; hay.add(clave(x)); nuevos++;
+    }
+    if (nuevos) save();
+    return send(res, 200, { ok: true, nuevos, repetidos: lista.length - nuevos });
+  }
   if (p === '/api/cambiar-clave' && m === 'POST') {
     const b = await body(req);
     if (!verify(b.actual || '', DB.acceso.passHash)) return send(res, 400, { error: 'La contraseña actual no es correcta.' });
