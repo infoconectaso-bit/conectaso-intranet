@@ -488,6 +488,9 @@ async function handle(req, res, seg, method, url) {
       const locs = store.all('locations');
       const matchLoc = t => { const nt = norm(t); return locs.filter(l => { const nl = norm(l.name); return nl && (nl === nt || nl.includes(nt) || nt.includes(nl)); }); };
       const today = time.bizToday();
+      const CUT = body.cut || '2024-01-01';  // inicio de la "era Holded" (primera factura ~F2400xx)
+      // Mapa explícito masía->ids (más fiable que el nombre). Si no se pasa, se intenta por nombre.
+      const venueMap = body.venueMap && typeof body.venueMap === 'object' ? body.venueMap : null;
       // eventos por masía (una pasada)
       const evByLoc = {}; store.all('events').forEach(e => { const l = +e.lugar || 0; (evByLoc[l] = evByLoc[l] || []).push(e); });
       let idx; try { idx = await holded.buildIndex(body.refresh === true); } catch (e) { return send(res, 200, { ok: false, error: 'Holded: ' + e.message }); }
@@ -501,27 +504,36 @@ async function handle(req, res, seg, method, url) {
       };
       const result = [];
       for (const t of TARGET) {
-        const matched = matchLoc(t); const ids = new Set(matched.map(l => l.id));
+        let matched, ids;
+        if (venueMap && venueMap[t]) { ids = new Set((venueMap[t] || []).map(Number)); matched = locs.filter(l => ids.has(l.id)); }
+        else { matched = matchLoc(t); ids = new Set(matched.map(l => l.id)); }
         const evs = []; ids.forEach(id => (evByLoc[id] || []).forEach(e => evs.push(e)));
         const realizadas = evs.filter(e => e.fecha && e.fecha < today);
-        let total = 0, totalConIva = 0, nConFactura = 0, nSinFactura = 0; const invSeen = new Set(); const conceptos = []; let nCredit = 0;
-        for (const ev of realizadas) {
+        const eraHolded = realizadas.filter(e => e.fecha >= CUT);
+        // facturación SOLO de las bodas de la era Holded (desde 2024), que es cuando hay facturas
+        let total = 0, nConFactura = 0, nSinFactura = 0; const invSeen = new Set(); const conceptos = []; let nCredit = 0;
+        const porBoda = [];  // total facturado por cada boda con factura (para mediana)
+        for (const ev of eraHolded) {
           let r; try { r = await holded.invoicesForClient(candidates(ev), false, { includeName: true }); } catch (e) { r = { invoices: [] }; }
           const invs = r.invoices || [];
           if (!invs.length) { nSinFactura++; continue; }
-          nConFactura++;
+          nConFactura++; let evTotal = 0;
           invs.forEach(inv => { const k = String(inv.id); if (invSeen.has(k)) return; invSeen.add(k);
-            total += (+inv.total || 0); totalConIva += (+inv.totalConIva || 0); if (inv.credit) nCredit++;
-            if (conceptos.length < 6) { const c = [(inv.desc || ''), ...(inv.products || []).map(p => p.name)].filter(Boolean).join(' · '); conceptos.push({ num: inv.number, fecha: inv.date, base: inv.total, rect: !!inv.credit, concepto: c.slice(0, 90) }); }
+            total += (+inv.total || 0); evTotal += (+inv.total || 0); if (inv.credit) nCredit++;
+            if (conceptos.length < 8) { const c = [(inv.desc || ''), ...(inv.products || []).map(p => p.name)].filter(Boolean).join(' · '); conceptos.push({ num: inv.number, fecha: inv.date, base: inv.total, rect: !!inv.credit, concepto: c.slice(0, 80) }); }
           });
+          porBoda.push(Math.round(evTotal * 100) / 100);
         }
+        const sorted = porBoda.slice().sort((a, b) => a - b);
+        const mediana = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
         result.push({
           masia: t, locIds: [...ids], locNames: matched.map(l => l.name),
-          bodasRealizadas: realizadas.length, conFactura: nConFactura, sinFactura: nSinFactura,
+          bodasRealizadasTotal: realizadas.length, bodasDesde2024: eraHolded.length,
+          conFactura: nConFactura, sinFactura: nSinFactura, pctCasado: eraHolded.length ? Math.round(nConFactura / eraHolded.length * 100) : 0,
           nFacturas: invSeen.size, nRectificativas: nCredit,
-          totalFacturadoSinIva: Math.round(total * 100) / 100, totalConIva: Math.round(totalConIva * 100) / 100,
-          mediaPorBodaRealizada: realizadas.length ? Math.round(total / realizadas.length * 100) / 100 : 0,
+          totalFacturadoSinIva: Math.round(total * 100) / 100,
           mediaPorBodaFacturada: nConFactura ? Math.round(total / nConFactura * 100) / 100 : 0,
+          medianaPorBodaFacturada: mediana,
           conceptos,
         });
       }
