@@ -244,7 +244,7 @@ async function eventsList(done) {
   $$('[data-unpaid]').forEach(b => b.onclick = () => { DONE_VIEW.unpaid = !DONE_VIEW.unpaid; eventsList(true); });
   $$('[data-noowner]').forEach(b => b.onclick = () => { TODO_VIEW.noOwner = !TODO_VIEW.noOwner; eventsList(false); });
 }
-const clientName = e => e.clienteNombre || e.conyuges || userName(e.userId) || 'Cliente';
+const clientName = e => e.clienteNombre || e.conyuges || userName(e.userId) || 'Sin nombre';
 function confirmDeleteEvent(id, done) {
   modal('Borrar evento', `¿Seguro que quieres eliminar el evento #${id}? Esta acción no se puede deshacer.`, {
     okText: 'Eliminar', danger: true, onOk: async () => { await api('events/' + id, { method: 'DELETE' }); toast('Evento eliminado', 'ok'); eventsList(done); }

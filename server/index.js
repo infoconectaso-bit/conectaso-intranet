@@ -2435,6 +2435,12 @@ async function events(req, res, user, seg, method, url) {
     const done = url.searchParams.get('status') === 'done';
     // Un evento pasa a "realizadas" a las 05:00 del día siguiente (hora de Madrid).
     let list = listEventsFor(user).filter(e => (done ? evFinished(e) : !evFinished(e)));
+    // Admin: nombre del titular (cuenta cliente) para el listado. Antes el navegador solo conocía los
+    // nombres del equipo y los clientes salían como "1087 - Cliente" aunque la cuenta tuviera nombre.
+    if (user.role === 'admin') {
+      const nm = {}; users.all().forEach(u => { nm[u.id] = u.name || ''; });
+      return ok(res, { events: list.map(e => { const s = perm.summarizeEvent(user, e); if (e.userId && nm[e.userId]) s.clienteNombre = nm[e.userId]; return s; }) });
+    }
     return ok(res, { events: list.map(e => perm.summarizeEvent(user, e)) });
   }
   // /api/events  (crear una boda nueva; solo admin)
