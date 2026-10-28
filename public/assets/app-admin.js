@@ -1540,14 +1540,14 @@ on(/^#\/backups$/, async () => {
         'mkdir -p "$DEST"',
         'OUT="$DEST/conectaso-$(date +%Y%m%d-%H%M).tar.gz"',
         'if command -v curl >/dev/null 2>&1; then curl -fsS "' + full + '" -o "$OUT"; else wget -q "' + full + '" -O "$OUT"; fi',
-        '# conserva las ultimas 21 copias y borra las mas viejas',
-        'ls -1t "$DEST"/conectaso-*.tar.gz 2>/dev/null | tail -n +22 | while read f; do rm -f "$f"; done'].join('\n');
+        '# conserva las ultimas 30 copias (~15 dias con 2 al dia) y borra las mas viejas',
+        'ls -1t "$DEST"/conectaso-*.tar.gz 2>/dev/null | tail -n +31 | while read f; do rm -f "$f"; done'].join('\n');
       const out = el('nasOut'); if (!out) return;
       out.innerHTML = `<p style="margin:0 0 6px"><b>Enlace seguro</b> (no lo compartas, da acceso a las copias):</p>
         <textarea class="inp" rows="2" readonly style="width:100%;font-family:monospace;font-size:12px" onclick="this.select()">${esc(full)}</textarea>
         <p style="margin:12px 0 6px"><b>Script para el NAS</b> (Programador de tareas → Tarea programada → Script definido por el usuario):</p>
         <textarea class="inp" rows="6" readonly style="width:100%;font-family:monospace;font-size:12px" onclick="this.select()">${esc(script)}</textarea>
-        <p class="hint" style="margin-top:8px">Crea en el NAS una carpeta compartida llamada <b>copias-intranet</b> y una tarea programada (p. ej. a las 03:30) que ejecute este script. Guardará cada noche una copia y mantendrá las <b>últimas 21</b>.</p>`;
+        <p class="hint" style="margin-top:8px">Crea en el NAS una carpeta compartida llamada <b>copias-intranet</b> y una tarea programada que ejecute este script <b>2 veces al día</b> (p. ej. primera a las 03:30 y repetir cada 12 h). Mantendrá las <b>últimas 30</b> copias (~15 días).</p>`;
     };
     const nasGet = el('nasGet');
     if (nasGet) nasGet.onclick = async () => { nasGet.disabled = true; try { const d = await api('backups/nas-config'); showNas(d); } catch (e) { toast(e.message || 'Error', 'err'); } nasGet.disabled = false; };
