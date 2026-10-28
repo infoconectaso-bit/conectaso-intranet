@@ -473,7 +473,8 @@ async function handle(req, res, seg, method, url) {
       const CFG = { loc: ['locations', mapLocation], veh: ['vehicles', mapVehicle], ext: ['extras', mapExtra], tac: ['tacs', r => ({ id: +r.__id || undefined, date: r.date || '', text: r.text || '', deposit_amount: r.deposit_amount || '' })] };
       if (!CFG[kind]) return send(res, 400, { error: 'kind?' });
       const [col, mapper] = CFG[kind];
-      const raws = readK(kind); const out = [], hist = {}; const falta = [];
+      let raws = []; try { raws = fs.readFileSync(path.join(dbm0.DATA_DIR, 'volcado-stage-' + kind + '.ndjson'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch (e) { }
+      const out = [], hist = {}; const falta = [];
       const recs = raws.map(r => { const x = mapper(r); x.id = +r.__id || x.id; return x; }).filter(x => x.id);
       recs.forEach(x => {
         const E = store.get(col, x.id); if (!E) { falta.push(x.id); return; }
