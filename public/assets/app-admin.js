@@ -1126,45 +1126,74 @@ on(/^#\/nominas$/, async () => {
   }
   return renderNominas(targetId, admin, workers);
 });
+// Nóminas con diseño visual: trabajadores en chips con avatar, pestañas por año y una cuadrícula
+// de 12 meses (tarjeta llena = nómina subida; hueco punteado = falta, y admin puede subir ahí mismo
+// con un clic o arrastrando el PDF encima).
+const NOM_STATE = { year: null };
+const nomInitials = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
 async function renderNominas(uid, admin, workers) {
   loading(['Nóminas']);
   const r = await api('files/payslip-list/' + uid).catch(() => ({ files: [] }));
   const files = r.files || [];
-  const byYear = {};
-  files.forEach(f => { const y = (f.period || '').slice(0, 4) || '—'; (byYear[y] = byYear[y] || []).push(f); });
-  const years = Object.keys(byYear).sort((a, b) => b.localeCompare(a));
   const now = new Date(), curY = now.getFullYear(), curM = now.getMonth() + 1;
-  const yearOpts = []; for (let y = curY + 1; y >= 2018; y--) yearOpts.push(y);
-  const workerSel = admin ? `<div class="field" style="max-width:360px"><label>Trabajador</label><select class="control" id="nomWorker">${workers.map(w => `<option value="${w.id}" ${w.id == uid ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select></div>` : '';
-  // El formulario de subida es SOLO para administración. Los DJ/técnicos solo ven y descargan.
-  const uploadForm = admin ? `<div class="panel"><div class="panel__head"><h3>Subir nómina</h3></div><div class="panel__body">
-    <form id="nomUpload" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-      <div class="field"><label>Año</label><select class="control" name="year">${yearOpts.map(y => `<option ${y == curY ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
-      <div class="field"><label>Mes</label><select class="control" name="month">${NOM_MESES.map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}" ${(i + 1) == curM ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
-      <div class="field"><label>Archivo (PDF)</label><input type="file" class="control" id="nomFile" accept="application/pdf,image/*"></div>
-      <button type="submit" class="btn btn--primary">Subir</button>
-    </form><div id="nomMsg" style="margin-top:8px;display:none;font-size:13px"></div>
-  </div></div>` : '';
-  const list = years.length ? years.map(y => `<div class="panel"><div class="panel__head"><h3>${esc(y)}</h3></div><div class="panel__body">
-      <table class="dt"><thead><tr><th>Mes</th><th>Archivo</th><th></th></tr></thead><tbody>
-      ${byYear[y].sort((a, b) => (b.period || '').localeCompare(a.period || '')).map(f => { const mm = +(f.period || '').slice(5, 7); const mn = mm ? NOM_MESES[mm - 1] : (f.period || '—'); return `<tr><td>${esc(mn)}</td><td>${esc(f.name)}</td><td style="text-align:right"><a class="btn btn--sm" href="/api/files/${f.id}" target="_blank">Ver / descargar</a>${admin ? ` <button class="btn btn--sm btn--red" data-delnom="${f.id}">Borrar</button>` : ''}</td></tr>`; }).join('')}
-      </tbody></table></div></div>`).join('') : '<div class="empty"><span class="script">Sin nóminas</span>Aún no hay nóminas subidas.</div>';
-  const holdedSync = admin ? `<div class="btn-row" style="margin-bottom:14px"><a class="btn" href="/api/holded-payslip-sync" target="_blank" rel="noopener">⬇ Sincronizar nóminas desde Holded</a> <span class="hint">Trae de Holded las nóminas que falten (p. ej. la de Damaris de julio). Primero te muestra una <b>prueba</b> con lo que cuadra; luego confirmas la descarga. Las que ya están no se duplican.</span></div>` : '';
-  shell(`${pageHead('Nóminas', admin ? 'Sube y consulta las nóminas del equipo (PDF), por año y mes.' : 'Tus nóminas, por año y mes. Puedes verlas y descargarlas.')}
-    ${holdedSync}${workerSel}${uploadForm}${list}`, ['Nóminas']);
-  const ws = el('nomWorker'); if (ws) ws.onchange = () => renderNominas(+ws.value, admin, workers);
-  const uf = el('nomUpload');
-  if (uf) uf.onsubmit = async e => {
-    e.preventDefault();
-    const fi = el('nomFile'); const f = fi && fi.files && fi.files[0]; const m = el('nomMsg'); m.style.display = 'block';
-    if (!f) { m.textContent = 'Elige un archivo.'; return; }
-    const d = collectForm(uf); const period = d.year + '-' + d.month;
+  const byYM = {}; files.forEach(f => { const k = String(f.period || '').slice(0, 7); (byYM[k] = byYM[k] || []).push(f); });
+  const yearsWith = [...new Set(files.map(f => +String(f.period || '').slice(0, 4)).filter(Boolean))];
+  const years = [...new Set(yearsWith.concat([curY]))].sort((a, b) => b - a);
+  if (!NOM_STATE.year || !years.includes(NOM_STATE.year)) NOM_STATE.year = curY;
+  const Y = NOM_STATE.year;
+  const me = admin ? (workers.find(w => w.id == uid) || {}) : S.user;
+  const sorted = files.slice().sort((a, b) => String(b.period || '').localeCompare(String(a.period || '')));
+  const last = sorted[0];
+  const lastLbl = last ? (NOM_MESES[+String(last.period).slice(5, 7) - 1] || '') + ' ' + String(last.period).slice(0, 4) : '—';
+  const nYear = files.filter(f => String(f.period || '').startsWith(Y + '-')).length;
+  // meses "debidos" del año elegido (hasta el mes pasado si es el año en curso)
+  const dueN = Y < curY ? 12 : (Y === curY ? Math.max(0, curM - 1) : 0);
+  let missing = 0; for (let m = 1; m <= dueN; m++) if (!byYM[Y + '-' + String(m).padStart(2, '0')]) missing++;
+
+  const chips = admin ? `<div class="nom-people">${workers.map(w => `<button class="nom-person${w.id == uid ? ' on' : ''}" data-nomw="${w.id}" title="${esc(w.name)}"><span class="nom-av">${esc(nomInitials(w.name))}</span><span class="nom-pname">${esc((w.name || '').split(' ').slice(0, 2).join(' '))}</span></button>`).join('')}</div>` : '';
+  const hero = `<div class="nom-hero">
+      <div class="nom-hero__av">${esc(nomInitials(me.name))}</div>
+      <div class="nom-hero__txt"><div class="nom-hero__name">${esc(me.name || 'Mis nóminas')}</div>
+        <div class="nom-hero__meta"><span>📄 <b>${files.length}</b> nóminas</span><span>🕒 Última: <b>${esc(lastLbl)}</b></span>${missing ? `<span class="nom-warn">⚠ Faltan <b>${missing}</b> en ${Y}</span>` : (dueN ? `<span class="nom-ok">✓ ${Y} al día</span>` : '')}</div></div>
+      ${admin ? `<a class="btn btn--sm nom-sync" href="/api/holded-payslip-sync" target="_blank" rel="noopener" title="Trae de Holded las nóminas que falten (primero muestra una prueba)">⬇ Traer de Holded</a>` : ''}
+    </div>`;
+  const tabs = `<div class="mtabs nom-years">${years.map(y => `<button class="mtab${y === Y ? ' on' : ''}" data-nomy="${y}">${y}</button>`).join('')}</div>`;
+  const tiles = NOM_MESES.map((mn, i) => {
+    const mm = String(i + 1).padStart(2, '0'), k = Y + '-' + mm, fs = byYM[k] || [];
+    const future = Y > curY || (Y === curY && i + 1 > curM);
+    if (fs.length) {
+      const f = fs[0];
+      return `<div class="nom-tile nom-tile--ok" data-nomdrop="${k}">
+        <div class="nom-tile__top"><span class="nom-tile__m">${mn}</span>${fs.length > 1 ? `<span class="nom-badge">${fs.length}</span>` : ''}</div>
+        <a class="nom-tile__doc" href="/api/files/${f.id}" target="_blank" rel="noopener" title="${esc(f.name)}"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 14h6M9 17h4"/></svg></a>
+        <div class="nom-tile__acts"><a class="nom-act" href="/api/files/${f.id}" target="_blank" rel="noopener">Ver</a>${fs.slice(1).map((g, j) => `<a class="nom-act" href="/api/files/${g.id}" target="_blank" rel="noopener">${j + 2}</a>`).join('')}${admin ? fs.map(g => `<button class="nom-del" data-delnom="${g.id}" title="Borrar ${esc(g.name)}">✕</button>`).slice(0, 1).join('') : ''}</div>
+      </div>`;
+    }
+    if (admin && !future) return `<button class="nom-tile nom-tile--empty" data-nomup="${k}" data-nomdrop="${k}" title="Subir la nómina de ${mn} ${Y}"><span class="nom-tile__m">${mn}</span><span class="nom-plus">+</span><span class="nom-tile__hint">Subir o arrastrar PDF</span></button>`;
+    return `<div class="nom-tile nom-tile--empty${future ? ' nom-tile--future' : ''}"><span class="nom-tile__m">${mn}</span><span class="nom-tile__hint">${future ? '' : 'Sin nómina'}</span></div>`;
+  }).join('');
+  shell(`${pageHead('Nóminas', admin ? 'Elige un trabajador y un año. Pulsa un mes vacío para subir su nómina.' : 'Tus nóminas por año. Pulsa un mes para verla o descargarla.')}
+    ${chips}${hero}${tabs}<div class="nom-grid">${tiles}</div>
+    <input type="file" id="nomFile" accept="application/pdf,image/*" style="display:none">`, ['Nóminas']);
+
+  $$('[data-nomw]').forEach(b => b.onclick = () => renderNominas(+b.dataset.nomw, admin, workers));
+  $$('[data-nomy]').forEach(b => b.onclick = () => { NOM_STATE.year = +b.dataset.nomy; renderNominas(uid, admin, workers); });
+  const upload = async (period, f) => {
+    if (!f) return;
     const fd = new FormData(); fd.append('file', f, f.name); fd.append('momento', period);
-    m.textContent = 'Subiendo…';
-    try { await api('files/payslip/' + uid, { method: 'POST', form: fd }); toast('Nómina subida', 'ok'); renderNominas(uid, admin, workers); }
-    catch (err) { m.innerHTML = '<span style="color:#d9534f;font-weight:700">' + esc(err.message || 'Error al subir') + '</span>'; }
+    toast('Subiendo ' + f.name + '…');
+    try { await api('files/payslip/' + uid, { method: 'POST', form: fd }); toast('Nómina subida ✓', 'ok'); renderNominas(uid, admin, workers); }
+    catch (err) { toast(err.message || 'Error al subir', 'err'); }
   };
-  $$('[data-delnom]').forEach(b => b.onclick = () => modal('Borrar nómina', '¿Seguro que quieres borrar esta nómina?', { okText: 'Borrar', danger: true, onOk: async () => { await api('files/' + b.dataset.delnom, { method: 'DELETE' }); toast('Nómina borrada', 'ok'); renderNominas(uid, admin, workers); } }));
+  const fi = el('nomFile'); let pending = null;
+  if (fi) fi.onchange = () => { const f = fi.files && fi.files[0]; if (f && pending) upload(pending, f); fi.value = ''; };
+  $$('[data-nomup]').forEach(b => b.onclick = () => { pending = b.dataset.nomup; fi.click(); });
+  if (admin) $$('[data-nomdrop]').forEach(t => {
+    t.addEventListener('dragover', e => { e.preventDefault(); t.classList.add('drag'); });
+    t.addEventListener('dragleave', () => t.classList.remove('drag'));
+    t.addEventListener('drop', e => { e.preventDefault(); t.classList.remove('drag'); const f = e.dataTransfer.files && e.dataTransfer.files[0]; upload(t.dataset.nomdrop, f); });
+  });
+  $$('[data-delnom]').forEach(b => b.onclick = e => { e.stopPropagation(); modal('Borrar nómina', '¿Seguro que quieres borrar esta nómina?', { okText: 'Borrar', danger: true, onOk: async () => { await api('files/' + b.dataset.delnom, { method: 'DELETE' }); toast('Nómina borrada', 'ok'); renderNominas(uid, admin, workers); } }); });
 }
 // Cobros pendientes de las bodas de la SEMANA EN VIGOR (lunes a domingo): de un vistazo, a quién
 // hay que cobrar esta semana. Incluye tanto las bodas próximas como las ya realizadas de la semana.
