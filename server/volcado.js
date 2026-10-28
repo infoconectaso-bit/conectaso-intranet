@@ -18,7 +18,7 @@ const DMY2ISO = (s) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s |
 const truthy = (v) => v === 1 || v === '1' || v === true;
 
 const KNOWN = new Set(['ask_for_opinion', 'celebration_hour', 'celebration_location', 'celebration_location_other', 'compliance_list', 'disco_observations', 'disco_restrictions', 'disco_logo_fotomaton_image', 'dj_assigned_overtime', 'dj_assigned_performed_ceremony', 'dj_vinculated', 'event_payed_import', 'event_status', 'event_total_import', 'event_total_cost', 'first_spouse', 'first_spouse_address', 'first_spouse_dni', 'first_spouse_email', 'first_spouse_mobile', 'first_spouse_instagram', 'first_spouse_sex', 'guest_number', 'guest_requests', 'habilitar_edicion_para_usuario', 'link_playlist', 'payment_method', 'privat_observations', 'second_spouse', 'second_spouse_address', 'second_spouse_dni', 'second_spouse_email', 'second_spouse_mobile', 'second_spouse_instagram', 'second_spouse_sex', 'wedding_date', 'wedding_hour', 'wedding_location', 'wedding_type', 'wp_vinculated', 'observations_on_dj_event', 'description', 'religious_celebration', 'monitoraauto']);
-const IGNORE = new Set(['_token', 'author', 'djsOptions', 'servicesOptions', 'image_74', 'event_id', 'viewport', '__id', 'uploaded_file_view']);
+const IGNORE = new Set(['_token', 'author', 'djsOptions', 'servicesOptions', 'image_74', 'event_id', 'viewport', '__id', '__files', 'uploaded_file_view']);
 
 /** Convierte un objeto crudo {campo: valor} de la ficha real en nuestro esquema de evento.
  *  Devuelve { ev, unmapped }. unmapped debe quedar vacío (si no, hay un campo nuevo que tratar). */
@@ -268,6 +268,135 @@ async function handle(req, res, seg, method, url) {
       } catch (e) { errors.push(id + ' (' + e.message + ')'); }
     }
     return send(res, 200, { ok: true, done, skipped, errors });
+  }
+
+  // ============ REFRESCO (recorrido en el navegador -> servidor) ============
+  // El navegador, con la sesión abierta en la intranet real, lee cada ficha CRUDA y la envía por
+  // lotes a /ingest (no-cors, text/plain). El servidor las acumula en un staging y luego las mapea
+  // con el mismo mapEvent validado, compara con la réplica y, con el OK, importa con MERGE. Así los
+  // datos personales van de servidor a servidor y nunca pasan por el canal de herramientas.
+  {
+    const path = require('path'); const fs = require('fs');
+    const dbm0 = require('./db');
+    const STAGE = path.join(dbm0.DATA_DIR, 'volcado-refresh.ndjson');
+    const FILEMAP = path.join(dbm0.DATA_DIR, 'volcado-refresh-files.json');
+
+    if (action === 'ingest-reset') { try { fs.writeFileSync(STAGE, ''); } catch (e) { } return send(res, 200, { ok: true, count: 0 }); }
+
+    if (action === 'ingest') {
+      const batch = Array.isArray(body.batch) ? body.batch : [];
+      let out = ''; for (const r of batch) { try { out += JSON.stringify(r) + '\n'; } catch (e) { } }
+      try { fs.appendFileSync(STAGE, out); } catch (e) { return send(res, 200, { ok: false, error: e.message }); }
+      return send(res, 200, { ok: true, added: batch.length });
+    }
+
+    if (action === 'ingest-status') {
+      let n = 0, bytes = 0; try { const s = fs.readFileSync(STAGE, 'utf8'); n = s ? s.split('\n').filter(Boolean).length : 0; bytes = Buffer.byteLength(s); } catch (e) { }
+      return send(res, 200, { ok: true, count: n, bytes });
+    }
+
+    if (action === 'refresh') {
+      const store = dbm0.store, users = dbm0.users;
+      const TODAY = require('./time').bizToday();
+      const mode = body.mode || 'diff';
+      let raws;
+      try { raws = fs.readFileSync(STAGE, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)); }
+      catch (e) { return send(res, 200, { ok: false, error: 'staging: ' + e.message }); }
+      // email -> uid (para recuperar titular de eventos NUEVOS; normaliza el +uID de deduplicados)
+      const emailToUid = {};
+      (users.all() || []).forEach(u => { if (u.email) { const k = String(u.email).toLowerCase().replace(/\+u\d+@/, '@'); if (!(k in emailToUid)) emailToUid[k] = u.id; } });
+      const hasContent = (e) => {
+        if (e.conyuges && e.conyuges.trim().length > 2) return true;
+        if (e.music && Object.values(e.music).some(m => m && m.song && String(m.song).trim())) return true;
+        if (e.services && e.services.length) return true;
+        if (e.extras && Object.keys(e.extras).length) return true;
+        if (e.optionals && e.optionals.some(o => (o.title && String(o.title).trim()) || (o.value && String(o.value).trim()))) return true;
+        if (+e.pagoCliente > 1 || +e.pagado > 1) return true;
+        if ((e.obsPriv && e.obsPriv.trim()) || (e.obsDj && e.obsDj.trim())) return true;
+        if (e.disco && Object.values(e.disco).some(v => v && String(v).trim())) return true;
+        if (e.files && e.files.length) return true;
+        if (e.description && e.description.trim()) return true;
+        return false;
+      };
+      const DIFF = ['fecha', 'hora', 'estado', 'pagado', 'pagoCliente', 'totalCost', 'metodo', 'djId', 'wpId'];
+      const S = v => String(v == null ? '' : v);
+      const unmapped = new Set();
+      const built = []; const fileMap = {};
+      const nuevos = [], nuevosPasados = [], descartados = [], cambios = [];
+      const seenIds = new Set();
+      for (const raw of raws) {
+        let m; try { m = mapEvent(raw); } catch (e) { continue; }
+        const ev = m.ev; ev.id = +raw.__id; if (!ev.id || seenIds.has(ev.id)) continue; seenIds.add(ev.id);
+        m.unmapped.forEach(u => unmapped.add(u));
+        if (Array.isArray(raw.__files) && raw.__files.length) fileMap[ev.id] = raw.__files;
+        const prev = store.get('events', ev.id);
+        if (!prev) {
+          for (const em of [raw.first_spouse_email, raw.second_spouse_email]) { const k = (em || '').trim().toLowerCase(); if (k && emailToUid[k]) { ev.userId = emailToUid[k]; break; } }
+          const f = ev.fecha, est = ev.estado;
+          if (f && f >= TODAY) { nuevos.push({ id: ev.id, fecha: f, estado: est, conyuges: (ev.conyuges || '').slice(0, 36), pagado: ev.pagado, pagoCliente: ev.pagoCliente }); built.push(ev); }
+          else if (!f && est >= 1 && est <= 4 && hasContent(ev)) { nuevos.push({ id: ev.id, fecha: '', estado: est, conyuges: (ev.conyuges || '').slice(0, 36), pagado: ev.pagado, pagoCliente: ev.pagoCliente }); built.push(ev); }
+          else if (f && f < TODAY && hasContent(ev)) { nuevosPasados.push({ id: ev.id, fecha: f, estado: est, conyuges: (ev.conyuges || '').slice(0, 36), pagado: ev.pagado, pagoCliente: ev.pagoCliente }); } // NO se importan: se enseñan para decidir
+          else { descartados.push({ id: ev.id, fecha: f || '', estado: est, conyuges: (ev.conyuges || '').slice(0, 36) }); }
+        } else {
+          const ch = {};
+          DIFF.forEach(k => { if (S(prev[k]) !== S(ev[k])) ch[k] = { de: S(prev[k]), a: S(ev[k]) }; });
+          if (Object.keys(ch).length) cambios.push({ id: ev.id, conyuges: (ev.conyuges || prev.conyuges || '').slice(0, 36), fecha: ev.fecha || prev.fecha || '', ch });
+          built.push(ev);
+        }
+      }
+      // eventos que YA están en la réplica pero NO aparecieron en el recorrido (no se tocan; se informan)
+      const noVistos = [];
+      store.all('events').forEach(e => { if (!seenIds.has(e.id)) noVistos.push({ id: e.id, fecha: e.fecha || '', conyuges: (e.conyuges || '').slice(0, 36) }); });
+      const summary = {
+        staged: raws.length, aImportar: built.length,
+        existentesConCambios: cambios.length, nuevosMantenidos: nuevos.length,
+        nuevosPasadosParaRevisar: nuevosPasados.length, nuevosDescartadosVacios: descartados.length,
+        enReplicaNoVistos: noVistos.length, conAdjuntos: Object.keys(fileMap).length,
+        unmapped: [...unmapped],
+        cambios: cambios.slice(0, 100), nuevos: nuevos.slice(0, 100), nuevosPasados: nuevosPasados.slice(0, 60), noVistos: noVistos.slice(0, 60), descartados: descartados.slice(0, 40),
+      };
+      if (mode === 'diff') { try { fs.writeFileSync(FILEMAP, JSON.stringify(fileMap)); } catch (e) { } return send(res, 200, { ok: true, mode, summary }); }
+      if (mode === 'import') {
+        const seed = { type: 'volcado-refresh', events: built, users: [], locations: [], vehicles: [], extras: [], tacs: [], staffIds: store.setting('staffIds') || [], beneficios: store.setting('beneficios') || null };
+        const counts = require('./volcado-import').run(seed, { store, users, transaction: dbm0.transaction });
+        try { fs.writeFileSync(FILEMAP, JSON.stringify(fileMap)); } catch (e) { }
+        return send(res, 200, { ok: true, mode, counts, summary });
+      }
+      return send(res, 400, { error: 'mode? (diff|import)' });
+    }
+
+    if (action === 'refresh-attachments') {
+      const crypto = require('crypto');
+      const UP = path.join(dbm0.DATA_DIR, 'uploads');
+      let fileMap = {}; try { fileMap = JSON.parse(fs.readFileSync(FILEMAP, 'utf8')); } catch (e) { return send(res, 200, { ok: false, error: 'sin fileMap (ejecuta refresh antes)' }); }
+      const MAXB = 120 * 1024 * 1024;
+      const safe = n => String(n || 'archivo').normalize('NFKD').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120) || 'archivo';
+      const mimeOf = n => ({ pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', mp3: 'audio/mpeg', mp4: 'video/mp4', mov: 'video/quicktime', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }[(n.split('.').pop() || '').toLowerCase()] || 'application/octet-stream');
+      const existsStmt = dbm0.db.prepare('SELECT COUNT(*) AS n FROM files WHERE collection = ? AND record_id = ? AND name = ?');
+      const insStmt = dbm0.db.prepare('INSERT INTO files (id, collection, record_id, name, description, mime, size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      const uploadedBy = +body.adminId || null;
+      const only = body.ids ? new Set(body.ids.map(Number)) : null;
+      let traidos = 0, saltados = 0, fallos = 0; const errs = [];
+      const ids = Object.keys(fileMap).map(Number).filter(id => !only || only.has(id));
+      for (const id of ids) {
+        for (const nameRaw of (fileMap[id] || [])) {
+          const name = decodeURIComponent(String(nameRaw));
+          try {
+            if (existsStmt.get('events', id, name).n > 0) { saltados++; continue; }
+            const r = await fetch(SRC_BASE + '/public/uploads/' + id + '/files/' + encodeURIComponent(name));
+            if (!r.ok) { fallos++; if (errs.length < 25) errs.push(id + '/' + name + ' http ' + r.status); continue; }
+            const buf = Buffer.from(await r.arrayBuffer());
+            if (!buf.length || buf.length > MAXB) { fallos++; if (errs.length < 25) errs.push(id + '/' + name + ' tam ' + buf.length); continue; }
+            const fid = crypto.randomBytes(12).toString('hex');
+            const dir = path.join(UP, 'boda-' + id); fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(path.join(dir, fid + '-' + safe(name)), buf);
+            insStmt.run(fid, 'events', id, name, '', mimeOf(name), buf.length, uploadedBy);
+            traidos++;
+          } catch (e) { fallos++; if (errs.length < 25) errs.push(id + '/' + name + ' ' + e.message); }
+        }
+      }
+      return send(res, 200, { ok: true, traidos, saltados, fallos, eventos: ids.length, errs });
+    }
   }
 
   // RECOLOCAR momentos personalizados en su sección real, leyendo cada ficha original.
