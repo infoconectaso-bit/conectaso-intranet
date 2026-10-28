@@ -612,17 +612,26 @@ async function handle(req, res, seg, method, url) {
       const today = time.bizToday(); const year = String(body.year || '2026');
       const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
       const evByLoc = {}; store.all('events').forEach(e => { const l = +e.lugar || 0; (evByLoc[l] = evByLoc[l] || []).push(e); });
+      const tiposList = store.setting('tipos') || [];
+      const tipoLabel = e => { const t = e.tipo; if (t == null || t === '') return '(sin tipo)'; const i = +t; if (!isNaN(i) && tiposList[i] != null) return tiposList[i]; return String(t); };
+      const esBoda = e => { const l = norm(tipoLabel(e)); return !(l.includes('corporativ') || l.includes('extra')); };
       const vm = body.venueMap || {}; const out = [];
       for (const v of Object.keys(vm)) {
         const cfg = vm[v] || {}; const ids = new Set((cfg.locIds || []).map(Number)); const pats = (cfg.patterns || []).map(norm).filter(Boolean);
         const evs = []; ids.forEach(id => (evByLoc[id] || []).forEach(e => evs.push(e)));
-        const bodas = evs.filter(e => e.fecha && e.fecha.slice(0, 4) === year && e.fecha < today).length;
+        const realiz = evs.filter(e => e.fecha && e.fecha.slice(0, 4) === year && e.fecha < today);
+        const tipoHist = {}; realiz.forEach(e => { const l = tipoLabel(e); tipoHist[l] = (tipoHist[l] || 0) + 1; });
+        const bodasReales = realiz.filter(esBoda).length;
+        const nCorporativos = realiz.filter(e => norm(tipoLabel(e)).includes('corporativ')).length;
         let total = 0, totalAll = 0, nInv = 0; const names = [];
         Object.values(idx.byId).forEach(c => { const nm = norm(c.name); if (!pats.some(p => nm.includes(p))) return;
           names.push(c.name);
           (c.invoices || []).map(holded.mapInvoice).forEach(inv => { totalAll += (+inv.total || 0); if (String(inv.date).slice(0, 4) === year) { total += (+inv.total || 0); nInv++; } });
         });
-        out.push({ masia: v, bodas, facturado2026: Math.round(total), facturadoTotal: Math.round(totalAll), nFacturas2026: nInv, contactos: [...new Set(names)], media: bodas ? Math.round(total / bodas) : 0 });
+        // Ajuste opcional por masía: resta los corporativos (p.ej. inmersiones a 130 €) de la facturación.
+        const corpPrice = +cfg.corpPrice || 0;
+        const facturadoBodas = Math.round(total - nCorporativos * corpPrice);
+        out.push({ masia: v, bodasTotal: realiz.length, bodasReales, nCorporativos, tipoHist, facturado2026: Math.round(total), facturadoBodas, descontadoCorp: Math.round(nCorporativos * corpPrice), nFacturas2026: nInv, contactos: [...new Set(names)], media: bodasReales ? Math.round(facturadoBodas / bodasReales) : 0 });
       }
       out.sort((a, b) => b.media - a.media);
       return send(res, 200, { ok: true, year, result: out });
