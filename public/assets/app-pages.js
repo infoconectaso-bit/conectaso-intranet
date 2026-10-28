@@ -1743,9 +1743,13 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
   const escLink = url => { const sv = linkService(url) || {}; const nm = sv.name || 'Abrir'; return `<a class="sp${sv.spotify ? '' : ' sp--other'}" href="${esc(url)}" target="_blank" rel="noopener" title="Abrir ${esc(nm)}">▶ ${esc(nm)}</a>`; };
   const escaleta = () => {
     const secs = musicAreasFor(ev).filter(a => !(a.key === 'ceremony' && ev.ceremoniaFuera))
-      .map(a => ({ title: a.title, moments: a.moments.map(mm => [a.key + '_' + mm[0], mm[1]]) }));
-    secs.push({ title: 'Fiesta', moments: DISCO_MOMENTS.map(mm => ['disco_' + mm[0], mm[1]]) });
+      .map(a => ({ key: a.key, title: a.title, moments: a.moments.map(mm => [a.key + '_' + mm[0], mm[1]]) }));
+    secs.push({ key: 'disco', title: 'Fiesta', moments: DISCO_MOMENTS.map(mm => ['disco_' + mm[0], mm[1]]) });
     const pl = (ev.disco || {}).playlist;
+    // Momentos personalizados (y lecturas) de cada sección, también en la escaleta.
+    const optRowsFor = key => (ev.optionals || []).filter(o => !o.on && (o.sec || SEC_OF[o.area] || 'C') === (SEC_OF[key] || (key === 'disco' ? 'D' : '')) && (o.value || o.link || o.title))
+      .sort((a, b) => (+a.order || 99) - (+b.order || 99))
+      .map(o => `<tr><td class="mic"><span class="box"></span></td><td class="mom">${o.kind === 'readings' ? '📖 ' : ''}${esc(o.title || 'Momento')}</td><td>${esc(o.value || '')}</td><td class="notes">${o.link ? escLink(o.link) : (o.kind === 'readings' ? '' : '<span class="warn">Sin enlace</span>')}</td></tr>`).join('');
     let html = '', n = 0;
     secs.forEach(s => {
       const rows = s.moments.map(([k, def]) => {
@@ -1753,7 +1757,7 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
         if (mu.on || (!mu.song && !mu.link)) return '';
         const chip = mu.link ? escLink(mu.link) : '<span class="warn">Sin enlace</span>';
         return `<tr><td class="mic"><span class="box"></span></td><td class="mom">${esc(momentTitle(ev, k, def))}</td><td>${esc(mu.song || '')}</td><td class="notes">${chip}</td></tr>`;
-      }).filter(Boolean).join('');
+      }).filter(Boolean).join('') + optRowsFor(s.key);
       if (!rows) return; n++;
       html += `<tr class="sec"><td></td><td colspan="3" class="sname">${n} · ${esc(s.title)}</td></tr>` + rows;
     });
