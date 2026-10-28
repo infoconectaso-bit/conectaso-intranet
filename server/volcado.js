@@ -602,6 +602,32 @@ async function handle(req, res, seg, method, url) {
       return send(res, 200, { ok: true, year, result: out });
     }
 
+    // FACTURACIÓN A LA EMPRESA DE CADA MASÍA (Holded) ÷ bodas realizadas. venueMap = { masia:
+    // { locIds:[...], patterns:[nombres de empresa] } }. Suma TODAS las facturas de los contactos
+    // cuyo nombre casa con los patrones (sin IVA, rectificativas restadas) y divide por las bodas.
+    if (action === 'holded-venue-company') {
+      const store = dbm0.store; const holded = require('./holded'); const time = require('./time');
+      if (!holded.enabled()) return send(res, 200, { ok: false, error: 'Holded no activado' });
+      let idx; try { idx = await holded.buildIndex(body.refresh === true); } catch (e) { return send(res, 200, { ok: false, error: 'Holded: ' + e.message }); }
+      const today = time.bizToday(); const year = String(body.year || '2026');
+      const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const evByLoc = {}; store.all('events').forEach(e => { const l = +e.lugar || 0; (evByLoc[l] = evByLoc[l] || []).push(e); });
+      const vm = body.venueMap || {}; const out = [];
+      for (const v of Object.keys(vm)) {
+        const cfg = vm[v] || {}; const ids = new Set((cfg.locIds || []).map(Number)); const pats = (cfg.patterns || []).map(norm).filter(Boolean);
+        const evs = []; ids.forEach(id => (evByLoc[id] || []).forEach(e => evs.push(e)));
+        const bodas = evs.filter(e => e.fecha && e.fecha.slice(0, 4) === year && e.fecha < today).length;
+        let total = 0, totalAll = 0, nInv = 0; const names = [];
+        Object.values(idx.byId).forEach(c => { const nm = norm(c.name); if (!pats.some(p => nm.includes(p))) return;
+          names.push(c.name);
+          (c.invoices || []).map(holded.mapInvoice).forEach(inv => { totalAll += (+inv.total || 0); if (String(inv.date).slice(0, 4) === year) { total += (+inv.total || 0); nInv++; } });
+        });
+        out.push({ masia: v, bodas, facturado2026: Math.round(total), facturadoTotal: Math.round(totalAll), nFacturas2026: nInv, contactos: [...new Set(names)], media: bodas ? Math.round(total / bodas) : 0 });
+      }
+      out.sort((a, b) => b.media - a.media);
+      return send(res, 200, { ok: true, year, result: out });
+    }
+
     // Gestiona la lista de exclusión FIJA del volcado (ids que no se deben traer nunca).
     if (action === 'set-exclude') {
       const store = dbm0.store;
