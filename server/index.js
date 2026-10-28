@@ -2882,7 +2882,7 @@ function finance(req, res, user, seg, method) {
       // Trabajadores que NUNCA salen en facturación equipo: DJ Gallego (#850) + los que configure el setting.
       const hideW = new Set([850].concat(store.setting('facturacionHideWorkers') || []).map(Number));
       const workers = Object.keys(bals).filter(id => +id).map(id => {
-        const b = bals[id]; const pays = _fs ? [] : store.byOwner('payments', +id);
+        const b = bals[id]; const pays = store.byOwner('payments', +id).filter(fact.countsPayment);
         const paid = pays.reduce((t, p) => t + (+p.amount || 0), 0);
         let last = b.last; pays.forEach(p => { if (p.date && p.date > last) last = p.date; });
         return { id: +id, name: userName(+id), pend: Math.round((b.rest - paid) * 100) / 100, last };
@@ -2895,7 +2895,7 @@ function finance(req, res, user, seg, method) {
       const id = +seg[2];
       // facturación en vivo: histórico + eventos ya realizados (incluye precios recién puestos)
       const h = fact.aggregateFor(id);
-      if (method === 'GET') return ok(res, { history: h, payments: fact.freshStart() ? [] : store.byOwner('payments', id) });
+      if (method === 'GET') return ok(res, { history: h, payments: store.byOwner('payments', id).filter(fact.countsPayment) });
     }
     if (seg[1] === 'pay' && method === 'POST') return addPayment(req, res, user);
     if (seg[1] === 'adjust' && method === 'POST') return addAdjust(req, res, user);
@@ -2922,7 +2922,7 @@ function finance(req, res, user, seg, method) {
   // DJ: solo su propio balance (histórico + eventos realizados)
   if (user.role === 'dj') {
     if (seg[1] === 'me' && method === 'GET') {
-      return ok(res, { history: fact.aggregateFor(user.id), payments: fact.freshStart() ? [] : store.byOwner('payments', user.id) });
+      return ok(res, { history: fact.aggregateFor(user.id), payments: store.byOwner('payments', user.id).filter(fact.countsPayment) });
     }
   }
   return fail(res, 403, 'Sin acceso');

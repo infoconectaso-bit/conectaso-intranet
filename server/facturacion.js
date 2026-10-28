@@ -47,6 +47,30 @@ function volcadoCutoff() {
 // partiendo de cero hasta el volcado general. Reversible: poner el setting a false.
 function freshStart() { const v = store.setting('facturacionFreshStart'); return v == null ? true : !!v; }
 
+// PUESTA A CERO de facturación equipo (pedido por Adrià, 28-oct-2026): todo lo anterior cuenta como
+// PAGADO. No se borra nada (histórico, bodas, ajustes y pagos se conservan), solo deja de sumar:
+//   - bodas con fecha <= date         -> no cuentan (pagadas)
+//   - ajustes/pagos con id <= maxId   -> no cuentan; los NUEVOS (id mayor) sí cuentan
+// Se crea UNA vez y se guarda en el setting 'facturacionReset'; el volcado/importación no lo toca,
+// así que una re-importación no vuelve a traer saldos antiguos. Para deshacerlo: borrar el setting.
+let _reset = null;
+function resetInfo() {
+  if (_reset) return _reset;
+  let r = null; try { r = store.setting('facturacionReset'); } catch (e) {}
+  if (!r || !r.date) {
+    const maxId = col => { let m = 0; try { store.all(col).forEach(x => { if (+x.id > m) m = +x.id; }); } catch (e) {} return m; };
+    r = { date: bizToday(), adjMaxId: maxId('adjustments'), payMaxId: maxId('payments'), at: new Date().toISOString() };
+    try { store.setSetting('facturacionReset', r); } catch (e) {}
+  }
+  _reset = r;
+  return r;
+}
+/** ¿Cuenta este evento en el saldo? (posterior a la puesta a cero) */
+function countsEvent(ev) { return !!ev.fecha && ev.fecha > resetInfo().date; }
+/** ¿Cuenta este ajuste / pago? (creado después de la puesta a cero) */
+function countsAdjust(a) { return +a.id > (+resetInfo().adjMaxId || 0); }
+function countsPayment(p) { return +p.id > (+resetInfo().payMaxId || 0); }
+
 const money = n => (Math.round((+n || 0) * 100) / 100).toFixed(2) + ' €';
 const OVERTIME = { 'Media Hora': 0.5, '1 Hora': 1, '1 hora y media': 1.5, '2 Horas': 2, '2 hora y media': 2.5, '3 Horas': 3, '3 hora y media': 3.5, '4 Horas': 4, '4 hora y media': 4.5, '5 Horas': 5 };
 const FIX_STAFF_NO_BASE = { '227': true, '276': true };
@@ -257,10 +281,10 @@ function allBalances() {
   const get = id => out[id] || (out[id] = { rest: 0, last: '' });
   if (!FS) store.all('history').forEach(h => { const b = get(h.id); b.rest += (h.rest || 0); (h.items || []).forEach(i => { if (i.date && i.date > b.last) b.last = i.date; }); });
   store.all('events').forEach(ev => {
-    if (!(ev.fecha && ev.fecha >= CUT) || !evRealized(ev)) return;
+    if (!(ev.fecha && ev.fecha >= CUT) || !evRealized(ev) || !countsEvent(ev)) return;
     assignedWorkers(ev).forEach(wid => { if (saldados.has(ev.id + ':' + wid)) return; const b = get(wid); b.rest += workerEarning(ev, wid).amount; if (ev.fecha > b.last) b.last = ev.fecha; });
   });
-  store.all('adjustments').forEach(a => { if (FS) return; const b = get(a.userId); b.rest += (parseFloat(a.amount) || 0); if (a.date && a.date > b.last) b.last = a.date; });
+  store.all('adjustments').forEach(a => { if (!countsAdjust(a)) return; const b = get(a.userId); b.rest += (parseFloat(a.amount) || 0); if (a.date && a.date > b.last) b.last = a.date; });
   return out;
 }
 /** Rellena ev.factRows y ev.revRows (solo para vista de admin). No persiste. */
@@ -281,6 +305,7 @@ function aggregateFor(uid, skipRefresh) {
   store.all('events').forEach(ev => {
     if (!(ev.fecha && ev.fecha >= CUT)) return;
     if (!evRealized(ev)) return;
+    if (!countsEvent(ev)) return;   // anterior a la puesta a cero: pagada
     if (assignedWorkers(ev).indexOf(String(uid)) < 0) return;
     if (saldados.has(ev.id + ':' + uid)) return;   // marcada como pagada para este trabajador
     const e = workerEarning(ev, uid);
@@ -293,7 +318,7 @@ function aggregateFor(uid, skipRefresh) {
   const adjItems = []; let adj = 0;
   store.all('adjustments').forEach(a => {
     if (+a.userId !== +uid) return;
-    if (FS) return;   // arranque limpio: solo cuenta lo GENERADO esta semana (ni ajustes ni pagos viejos)
+    if (!countsAdjust(a)) return;   // anteriores a la puesta a cero: no cuentan (los nuevos sí)
     const amt = parseFloat(a.amount) || 0;
     adjItems.push({ type: 'adj', adjId: a.id, title: 'Ajuste · ' + (a.concept || 'Plus'), date: a.date || '', amount: amt,
       body: ['Ajuste manual de administración', a.concept ? ('Concepto: ' + a.concept) : '', 'Importe: ' + (amt > 0 ? '+' : '') + amt + ' €'].filter(Boolean) });
@@ -340,4 +365,7 @@ function reapplyRateToEvents(eventIds) {
   return n;
 }
 
-module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, allBalances, volcadoCutoff, freshStart, freezeRates, freezeRealized, reapplyRateToEvents, HOURLY_RATE, OVERTIME };
+// Fija la puesta a cero en cuanto arranca el servidor con esta versión (una sola vez).
+try { const r = resetInfo(); console.log('[facturación] puesta a cero vigente desde', r.date); } catch (e) {}
+
+module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, allBalances, volcadoCutoff, freshStart, resetInfo, countsPayment, freezeRates, freezeRealized, reapplyRateToEvents, HOURLY_RATE, OVERTIME };
