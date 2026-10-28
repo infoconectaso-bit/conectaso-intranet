@@ -603,6 +603,81 @@ async function handle(req, res, seg, method, url) {
 
     // PEEK al staging del recorrido: devuelve el event_status CRUDO que capturó la copia para unos ids,
     // su mapeo y lo que tiene la réplica ahora. Para distinguir "cambió en vivo" de "desajuste de mapeo".
+    // ---- STAGING genérico por tipo (users / att): el navegador con sesión en la intranet real envía
+    // los datos crudos (no-cors) y aquí se mapean/comparan/importan sin que pasen por el chat. ----
+    const KSTAGE = k => path.join(dbm0.DATA_DIR, 'volcado-stage-' + String(k || 'x').replace(/[^a-z]/g, '') + '.ndjson');
+    const readK = k => { try { return fs.readFileSync(KSTAGE(k), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch (e) { return []; } };
+    if (action === 'kstage-reset') { try { fs.writeFileSync(KSTAGE(body.kind), ''); } catch (e) { } return send(res, 200, { ok: true }); }
+    if (action === 'kstage') {
+      const batch = Array.isArray(body.batch) ? body.batch : [];
+      try { fs.appendFileSync(KSTAGE(body.kind), batch.map(r => JSON.stringify(r)).join('\n') + (batch.length ? '\n' : '')); } catch (e) { return send(res, 200, { ok: false, error: e.message }); }
+      return send(res, 200, { ok: true, added: batch.length });
+    }
+    if (action === 'kstage-status') { return send(res, 200, { ok: true, count: readK(body.kind).length }); }
+    // USUARIOS: compara campo por campo (sin devolver valores personales, solo ids y nombres de campo)
+    if (action === 'users-diff' || action === 'users-import') {
+      const users = dbm0.users, store = dbm0.store;
+      const raws = readK('users'); const listIds = (body.listIds || []).map(Number);
+      const mapped = raws.map(r => { const u = mapUser(r); u.id = +r.__id; return u; }).filter(u => u.id);
+      const norm = e => String(e || '').trim().toLowerCase().replace(/\+u\d+@/, '@');
+      const faltan = [], difs = [], hist = {};
+      mapped.forEach(u => {
+        const row = users.getRow(u.id);
+        if (!row) { faltan.push(u.id); return; }
+        const cur = users.get(u.id) || {}; const d = JSON.parse(row.data || '{}');
+        const ch = [];
+        if (String(u.name || '').trim() !== String(cur.name || '').trim()) ch.push('nombre');
+        if (norm(u.mail) !== norm(d.emailOriginal || cur.email) && norm(u.mail) !== norm(cur.email)) ch.push('email');
+        if (u.role !== cur.role) ch.push('rol');
+        if ((+u.worker_type || 0) !== (+d.worker_type || 0)) ch.push('tipo_trabajador');
+        if (!!u.vehicle_allowed !== !!d.vehicle_allowed) ch.push('furgoneta');
+        if (!!u.tyc !== !!d.tyc) ch.push('tyc');
+        if (ch.length) { difs.push({ id: u.id, campos: ch }); ch.forEach(c => hist[c] = (hist[c] || 0) + 1); }
+      });
+      const enListaNoLeidos = listIds.filter(id => !mapped.some(u => u.id === id));
+      if (action === 'users-diff') return send(res, 200, { ok: true, leidos: mapped.length, faltan, difsN: difs.length, hist, difs: difs.slice(0, 200), enListaNoLeidos });
+      // Importa SOLO los usuarios indicados (por defecto, los que faltan). Merge: no borra nada.
+      const want = new Set((body.ids && body.ids.length ? body.ids : faltan).map(Number));
+      const seed = { events: [], users: mapped.filter(u => want.has(u.id)), locations: [], vehicles: [], extras: [], tacs: [] };
+      const counts = require('./volcado-import').run(seed, { store, users, transaction: dbm0.transaction });
+      return send(res, 200, { ok: true, counts });
+    }
+    // CONTROL HORARIO: filas del listado de la intranet real -> colección attendances (upsert por src)
+    if (action === 'att-preview' || action === 'att-import') {
+      const users = dbm0.users, store = dbm0.store;
+      const raws = readK('att');
+      const nn = s => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+      const byName = {}; users.all().forEach(u => { if (u.role !== 'user') { const k = nn(u.name); (byName[k] = byName[k] || []).push(u.id); } });
+      const toISO = f => { let m = String(f || '').match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if (m) { let y = +m[3]; if (y < 100) y += 2000; return y + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); } m = String(f || '').match(/(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ''; };
+      const hm = x => { const m = String(x).match(/(\d{1,2})[:.h](\d{2})/); return m ? String(+m[1]).padStart(2, '0') + ':' + m[2] : ''; };
+      const slotsOf = t => { const out = []; const re = /(\d{1,2}[:.h]\d{2})\s*(?:-|–|a|hasta|→)\s*(\d{1,2}[:.h]\d{2})/gi; let m; while ((m = re.exec(String(t || '')))) out.push({ in: hm(m[1]), out: hm(m[2]) }); return out; };
+      const recs = [], sinUsuario = new Set(), sinFecha = [], sinFranja = [];
+      raws.forEach(r => {
+        let uid = +r.userId || 0;
+        if (!uid) { const c = byName[nn(r.user)] || []; if (c.length === 1) uid = c[0]; }
+        if (!uid) { sinUsuario.add(nn(r.user).slice(0, 3) + '…'); }
+        const date = toISO(r.fecha); if (!date) sinFecha.push(r.id);
+        const slots = slotsOf(r.franja); if (!slots.length) sinFranja.push({ id: r.id, muestra: String(r.franja || '').replace(/[a-záéíóúñ]/gi, 'x').slice(0, 40) });
+        recs.push({ id: +r.id, userId: uid || null, userName: uid ? ((users.get(uid) || {}).name || '') : '', date, slots, comment: r.comentarios || '', vacation: /s[ií]|yes|1/i.test(String(r.vacaciones || '')) && !/^no/i.test(String(r.vacaciones || '')) });
+      });
+      const ok = recs.filter(x => x.userId && x.date);
+      if (action === 'att-preview') {
+        const porUsuario = {}; ok.forEach(x => porUsuario[x.userId] = (porUsuario[x.userId] || 0) + 1);
+        const existentes = store.all('attendances').length; const yaPorId = ok.filter(x => x.id && store.get('attendances', x.id)).length;
+        return send(res, 200, { ok: true, leidos: raws.length, importables: ok.length, sinUsuario: [...sinUsuario], sinUsuarioN: recs.filter(x => !x.userId).length, sinFechaN: sinFecha.length, sinFranjaN: sinFranja.length, sinFranjaMuestras: sinFranja.slice(0, 8), porUsuario, existentesEnReplica: existentes, yaPorId });
+      }
+      // Mismo id que en la intranet real: si ya existe se ACTUALIZA, si no se crea. Nunca se borra nada.
+      let nuevos = 0, actualizados = 0, yaEstaban = 0;
+      dbm0.transaction(() => {
+        ok.forEach(r => {
+          const prev = r.id ? store.get('attendances', r.id) : null;
+          if (prev) { const same = JSON.stringify([prev.userId, prev.date, prev.slots, prev.comment || '']) === JSON.stringify([r.userId, r.date, r.slots, r.comment || '']); if (same) { yaEstaban++; return; } store.put('attendances', Object.assign({}, prev, r)); actualizados++; return; }
+          store.put('attendances', Object.assign({}, r)); nuevos++;
+        });
+      });
+      return send(res, 200, { ok: true, nuevos, actualizados, yaEstaban, total: store.all('attendances').length });
+    }
+
     if (action === 'staged-peek') {
       const store = dbm0.store;
       const want = new Set((body.ids || []).map(Number));
