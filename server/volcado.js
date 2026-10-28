@@ -628,6 +628,25 @@ async function handle(req, res, seg, method, url) {
       return send(res, 200, { ok: true, year, result: out });
     }
 
+    // Busca en los CONCEPTOS de las facturas (descripción, líneas, observaciones) un texto y dice a qué
+    // contacto/empresa pertenecen. Para identificar qué empresa factura una masía concreta.
+    if (action === 'holded-concept-search') {
+      const holded = require('./holded');
+      if (!holded.enabled()) return send(res, 200, { ok: false, error: 'Holded no activado' });
+      let idx; try { idx = await holded.buildIndex(false); } catch (e) { return send(res, 200, { ok: false, error: 'Holded: ' + e.message }); }
+      const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const q = norm(body.text || '');
+      const hits = {};
+      Object.values(idx.byId).forEach(c => {
+        (c.invoices || []).forEach(raw => { const inv = holded.mapInvoice(raw);
+          const concept = norm((inv.desc || '') + ' ' + (inv.products || []).map(p => (p.name || '') + ' ' + (p.desc || '')).join(' ') + ' ' + (inv.notes || ''));
+          if (q && concept.includes(q)) { const k = c.name || '(sin nombre)'; (hits[k] = hits[k] || { n: 0, total: 0, sample: '' }); hits[k].n++; hits[k].total += (+inv.total || 0); if (!hits[k].sample) hits[k].sample = ((inv.desc || '') || (inv.products[0] && inv.products[0].name) || '').slice(0, 60); }
+        });
+      });
+      const out = Object.entries(hits).map(([name, v]) => ({ name, n: v.n, total: Math.round(v.total), sample: v.sample })).sort((a, b) => b.total - a.total);
+      return send(res, 200, { ok: true, q: body.text, hits: out });
+    }
+
     // Gestiona la lista de exclusión FIJA del volcado (ids que no se deben traer nunca).
     if (action === 'set-exclude') {
       const store = dbm0.store;
