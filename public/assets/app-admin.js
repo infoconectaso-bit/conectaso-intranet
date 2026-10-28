@@ -1338,19 +1338,21 @@ function pieChart(rows, { topN = 12, unit = '' } = {}) {
   if (rows.length > topN) {
     const head = rows.slice(0, topN), rest = rows.slice(topN);
     const otros = rest.reduce((s, r) => s + r.value, 0);
-    rows = head.concat([{ label: 'Otros (' + rest.length + ')', value: Math.round(otros * 10) / 10 }]);
+    rows = head.concat([{ label: 'Resto (' + rest.length + ' más pequeños, sumados)', value: Math.round(otros * 10) / 10, otros: true }]);
   }
   const total = rows.reduce((s, r) => s + r.value, 0) || 1;
+  // El grupo "Resto" suma muchos pequeños: va en GRIS para que no parezca que es el más grande.
+  const colOf = (r, i) => r.otros ? '#CFC9BC' : PIE_COLORS[i % PIE_COLORS.length];
   const R = 95, cx = 105, cy = 105; let ang = -90;
   const p = a => [cx + R * Math.cos(a * Math.PI / 180), cy + R * Math.sin(a * Math.PI / 180)];
   const segs = rows.map((r, i) => {
-    const frac = r.value / total, col = PIE_COLORS[i % PIE_COLORS.length];
+    const frac = r.value / total, col = colOf(r, i);
     if (frac >= 0.999) return `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${col}"><title>${esc(r.label)}: ${r.value}${unit} (100%)</title></circle>`;
     const a0 = ang, a1 = ang + frac * 360; ang = a1;
     const [x0, y0] = p(a0), [x1, y1] = p(a1), large = (a1 - a0) > 180 ? 1 : 0;
     return `<path d="M${cx},${cy} L${x0.toFixed(1)},${y0.toFixed(1)} A${R},${R} 0 ${large} 1 ${x1.toFixed(1)},${y1.toFixed(1)} Z" fill="${col}"><title>${esc(r.label)}: ${r.value}${unit} (${Math.round(frac * 100)}%)</title></path>`;
   }).join('');
-  const legend = rows.map((r, i) => `<div class="pie-leg-row"><span class="pie-dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></span><span class="pie-leg-name" title="${esc(r.label)}">${esc(r.label)}</span><b>${r.value}${unit}</b> <span class="muted">${Math.round(r.value / total * 100)}%</span></div>`).join('');
+  const legend = rows.map((r, i) => `<div class="pie-leg-row"><span class="pie-dot" style="background:${colOf(r, i)}"></span><span class="pie-leg-name" title="${esc(r.label)}">${esc(r.label)}</span><b>${r.value}${unit}</b> <span class="muted">${Math.round(r.value / total * 100)}%</span></div>`).join('');
   return `<div class="pie-wrap"><svg viewBox="0 0 210 210" class="pie-svg">${segs}<circle class="pie-hole" cx="${cx}" cy="${cy}" r="48"/></svg><div class="pie-leg">${legend}</div></div>`;
 }
 // Gráfico de líneas multi-serie (evolución por año). xLabels: años; series: [{label, values[], color}].
