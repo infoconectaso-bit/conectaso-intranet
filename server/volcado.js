@@ -474,6 +474,19 @@ async function handle(req, res, seg, method, url) {
       let rep = null; try { rep = JSON.parse(fs.readFileSync(path.join(dbm0.DATA_DIR, 'volcado-compare.json'), 'utf8')); } catch (e) { return send(res, 200, { ok: false, error: 'sin informe' }); }
       return send(res, 200, { ok: true, report: rep });
     }
+
+    // PEEK al staging del recorrido: devuelve el event_status CRUDO que capturó la copia para unos ids,
+    // su mapeo y lo que tiene la réplica ahora. Para distinguir "cambió en vivo" de "desajuste de mapeo".
+    if (action === 'staged-peek') {
+      const store = dbm0.store;
+      const want = new Set((body.ids || []).map(Number));
+      let raws = [];
+      try { raws = fs.readFileSync(STAGE, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch (e) { return send(res, 200, { ok: false, error: 'sin staging' }); }
+      const out = [];
+      raws.forEach(r => { const id = +r.__id; if (!want.has(id)) return; const m = mapEvent(r); const E = store.get('events', id);
+        out.push({ id, crudo_event_status: r.event_status, crudo_label: r.event_status__text || '', mapeado: m.ev.estado, replica_estado: E ? E.estado : null }); });
+      return send(res, 200, { ok: true, estados: store.setting('estados'), peek: out });
+    }
   }
 
   // RECOLOCAR momentos personalizados en su sección real, leyendo cada ficha original.
