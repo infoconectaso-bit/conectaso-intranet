@@ -1499,13 +1499,17 @@ on(/^#\/backups$/, async () => {
     if (!nas || !nas.totalKB) estNas = { state: 'warn', label: 'NAS de la nave', detail: 'aún sin informar' };
     else { const ageH = nas.at ? (Date.now() - new Date(nas.at)) / 36e5 : 999; const pct = Math.round(nas.usedKB / nas.totalKB * 100);
       estNas = ageH > 26 ? { state: 'warn', label: 'NAS de la nave', detail: `último informe ${fmtDate(nas.at)}` } : { state: 'ok', label: 'NAS de la nave', detail: `última ${fmtDate(nas.at)} · ${pct}% ocupado` }; }
+    estServidor.pct = st.maxBytes ? Math.min(100, Math.round((st.totalBytes || 0) / st.maxBytes * 100)) : null;
+    estNube.pct = (cfg.enabled && cloud.bytes != null && cloud.freeLimit) ? Math.min(100, Math.round(cloud.bytes / cloud.freeLimit * 100)) : null;
+    estNas.pct = (nas && nas.totalKB) ? Math.min(100, Math.round(nas.usedKB / nas.totalKB * 100)) : null;
     const estados = [estServidor, estNube, estNas];
     const okN = estados.filter(e => e.state === 'ok').length;
     const allOk = okN === 3;
     const ico = s => s === 'ok' ? '<span style="color:#1B9E4B">✔</span>' : s === 'warn' ? '<span style="color:#C77700">⚠</span>' : '<span style="color:#C0392B">✖</span>';
-    const statusCard = `<div class="card" style="padding:16px 18px;border:1px solid var(--line,#e5e7eb);border-left:5px solid ${allOk ? '#1B9E4B' : '#C77700'};border-radius:12px;margin-bottom:16px;max-width:680px">
+    const miniBar = pct => pct == null ? '' : `<span style="display:inline-flex;align-items:center;gap:7px;margin-left:auto;flex:0 0 auto"><span style="width:92px;height:7px;border-radius:999px;background:rgba(0,0,0,.08);overflow:hidden;display:inline-block"><span style="display:block;height:100%;width:${Math.max(3, pct)}%;background:${pct >= 90 ? '#C0392B' : pct >= 70 ? '#C77700' : '#1B9E4B'}"></span></span><span class="hint tnum" style="min-width:32px;text-align:right">${pct}%</span></span>`;
+    const statusCard = `<div class="card" style="padding:16px 18px;border:1px solid var(--line,#e5e7eb);border-left:5px solid ${allOk ? '#1B9E4B' : '#C77700'};border-radius:12px;margin-bottom:16px;max-width:760px">
       <div style="font-weight:700;font-size:16px;margin-bottom:10px">${allOk ? '✅' : '⚠️'} ${okN} de 3 copias funcionando correctamente</div>
-      ${estados.map(e => `<div style="display:flex;align-items:center;gap:11px;padding:7px 0;border-top:1px solid var(--line,#eee)"><span style="width:18px;text-align:center;font-weight:700">${ico(e.state)}</span><b style="min-width:150px">${esc(e.label)}</b><span class="hint">${esc(e.detail)}</span></div>`).join('')}
+      ${estados.map(e => `<div style="display:flex;align-items:center;gap:11px;padding:8px 0;border-top:1px solid var(--line,#eee);flex-wrap:wrap"><span style="width:18px;text-align:center;font-weight:700">${ico(e.state)}</span><b style="min-width:140px">${esc(e.label)}</b><span class="hint" style="flex:1 1 180px;min-width:0">${esc(e.detail)}</span>${miniBar(e.pct)}</div>`).join('')}
     </div>`;
     shell(`${pageHead('Copias de seguridad', 'Copias automáticas de la base de datos (bodas, usuarios, tarifas…).')}
       ${statusCard}
