@@ -1484,23 +1484,41 @@ on(/^#\/backups$/, async () => {
       const nameCell = `<b>${esc(b.name)}</b>${lbl ? ` <span class="tag tag--green" style="margin-left:6px;white-space:nowrap">🛡 ${esc(lbl)}</span>` : ''}`;
       return `<tr${attr}><td>${nameCell}</td><td>${fmtDate(b.date)}</td><td style="text-align:right">${fmtSize(b.size)}</td><td style="text-align:right;white-space:nowrap"><button class="btn btn--sm" data-restore="${esc(b.name)}" title="Restaurar la intranet a este punto">↩ Restaurar</button> <a class="btn btn--sm" href="/api/backups/download?name=${encodeURIComponent(b.name)}" download>⬇ Descargar</a></td></tr>`;
     };
-    const SHOWN = 10;
+    const SHOWN = 5;
     const rows = list.slice(0, SHOWN).map(b => rowHtml(b, false)).join('') + list.slice(SHOWN).map(b => rowHtml(b, true)).join('');
     const moreBtn = list.length > SHOWN ? `<div class="btn-row" style="margin-top:10px"><button class="btn btn--sm" id="bkMore">Ver todas (${list.length})</button></div>` : '';
+    // --- Estado resumido de las 3 copias para la cabecera "X de 3 funcionando" ---
+    const srvState = (st.lastError && !st.healthy) ? 'bad' : (st.stale ? 'warn' : 'ok');
+    const estServidor = { state: srvState, label: 'Servidor', detail: srvState === 'ok' ? `cada 5 min · última ${last ? fmtDate(last.date) : '—'} · ${r.count || 0} copias` : (srvState === 'warn' ? 'hace rato que no se hace una copia' : 'la última copia falló') };
+    let estNube;
+    if (!cfg.enabled) estNube = { state: 'warn', label: 'Copia en la nube', detail: 'desactivada' };
+    else if (cloud.reachError) estNube = { state: 'bad', label: 'Copia en la nube', detail: 'sin conexión con la nube' };
+    else if (cloud.lastError && (!cloud.lastOk || new Date(cloud.lastError.date) > new Date(cloud.lastOk.date))) estNube = { state: 'warn', label: 'Copia en la nube', detail: 'la última subida falló' };
+    else estNube = { state: 'ok', label: 'Nube (Backblaze)', detail: `activa${cloud.remoteLast ? ' · última ' + fmtDate(cloud.remoteLast) : ''}` };
+    let estNas;
+    if (!nas || !nas.totalKB) estNas = { state: 'warn', label: 'NAS de la nave', detail: 'aún sin informar' };
+    else { const ageH = nas.at ? (Date.now() - new Date(nas.at)) / 36e5 : 999; const pct = Math.round(nas.usedKB / nas.totalKB * 100);
+      estNas = ageH > 26 ? { state: 'warn', label: 'NAS de la nave', detail: `último informe ${fmtDate(nas.at)}` } : { state: 'ok', label: 'NAS de la nave', detail: `última ${fmtDate(nas.at)} · ${pct}% ocupado` }; }
+    const estados = [estServidor, estNube, estNas];
+    const okN = estados.filter(e => e.state === 'ok').length;
+    const allOk = okN === 3;
+    const ico = s => s === 'ok' ? '<span style="color:#1B9E4B">✔</span>' : s === 'warn' ? '<span style="color:#C77700">⚠</span>' : '<span style="color:#C0392B">✖</span>';
+    const statusCard = `<div class="card" style="padding:16px 18px;border:1px solid var(--line,#e5e7eb);border-left:5px solid ${allOk ? '#1B9E4B' : '#C77700'};border-radius:12px;margin-bottom:16px;max-width:680px">
+      <div style="font-weight:700;font-size:16px;margin-bottom:10px">${allOk ? '✅' : '⚠️'} ${okN} de 3 copias funcionando correctamente</div>
+      ${estados.map(e => `<div style="display:flex;align-items:center;gap:11px;padding:7px 0;border-top:1px solid var(--line,#eee)"><span style="width:18px;text-align:center;font-weight:700">${ico(e.state)}</span><b style="min-width:150px">${esc(e.label)}</b><span class="hint">${esc(e.detail)}</span></div>`).join('')}
+    </div>`;
     shell(`${pageHead('Copias de seguridad', 'Copias automáticas de la base de datos (bodas, usuarios, tarifas…).')}
-      ${banner}
-      ${localBar}
-      <div class="grid-3" style="margin-bottom:14px">
-        <div class="stat stat--blue"><div class="k">Última copia</div><div class="v" style="font-size:18px">${last ? fmtDate(last.date) : '—'}</div></div>
-        <div class="stat"><div class="k">Copias guardadas</div><div class="v">${r.count || 0}</div></div>
-        <div class="stat stat--yellow"><div class="k">Espacio ocupado</div><div class="v" style="font-size:18px">${fmtSize(r.totalSize || 0)}</div></div>
-      </div>
-      <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--primary" id="bkNow">💾 Crear copia ahora</button> <button class="btn" id="bkPre">🛡 Crear copia previa a mantenimiento</button></div>
-      <p class="hint" style="margin-bottom:12px">Copia automática al arrancar y <b>cada 5 minutos</b> (de 02:00 a 06:00, menos a menudo). Se guardan escalonadas (2 h al minuto · 48 h cada 30 min · 30 días por día) y las antiguas se borran solas. Las <b>🛡 protegidas</b> (previas a mantenimiento o restauración) <b>no se borran nunca</b>. Con <b>↩ Restaurar</b> vuelves la intranet a ese punto: antes se guarda sola una copia del estado actual (reversible) y el servicio se reinicia solo (~1 min).</p>
+      ${statusCard}
+      <div class="btn-row" style="margin-bottom:16px"><button class="btn btn--primary btn--sm" id="bkNow">💾 Crear copia ahora</button> <button class="btn btn--sm" id="bkConfigBtn">⚙ Mostrar configuración</button></div>
+      <h3 style="margin:4px 0 10px;font-size:16px">Copias recientes del servidor</h3>
       <div class="table-wrap"><table class="dt"><thead><tr><th>Archivo</th><th>Fecha</th><th style="text-align:right">Tamaño</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">Aún no hay copias (se creará una en breve).</td></tr>'}</tbody></table></div>
       ${moreBtn}
+      <p class="hint" style="margin-top:12px">Copia automática al arrancar y <b>cada 5 minutos</b>. Se guardan escalonadas y las antiguas se borran solas; las <b>🛡 protegidas</b> no se borran nunca. Con <b>↩ Restaurar</b> vuelves la intranet a ese punto (antes se guarda una copia reversible del estado actual).</p>
 
-      <h2 style="margin:26px 0 6px">☁️ Copia en la nube (fuera del servidor)</h2>
+      <div id="bkConfig" style="display:none;margin-top:18px;border-top:1px solid var(--line,#e5e7eb);padding-top:16px">
+        ${localBar}
+        <div class="btn-row" style="margin-bottom:6px"><button class="btn" id="bkPre">🛡 Crear copia previa a mantenimiento</button></div>
+        <h2 style="margin:20px 0 6px">☁️ Copia en la nube (fuera del servidor)</h2>
       <p class="hint" style="margin-bottom:12px">Segunda copia automática en <b>Backblaze B2</b> (región Europa). Si el servidor se estropeara, los datos seguirían a salvo aquí. Cada copia local (cada 7 min) se sube también a la nube, y las antiguas se borran solas. La clave secreta se guarda <b>solo en tu servidor</b>; no se muestra una vez guardada.</p>
       ${cloudBanner}
       ${storageBar}
@@ -1548,6 +1566,7 @@ on(/^#\/backups$/, async () => {
           <button class="btn btn--primary" id="acSave">Guardar</button>
           <button class="btn btn--red" id="acRun">🧹 Limpiar ahora</button>
         </div>
+      </div>
       </div>`, ['Copias de seguridad']);
     const bn = el('bkNow');
     if (bn) bn.onclick = async () => { bn.disabled = true; bn.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST' }); toast('Copia creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
@@ -1555,6 +1574,8 @@ on(/^#\/backups$/, async () => {
     if (bp) bp.onclick = async () => { bp.disabled = true; bp.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST', body: { pre: true } }); toast('Copia previa a mantenimiento creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
     const bkMore = el('bkMore');
     if (bkMore) bkMore.onclick = () => { const hidden = $$('.bk-more'); const show = bkMore.dataset.open !== '1'; hidden.forEach(tr => tr.style.display = show ? '' : 'none'); bkMore.dataset.open = show ? '1' : '0'; bkMore.textContent = show ? 'Ver menos' : `Ver todas (${hidden.length})`; };
+    const bkCfgBtn = el('bkConfigBtn');
+    if (bkCfgBtn) bkCfgBtn.onclick = () => { const c = el('bkConfig'); if (!c) return; const open = c.style.display === 'none'; c.style.display = open ? '' : 'none'; bkCfgBtn.textContent = open ? '⚙ Ocultar configuración' : '⚙ Mostrar configuración'; if (open) c.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
     // Copia local al NAS: obtener el enlace seguro + el script para el Programador de tareas.
     const showNas = (d) => {
       const rep = ['# informa del espacio del NAS al panel',
