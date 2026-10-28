@@ -175,7 +175,8 @@ function collectForm(form) {
    ========================================================================= */
 on(/^#\/eventos$/, () => eventsList(false));
 on(/^#\/eventos\/realizados$/, () => eventsList(true));
-const DONE_VIEW = { sel: '12m', unpaid: false };  // '12m' | 'all' | '2026' ...
+const DONE_VIEW = { sel: '12m', unpaid: false };
+const TODO_VIEW = { noOwner: false };  // '12m' | 'all' | '2026' ...
 // --- Furgonetas: resolver y abreviar la marca para el listado y la hoja de ruta ---
 const VEH_ABBR = { volkswagen: 'VW', vw: 'VW', ford: 'FRD', toyota: 'TYT', peugeot: 'PGT', citroen: 'CIT', 'citroën': 'CIT', renault: 'RLT', fiat: 'FIAT', mercedes: 'MB', 'mercedes-benz': 'MB', opel: 'OPL', nissan: 'NSN', iveco: 'IVC', fiorino: 'FIAT' };
 const vehById = id => (S.meta.vehicles || []).find(v => String(v.id) === String(id));
@@ -225,7 +226,14 @@ async function eventsList(done) {
     const unpaidChip = admin ? `<button type="button" class="yrchip yrchip--unpaid${DONE_VIEW.unpaid ? ' on' : ''}" data-unpaid title="Mostrar solo las bodas con pago pendiente"><span class="dot" style="background:#D50000"></span> Impagadas (${nUnpaid})</button>` : '';
     yearBar = `<div class="yrbar">${chip('12m', 'Últimos 12 meses')}${years.map(y => chip(y, y)).join('')}${chip('all', 'Todos los años')}${unpaidChip}</div>`;
   }
-  const tblId = done ? 'dtDone_' + DONE_VIEW.sel + (DONE_VIEW.unpaid ? '_imp' : '') : 'dtTodo';
+  // Pendientes (admin): filtro "Sin titular" para revisar las bodas que no tienen cliente asignado.
+  if (!done && admin) {
+    const noOwner = e => !e.userId;
+    const nNo = evs.filter(noOwner).length;
+    if (TODO_VIEW.noOwner) evs = evs.filter(noOwner);
+    yearBar = `<div class="yrbar"><button type="button" class="yrchip yrchip--unpaid${TODO_VIEW.noOwner ? ' on' : ''}" data-noowner title="Bodas sin titular (sin cliente asignado): no recibirían avisos"><span class="dot" style="background:#D50000"></span> Sin titular (${nNo})</button></div>`;
+  }
+  const tblId = done ? 'dtDone_' + DONE_VIEW.sel + (DONE_VIEW.unpaid ? '_imp' : '') : ('dtTodo' + (TODO_VIEW.noOwner ? '_noown' : ''));
   // La columna "Fecha" cambia de índice según el rol (el admin tiene una columna "Tipo" extra).
   // Ordenamos SIEMPRE por fecha: ascendente en pendientes (próxima primero), descendente en realizadas.
   const fechaIdx = cols.findIndex(c => c.t === 'Fecha');
@@ -234,6 +242,7 @@ async function eventsList(done) {
   if (admin) $$('[data-del-event]').forEach(b => b.onclick = () => confirmDeleteEvent(+b.dataset.delEvent, done));
   $$('[data-yr]').forEach(b => b.onclick = () => { DONE_VIEW.sel = b.dataset.yr; eventsList(true); });
   $$('[data-unpaid]').forEach(b => b.onclick = () => { DONE_VIEW.unpaid = !DONE_VIEW.unpaid; eventsList(true); });
+  $$('[data-noowner]').forEach(b => b.onclick = () => { TODO_VIEW.noOwner = !TODO_VIEW.noOwner; eventsList(false); });
 }
 const clientName = e => e.clienteNombre || e.conyuges || userName(e.userId) || 'Cliente';
 function confirmDeleteEvent(id, done) {
