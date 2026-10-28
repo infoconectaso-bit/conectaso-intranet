@@ -1158,3 +1158,8 @@ html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok
 .ruta-deck .obs-aviso{margin-top:16px;max-width:760px}
 .ruta-deck .obs-aviso .note-tip{margin-top:0}
 .ruta-deck .slide.page{padding-bottom:110px}
+
+/* Análisis: gráficos más compactos */
+.pie-svg{width:170px;height:170px}
+.pie-wrap{gap:16px}
+.ana-pane .line-svg{max-height:270px}

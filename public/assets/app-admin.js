@@ -1379,7 +1379,7 @@ function lineChartMulti(xLabels, series, opts) {
   }).join('');
   const lines = series.map(s => `<polyline fill="none" stroke="${s.color}" stroke-width="2.5" points="${s.values.map((v, i) => X(i) + ',' + Y(v)).join(' ')}"/>` + s.values.map((v, i) => `<circle cx="${X(i)}" cy="${Y(v)}" r="3.6" fill="#fff" stroke="${s.color}" stroke-width="2"><title>${esc(s.label)} · ${esc(xLabels[i])}: ${v}</title></circle>`).join('') + (showValues ? s.values.map((v, i) => `<text x="${X(i)}" y="${Y(v) - 9}" font-size="12" font-weight="700" text-anchor="middle" fill="${s.color}">${v}</text>`).join('') : '')).join('');
   const legend = series.map(s => `<span class="ln-leg"><span class="ln-dot" style="background:${s.color}"></span>${esc(s.label)}</span>`).join('');
-  return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" class="line-svg" style="width:100%;min-width:560px">${vgrid}${grid}${lines}${xlab}</svg></div><div class="ln-legend">${legend}</div>`;
+  return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" class="line-svg" style="width:100%;max-width:680px;min-width:480px">${vgrid}${grid}${lines}${xlab}</svg></div><div class="ln-legend">${legend}</div>`;
 }
 // ANÁLISIS (admin, bajo contraseña): ventas, facturación de masías, económico y horas extra.
 on(/^#\/analisis$/, async () => {
@@ -1421,7 +1421,7 @@ on(/^#\/analisis$/, async () => {
     (() => { const dw = a.bodasDow || {}; const cats = Object.keys(dw); if (!cats.length) return ''; const pieRows = cats.map(c => ({ label: c, value: sum(dw[c]) })); return sect('Bodas por día de la semana', crossTable(dw, 'Día') + pieChart(pieRows, { unit: ' bodas' }), 'Viernes, sábado, domingo y entre semana (lunes a jueves)'); })(),
   ].join('');
   const tabMasias = [
-    sect('Bodas por masía y año', crossTable(a.ventasMasia, 'Masía', null, 2), 'Solo masías con 2 o más bodas'),
+    sect('Bodas por masía y año', crossTable(a.ventasMasia, 'Masía', null, 4), 'Solo masías donde hemos ido 4 o más veces'),
     (() => { const vm = a.ventasMasia || {}; const top = Object.keys(vm).map(k => [k, sum(vm[k])]).sort((x, y) => y[1] - x[1]).slice(0, 8); const series = top.map((t, i) => ({ label: t[0], color: PIE_COLORS[i % PIE_COLORS.length], values: years.map(y => vm[t[0]][y] || 0) })); return sect('Evolución de bodas por masía (por año)', lineChartMulti(years, series), 'Top 8 masías por volumen'); })(),
     a.holdedOk ? sect('Facturación de masías por año', crossTable(a.masiaAnual, 'Masía', eur), 'Importe facturado (sin IVA) desde Holded') : sect('Facturación de masías', '<div class="empty">Holded no está activado.</div>'),
     a.holdedOk ? sect('Media económica por boda y mes', `<div class="table-wrap"><table class="dt"><thead><tr><th>Mes</th><th style="text-align:right">Facturado masías</th><th style="text-align:right">Bodas</th><th style="text-align:right">Media / boda</th></tr></thead><tbody>${econRows.map(m => `<tr><td><b>${esc(m.mes)}</b></td><td style="text-align:right">${eur(m.facturado)}</td><td style="text-align:right">${m.bodas}</td><td style="text-align:right"><b>${eur(m.media)}</b></td></tr>`).join('')}</tbody></table></div>`, 'Facturación de masías ÷ nº de bodas realizadas cada mes') : '',
