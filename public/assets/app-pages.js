@@ -1082,12 +1082,26 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
       const omit = i => `<button type="button" class="sp-opt" data-song="${i}" data-uri="" style="display:flex;align-items:center;gap:6px;border:2px solid transparent;border-radius:12px;padding:7px 14px;background:var(--bg,#f6f7f5);cursor:pointer;color:var(--mute,#6a7076);font-weight:600;flex:0 0 auto">🚫 Omitir</button>`;
       const rows = songs.map((s, i) => {
         const ic = s.status === 'ok' ? '✅' : s.status === 'warn' ? '⚠️' : '❌';
-        const orig = s.song || s.link || '';
+        const isYt = s.kind === 'yt', isPl = s.kind === 'playlist';
         const srcDur = s.srcDur ? ` · vídeo ${esc(s.srcDur)}` : '';
+        // Origen: para YouTube se resalta en ROJO (la coincidencia es incierta y hay que revisarla).
+        const lab = isYt
+          ? `<span style="color:#d9534f;font-weight:700;text-decoration:underline;text-underline-offset:2px">▶️ YouTube</span><span class="hint">${srcDur}</span>`
+          : `<span class="hint">${srcLabel(s.kind)}${srcDur}</span>`;
+        // Texto original solo para enlaces de texto; para YouTube/playlist usamos un botón directo.
+        const origTxt = ((s.kind === 'text' || s.kind === 'none') && s.song) ? ` <span class="hint">— ${esc(s.song)}</span>` : '';
+        const act = (isPl && s.link)
+          ? `<a class="btn btn--sm" href="${esc(s.link)}" target="_blank" rel="noopener" style="padding:3px 10px">🟢 Abrir playlist</a>`
+          : (isYt && s.link)
+          ? `<a class="btn btn--sm" href="${esc(s.link)}" target="_blank" rel="noopener" style="padding:3px 10px;color:#fff;background:#d9534f;border-color:#d9534f">▶ Ver en YouTube</a>`
+          : '';
+        const rowStyle = isYt
+          ? 'padding:11px 11px;margin-top:2px;border-top:1px solid var(--line,#eee);border-left:3px solid #d9534f;background:rgba(217,83,32,.06);border-radius:0 10px 10px 0'
+          : 'padding:11px 0;border-top:1px solid var(--line,#eee)';
         const noCand = (!s.candidates || !s.candidates.length);
         const cards = noCand ? '' : (s.candidates.map(c => card(i, c)).join('') + omit(i));
-        return `<div style="padding:11px 0;border-top:1px solid var(--line,#eee)">
-          <div style="margin-bottom:7px"><b>${esc(s.title)}</b> ${ic} <span class="hint">${srcLabel(s.kind)}${srcDur}</span>${orig ? ` <span class="hint">— ${esc(orig)}</span>` : ''}</div>
+        return `<div style="${rowStyle}">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px"><b>${esc(s.title)}</b> ${ic} ${lab}${origTxt}${act ? `<span style="margin-left:auto">${act}</span>` : ''}</div>
           ${noCand ? `<div class="hint" style="color:#d9534f">❌ ${esc(s.error || 'sin resultados en Spotify')}</div>` : `<div style="display:flex;flex-wrap:wrap;gap:8px">${cards}</div>`}
         </div>`;
       }).join('');
