@@ -475,6 +475,59 @@ async function handle(req, res, seg, method, url) {
       return send(res, 200, { ok: true, n: results.length });
     }
 
+    // ANÁLISIS DE FACTURACIÓN POR MASÍA (Holded). Media por boda y comparativa entre las masías donde
+    // más se trabaja. Usa el índice cacheado de Holded (no gasta cupo extra de API si está fresco).
+    // Importes SIN IVA (base imponible); las rectificativas (CN) ya restan.
+    if (action === 'holded-venues') {
+      const store = dbm0.store, users = dbm0.users;
+      const holded = require('./holded'); const time = require('./time');
+      if (!holded.enabled()) return send(res, 200, { ok: false, error: 'Holded no está activado en la réplica' });
+      const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+      const TARGET = Array.isArray(body.venues) && body.venues.length ? body.venues
+        : ['Mas Canferrer', 'Hotel Edelweiss', 'Mas Badó', 'Mas Llombart', 'Can Ribas', 'Mas Vivencs', 'Castell de Tous'];
+      const locs = store.all('locations');
+      const matchLoc = t => { const nt = norm(t); return locs.filter(l => { const nl = norm(l.name); return nl && (nl === nt || nl.includes(nt) || nt.includes(nl)); }); };
+      const today = time.bizToday();
+      // eventos por masía (una pasada)
+      const evByLoc = {}; store.all('events').forEach(e => { const l = +e.lugar || 0; (evByLoc[l] = evByLoc[l] || []).push(e); });
+      let idx; try { idx = await holded.buildIndex(body.refresh === true); } catch (e) { return send(res, 200, { ok: false, error: 'Holded: ' + e.message }); }
+      const candidates = ev => {
+        const emails = [], nifs = [], names = [];
+        const u = users.get(ev.userId); if (u && u.email) emails.push(u.email);
+        (ev.coUsers || []).forEach(id => { const c = users.get(id); if (c && c.email) emails.push(c.email); });
+        (ev.spouses || []).forEach(s => { if (s) { if (s.email) emails.push(s.email); if (s.dni) nifs.push(s.dni); if (s.name) names.push(s.name); } });
+        if (ev.conyuges) String(ev.conyuges).split(/\s+y\s+|&/i).forEach(n => { const x = n.trim(); if (x) names.push(x); });
+        return { emails, nifs, names };
+      };
+      const result = [];
+      for (const t of TARGET) {
+        const matched = matchLoc(t); const ids = new Set(matched.map(l => l.id));
+        const evs = []; ids.forEach(id => (evByLoc[id] || []).forEach(e => evs.push(e)));
+        const realizadas = evs.filter(e => e.fecha && e.fecha < today);
+        let total = 0, totalConIva = 0, nConFactura = 0, nSinFactura = 0; const invSeen = new Set(); const conceptos = []; let nCredit = 0;
+        for (const ev of realizadas) {
+          let r; try { r = await holded.invoicesForClient(candidates(ev), false, { includeName: true }); } catch (e) { r = { invoices: [] }; }
+          const invs = r.invoices || [];
+          if (!invs.length) { nSinFactura++; continue; }
+          nConFactura++;
+          invs.forEach(inv => { const k = String(inv.id); if (invSeen.has(k)) return; invSeen.add(k);
+            total += (+inv.total || 0); totalConIva += (+inv.totalConIva || 0); if (inv.credit) nCredit++;
+            if (conceptos.length < 6) { const c = [(inv.desc || ''), ...(inv.products || []).map(p => p.name)].filter(Boolean).join(' · '); conceptos.push({ num: inv.number, fecha: inv.date, base: inv.total, rect: !!inv.credit, concepto: c.slice(0, 90) }); }
+          });
+        }
+        result.push({
+          masia: t, locIds: [...ids], locNames: matched.map(l => l.name),
+          bodasRealizadas: realizadas.length, conFactura: nConFactura, sinFactura: nSinFactura,
+          nFacturas: invSeen.size, nRectificativas: nCredit,
+          totalFacturadoSinIva: Math.round(total * 100) / 100, totalConIva: Math.round(totalConIva * 100) / 100,
+          mediaPorBodaRealizada: realizadas.length ? Math.round(total / realizadas.length * 100) / 100 : 0,
+          mediaPorBodaFacturada: nConFactura ? Math.round(total / nConFactura * 100) / 100 : 0,
+          conceptos,
+        });
+      }
+      return send(res, 200, { ok: true, generado: new Date().toISOString(), holdedIdx: { contactos: idx.contactsN, facturas: idx.invoicesN, rectificativas: idx.creditNotesN }, sinMatch: TARGET.filter(t => !matchLoc(t).length), todasLasMasias: locs.map(l => ({ id: l.id, name: l.name })).filter(l => l.name), result });
+    }
+
     // Gestiona la lista de exclusión FIJA del volcado (ids que no se deben traer nunca).
     if (action === 'set-exclude') {
       const store = dbm0.store;
