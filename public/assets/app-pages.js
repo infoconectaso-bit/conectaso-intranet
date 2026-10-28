@@ -204,7 +204,7 @@ async function eventsList(done) {
     { t: 'Usuario', get: e => clientName(e) + ' ' + [e.userId].concat(e.coUsers || []).join(' '),
       html: e => {
         const co = (e.coUsers || []).map(Number).filter(id => id && id !== +e.userId);
-        const main = `<a href="#/usuario/${e.userId}" title="Titular de la boda">${e.userId} - ${esc(clientName(e))}</a>`;
+        const main = e.userId ? `<a href="#/usuario/${e.userId}" title="Titular de la boda">${e.userId} - ${esc(clientName(e))}</a>` : `<span class="muted" title="Esta boda no tiene titular (usuario cliente) asignado">Sin titular${e.conyuges ? ' · ' + esc(e.conyuges) : ''}</span>`;
         const extra = co.map(id => `<a href="#/usuario/${id}" class="co-id" title="Cotitular vinculado a esta boda">+ ${id}</a>`).join('');
         return `<div class="cli-ids">${main}${extra}</div>`;
       } });
