@@ -1052,28 +1052,50 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
     const out = box.querySelector('#spGenOut');
     const prep = box.querySelector('#spPrep');
 
-    // Pinta el selector: cada canción con su mejor coincidencia preseleccionada, alternativas por % y "Omitir".
+    // Pinta el selector VISUAL: cada canción con sus candidatas como tarjetas (carátula + % en color),
+    // la mejor preseleccionada; se toca para elegir, o "Omitir" para no añadirla.
+    const pillBg = sc => sc >= 80 ? '#1DB954' : sc >= 55 ? '#E8A32B' : '#C0504D';
+    const srcLabel = k => k === 'yt' ? '▶️ YouTube' : k === 'id' ? '🟢 Enlace Spotify' : '✍️ Texto';
+    let sel = [];
     const renderChooser = (data) => {
-      const rows = (data.songs || []).map((s, i) => {
+      const songs = data.songs || [];
+      sel = songs.map(s => s.bestUri || '');   // selección por canción (uri, o '' = omitir)
+      const card = (i, c) => {
+        const thumb = c.img
+          ? `<img src="${esc(c.img)}" alt="" width="46" height="46" loading="lazy" style="width:46px;height:46px;border-radius:6px;object-fit:cover;flex:0 0 auto">`
+          : '<span style="width:46px;height:46px;border-radius:6px;background:var(--line,#e3e6e3);display:grid;place-items:center;flex:0 0 auto">♪</span>';
+        return `<button type="button" class="sp-opt" data-song="${i}" data-uri="${esc(c.uri)}" style="display:flex;align-items:center;gap:9px;text-align:left;border:2px solid transparent;border-radius:12px;padding:7px 9px;background:var(--bg,#f6f7f5);cursor:pointer;min-width:230px;max-width:340px;flex:1 1 240px">
+          ${thumb}
+          <div style="min-width:0;flex:1"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.name)}</div><div class="hint" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.artist)}${c.dur ? ' · ' + esc(c.dur) : ''}</div></div>
+          <span style="flex:0 0 auto;background:${pillBg(c.score)};color:#fff;font-weight:700;font-size:12px;border-radius:999px;padding:3px 9px">${c.score}%</span>
+        </button>`;
+      };
+      const omit = i => `<button type="button" class="sp-opt" data-song="${i}" data-uri="" style="display:flex;align-items:center;gap:6px;border:2px solid transparent;border-radius:12px;padding:7px 14px;background:var(--bg,#f6f7f5);cursor:pointer;color:var(--mute,#6a7076);font-weight:600;flex:0 0 auto">🚫 Omitir</button>`;
+      const rows = songs.map((s, i) => {
         const ic = s.status === 'ok' ? '✅' : s.status === 'warn' ? '⚠️' : '❌';
-        const opts = ['<option value="">— Omitir (no añadir) —</option>'].concat(
-          (s.candidates || []).map(c => `<option value="${esc(c.uri)}"${c.uri === s.bestUri ? ' selected' : ''}>${esc(c.name)} — ${esc(c.artist)}${c.dur ? ' · ' + esc(c.dur) : ''} (${c.score}%)</option>`)
-        ).join('');
         const orig = s.song || s.link || '';
-        const srcDur = s.srcDur ? ` <span class="hint">· vídeo ${esc(s.srcDur)}</span>` : '';
-        const err = (!s.candidates || !s.candidates.length) ? `<span class="hint" style="color:#d9534f">❌ ${esc(s.error || 'sin resultados en Spotify')}</span>` : '';
-        return `<div style="padding:8px 0;border-top:1px solid var(--line,#eee)">
-          <div><b>${esc(s.title)}</b> ${ic} ${orig ? `<span class="hint">— ${esc(orig)}</span>` : ''}${srcDur}</div>
-          ${s.candidates && s.candidates.length ? `<select class="sp-pick input" data-idx="${i}" style="margin-top:4px;max-width:100%">${opts}</select>` : err}
+        const srcDur = s.srcDur ? ` · vídeo ${esc(s.srcDur)}` : '';
+        const noCand = (!s.candidates || !s.candidates.length);
+        const cards = noCand ? '' : (s.candidates.map(c => card(i, c)).join('') + omit(i));
+        return `<div style="padding:11px 0;border-top:1px solid var(--line,#eee)">
+          <div style="margin-bottom:7px"><b>${esc(s.title)}</b> ${ic} <span class="hint">${srcLabel(s.kind)}${srcDur}</span>${orig ? ` <span class="hint">— ${esc(orig)}</span>` : ''}</div>
+          ${noCand ? `<div class="hint" style="color:#d9534f">❌ ${esc(s.error || 'sin resultados en Spotify')}</div>` : `<div style="display:flex;flex-wrap:wrap;gap:8px">${cards}</div>`}
         </div>`;
       }).join('');
-      out.innerHTML = `<div class="hint" style="margin-bottom:6px">Elige la versión de cada canción (o déjala en «Omitir» si no la quieres). Título: <b>${esc(data.title || '')}</b></div>
+      out.innerHTML = `<div class="hint" style="margin-bottom:6px">Toca la versión correcta de cada canción (o «Omitir» para no añadirla). Título: <b>${esc(data.title || '')}</b></div>
         ${rows}
-        <div class="btn-row" style="margin-top:12px"><button type="button" class="btn btn--primary" id="spGen">${ev.spotifyUrl ? '↻ Actualizar playlist con esta selección' : '✅ Generar playlist con esta selección'}</button></div>
+        <div class="btn-row" style="margin-top:14px"><button type="button" class="btn btn--primary" id="spGen">${ev.spotifyUrl ? '↻ Actualizar playlist con esta selección' : '✅ Generar playlist con esta selección'}</button></div>
         <div id="spGenMsg" style="margin-top:10px"></div>`;
+      const paint = () => out.querySelectorAll('.sp-opt').forEach(b => {
+        const on = (b.dataset.uri || '') === (sel[+b.dataset.song] || '');
+        b.style.borderColor = on ? 'var(--acc,#1DB954)' : 'transparent';
+        b.style.boxShadow = on ? '0 0 0 2px var(--acc,#1DB954) inset' : 'none';
+      });
+      out.querySelectorAll('.sp-opt').forEach(b => b.onclick = () => { sel[+b.dataset.song] = b.dataset.uri || ''; paint(); });
+      paint();
       const gen = out.querySelector('#spGen');
       gen.onclick = async () => {
-        const picks = [...out.querySelectorAll('.sp-pick')].map(sel => sel.value).filter(Boolean);
+        const picks = sel.filter(Boolean);
         const msg = out.querySelector('#spGenMsg');
         if (!picks.length) { if (msg) msg.innerHTML = '<span style="color:#d9534f;font-weight:700">Selecciona al menos una canción (o deja alguna sin «Omitir»).</span>'; return; }
         gen.disabled = true; const t0 = gen.textContent; gen.textContent = 'Guardando en Spotify…';
