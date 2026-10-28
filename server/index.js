@@ -2487,11 +2487,17 @@ async function events(req, res, user, seg, method, url) {
     }
     let me; try { me = await spotify.me(); } catch (e) { return fail(res, 502, 'Spotify: ' + e.message); }
     const meta = spotifyMeta(ev);
+    // Colaborativa sí/no (configurable). Por defecto NO: privada y gestionada desde la intranet,
+    // porque Spotify no permite dar permiso de edición por enlace vía API (requiere enlace de invitación manual).
+    const SP_COLLAB = !!(store.setting('spotifyConfig') || {}).collaborative;
     let pid = ev.spotifyPlaylistId;
     try {
       if (pid && !(await spotify.playlistExists(pid))) pid = null;   // se borró en Spotify → se recrea
-      if (!pid) { const pl = await spotify.createPlaylist(me.id, meta.plName, meta.plDesc, false, true); pid = pl.id; }   // privada + colaborativa
-      else { await spotify.updateDetails(pid, { name: meta.plName, description: meta.plDesc, public: false, collaborative: true }); }
+      if (!pid) {
+        const pl = await spotify.createPlaylist(me.id, meta.plName, meta.plDesc, false, SP_COLLAB); pid = pl.id;   // privada (+colaborativa si procede)
+        // Spotify a veces ignora public:false al crear; lo forzamos justo después.
+        try { await spotify.updateDetails(pid, { public: false, collaborative: SP_COLLAB }); } catch (e) {}
+      } else { await spotify.updateDetails(pid, { name: meta.plName, description: meta.plDesc, public: false, collaborative: SP_COLLAB }); }
       await spotify.replaceTracks(pid, uris);
     } catch (e) { return fail(res, 502, 'Spotify: ' + e.message); }
     ev.spotifyPlaylistId = pid;

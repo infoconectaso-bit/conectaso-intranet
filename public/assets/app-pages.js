@@ -1088,7 +1088,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
         </div>`;
       }).join('');
       out.innerHTML = `<div class="hint" style="margin-bottom:6px">Toca la versión correcta de cada canción (o «Omitir» para no añadirla). Título: <b>${esc(data.title || '')}</b></div>
-        <div class="hint" style="margin-bottom:6px">Privada y colaborativa (quien tenga el enlace puede reordenar/añadir). «Actualizar» reemplaza por lo de aquí.</div>
+        <div class="hint" style="margin-bottom:6px">La playlist es privada. «Actualizar» reemplaza su contenido por lo seleccionado aquí.</div>
         ${rows}
         <div class="btn-row" style="margin-top:14px"><button type="button" class="btn btn--primary btn--sm" id="spGen">${ev.spotifyUrl ? '↻ Actualizar con esta selección' : '✅ Generar con esta selección'}</button></div>
         <div id="spGenMsg" style="margin-top:10px"></div>`;
