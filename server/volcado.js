@@ -634,6 +634,33 @@ async function handle(req, res, seg, method, url) {
         Object.keys(dates).forEach(id => { const iso = toISO(dates[id]); if (!iso) return; const row = users.getRow(+id); if (!row) return; users.update(+id, { data: { tycSign: { version: '2027', date: iso } } }); n++; });
         return send(res, 200, { ok: true, set: n });
       }
+      // Volcado de colecciones "operativas" de la intranet antigua (control horario, vacaciones,
+      // usos de vehículos, mantenimiento…). Cada registro trae `src` (id/clave de origen): si ya existe
+      // uno con el mismo src se ACTUALIZA, si no se crea. Nunca borra nada.
+      if (cmd === 'upsert-collection') {
+        const ALLOWED = ['attendances', 'vacations', 'usages', 'maintenance', 'vehicles', 'extraRequests', 'tacs', 'extras', 'locations'];
+        const col = String(body.col || ''); if (!ALLOWED.includes(col)) return send(res, 400, { error: 'Colección no permitida: ' + col });
+        const recs = Array.isArray(body.records) ? body.records : [];
+        const bySrc = {}; store.all(col).forEach(r => { if (r.src != null) bySrc[String(r.src)] = r; });
+        let nuevos = 0, actualizados = 0, sinSrc = 0;
+        dbm.transaction(() => {
+          recs.forEach(r => {
+            if (r == null || r.src == null) { sinSrc++; return; }
+            const prev = bySrc[String(r.src)];
+            if (prev) { store.put(col, Object.assign({}, prev, r, { id: prev.id })); actualizados++; }
+            else { const rec = Object.assign({}, r); delete rec.id; const saved = store.put(col, rec); bySrc[String(r.src)] = saved; nuevos++; }
+          });
+        });
+        return send(res, 200, { ok: true, col, nuevos, actualizados, sinSrc, total: store.all(col).length });
+      }
+      if (cmd === 'dump-collection') { // para cotejar: registros de una colección (opcional: solo campos indicados)
+        const col = String(body.col || ''); const all = store.all(col);
+        const f = Array.isArray(body.fields) ? body.fields : null;
+        return send(res, 200, { ok: true, col, total: all.length, records: all.slice(+body.offset || 0, (+body.offset || 0) + (+body.limit || 5000)).map(r => f ? f.reduce((o, k) => (o[k] = r[k], o), {}) : r) });
+      }
+      if (cmd === 'users-brief') { // listado breve de usuarios para cotejar con la intranet
+        return send(res, 200, { ok: true, users: users.all().map(u => ({ id: u.id, role: u.role, name: u.name, email: u.email, active: u.active, data: u.data })) });
+      }
       if (cmd === 'find-users') { // buscar usuarios por nombre/email (para localizar cuentas de Jordi/Dowhile)
         const q = String(body.q || '').toLowerCase();
         return send(res, 200, { ok: true, users: users.all().filter(u => ((u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))).map(u => ({ id: u.id, role: u.role, name: u.name, email: u.email })) });
