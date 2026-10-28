@@ -42,6 +42,10 @@ function mapEvent(raw) {
   for (const key of Object.keys(raw)) {
     const v = raw[key];
     if (IGNORE.has(key) || key.endsWith('__text')) continue;
+    // LECTURAS de la ceremonia: la intranet real permite varias (ceremony_readings_{n}_{campo}). Se
+    // guardan como momentos personalizados de ceremonia (kind 'readings') para que se vean y editen.
+    const rd = key.match(/^ceremony_readings_(\d+)_(title|value|link|order|comment)$/);
+    if (rd) { let o = ev.optionals.find(x => x._id === 'r' + rd[1]); if (!o) { o = { _id: 'r' + rd[1], area: 'ceremony', kind: 'readings', sec: 'C', rid: +rd[1] }; ev.optionals.push(o); } o[rd[2]] = v; continue; }
     // música: {area}_{moment}
     const mm = key.match(/^(ceremony|aperitif|banquet|disco)_(.+)$/);
     if (mm && !/^(check_|order_|link_|comment_)/.test(key) && !/_optionals_/.test(key) && !['disco_observations', 'disco_restrictions', 'disco_logo_fotomaton_image'].includes(key)) {
@@ -117,7 +121,7 @@ function mapEvent(raw) {
   // co-titulares únicos
   ev.coUsers = [...new Set(ev.coUsers)];
   // limpieza de ids temporales de opcionales/archivos
-  ev.optionals.forEach(o => { o.id = +o._id || 0; delete o._id; });
+  ev.optionals.forEach(o => { o.id = o.rid ? 900000 + o.rid : (+o._id || 0); delete o._id; delete o.rid; if (o.kind === 'readings' && !o.title) o.title = 'Lectura'; });
   ev.files.forEach(f => { f.id = +f._id || 0; delete f._id; });
   ev.conyuges = [ev.spouses[0].name, ev.spouses[1].name].filter(Boolean).join(' y ');
   // Defaults para calcar el formato del seed probado (campos que la intranet vieja no expone en
@@ -984,6 +988,18 @@ async function handle(req, res, seg, method, url) {
       }
       if (cmd === 'users-brief') { // listado breve de usuarios para cotejar con la intranet
         return send(res, 200, { ok: true, users: users.all().map(u => ({ id: u.id, role: u.role, name: u.name, email: u.email, active: u.active, data: u.data })) });
+      }
+      // Pasa las LECTURAS que se guardaron como claves raras de música (ceremony_readings_N_campo) a
+      // momentos personalizados de ceremonia. Idempotente.
+      if (cmd === 'fix-readings') {
+        const re = /^ceremony_readings_(\d+)_(title|value|link|order|comment)$/; let evs = 0, lect = 0;
+        dbm.transaction(() => { ['events', 'events_trash'].forEach(col => { let all = []; try { all = store.all(col); } catch (e) { return; } all.forEach(e => {
+          const keys = Object.keys(e.music || {}).filter(k => re.test(k)); if (!keys.length) return;
+          const by = {}; keys.forEach(k => { const m = k.match(re); const v = (e.music[k] || {}).song; (by[m[1]] = by[m[1]] || {})[m[2]] = v == null ? '' : v; delete e.music[k]; });
+          e.optionals = e.optionals || [];
+          Object.keys(by).forEach(n => { const id = 900000 + +n; if (e.optionals.some(o => +o.id === id)) return; const b = by[n]; if (!['title', 'value', 'link', 'comment'].some(f => String(b[f] || '').trim())) return; e.optionals.push({ id, kind: 'readings', area: 'ceremony', sec: 'C', title: b.title || 'Lectura', value: b.value || '', link: b.link || '', order: b.order || '', comment: b.comment || '' }); lect++; });
+          store.put(col, e); evs++; }); }); });
+        return send(res, 200, { ok: true, eventos: evs, lecturas: lect });
       }
       if (cmd === 'find-users') { // buscar usuarios por nombre/email (para localizar cuentas de Jordi/Dowhile)
         const q = String(body.q || '').toLowerCase();
