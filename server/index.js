@@ -683,6 +683,9 @@ async function api(req, res, url) {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
     if (!holded.enabled()) return ok(res, { enabled: false });
     try {
+      // ?id=<invId>: devuelve el DETALLE completo de la factura tal como lo da Holded (observaciones…)
+      const idParam = url.searchParams.get('id');
+      if (idParam) return ok(res, { detail: await holded.getInvoice(idParam) });
       // ?event=<id>: muestra las facturas que el sistema asocia a esa boda, con su signo y si es
       // rectificativa, igual que la pestaña de facturación del evento. Para entender el 300/150.
       const evParam = url.searchParams.get('event');
@@ -1177,6 +1180,7 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
       const ignoradas = [];
       const _hoy = bizToday();
       let cWithConcept = 0, cWithDate = 0, cSample = '';   // diagnóstico: ¿se está leyendo el concepto de Holded?
+      const rawById = {};   // factura cruda de cada fila "sin vincular" (para releer su detalle)
       const sinVincular = []; let totalInv = 0, linkedInv = 0, empresaInv = 0, antiguasInv = 0, pasadasInv = 0, sinPagarInv = 0;
       Object.values(idx.byId).forEach(c => {
         let ev = null;
@@ -1245,8 +1249,36 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
             else why = 'Fecha ' + sg.date + ' con ' + sg.nOnDate + ' bodas ese día; el lugar del concepto no coincide con ninguna';
           }
           sinVincular.push({ number: inv.number, date: inv.date, total: inv.total, paid: inv.paid, pending: inv.pending, status: inv.status, contact: c.name || '', code: c.code || c.vat_number || '', invId: inv.id, suggestedEventId, suggestedLabel, catWarn, why, options, concept: String(_c || '').slice(0, 160) });
+          rawById[inv.id] = raw;
         });
       });
+      // El LISTADO de Holded no trae las OBSERVACIONES de la factura (solo el detalle). Para las filas
+      // sin boda sugerida, se pide el detalle (cacheado 12 h) y se vuelve a intentar con su texto.
+      const needDetail = sinVincular.filter(r => !r.suggestedEventId && !(r.options && r.options.length));
+      const fetchDet = async row => {
+        try {
+          const det = await holded.getInvoiceCached(row.invId);
+          if (!det) return;
+          const raw2 = Object.assign({}, rawById[row.invId] || {}, { _detail: det });
+          const sg = suggestByConcept(raw2);
+          const c2 = invConcept(raw2); row.concept = String(c2 || '').slice(0, 300);
+          if (sg && sg.date && sg.date < _hoy && !sg.eventId) { row._pasada = true; return; }   // boda ya pasada: fuera
+          row.why = ''; row.options = []; row.suggestedEventId = null; row.suggestedLabel = '';
+          if (sg && sg.eventId) {
+            const sev = store.get('events', sg.eventId) || {};
+            const lname = (store.get('locations', sev.lugar) || {}).name || sev.lugarOtro || '';
+            row.suggestedEventId = sg.eventId;
+            row.suggestedLabel = '#' + sg.eventId + (lname ? ' · ' + lname : '') + (sev.fecha ? ' · ' + sev.fecha : '');
+            if (sg.pack && sev.tipo && normNm(sg.pack) !== normNm(sev.tipo)) row.catWarn = 'La factura pone "' + sg.pack + '" pero la boda #' + sg.eventId + ' está como "' + sev.tipo + '".';
+          } else if (sg && sg.options && sg.options.length) {
+            row.options = sg.options.map(eid => { const sev = store.get('events', eid) || {}; const ln = (store.get('locations', sev.lugar) || {}).name || sev.lugarOtro || ''; return { id: eid, label: '#' + eid + (ln ? ' · ' + ln : '') + (sev.fecha ? ' · ' + sev.fecha : '') }; });
+          } else if (!sg || !sg.date) row.why = 'No detecté la fecha ni en el concepto ni en las observaciones';
+          else if (sg.nOnDate === 0) row.why = 'Detecté fecha ' + sg.date + ' pero no hay ninguna boda creada ese día';
+          else row.why = 'Fecha ' + sg.date + ' con ' + sg.nOnDate + ' bodas ese día; el lugar no coincide con ninguna';
+        } catch (e) { /* sin detalle: se queda como estaba */ }
+      };
+      for (let i = 0; i < needDetail.length; i += 5) await Promise.all(needDetail.slice(i, i + 5).map(fetchDet));
+      for (let i = sinVincular.length - 1; i >= 0; i--) if (sinVincular[i]._pasada) { sinVincular.splice(i, 1); pasadasInv++; }
       // Facturas SIN contacto en Holded que se han enlazado a mano por número: también cuentan en su boda.
       (idx.orphans || []).forEach(raw => {
         const evId = links[raw.id]; if (!evId) return;

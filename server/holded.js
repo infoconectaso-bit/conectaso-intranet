@@ -62,6 +62,15 @@ async function listInvoices({ maxPages = 50, limit = 200, filters = {} } = {}) {
 
 /** Devuelve una factura concreta (para inspeccionar campos: base imponible, estado de pago…). */
 function getInvoice(id) { return apiGet('/invoices/' + encodeURIComponent(id)); }
+// Detalle de factura cacheado 12 h (el listado de Holded NO trae las observaciones; el detalle sí).
+const _detCache = {};
+async function getInvoiceCached(id) {
+  const c = _detCache[id];
+  if (c && Date.now() - c.at < 12 * 3600 * 1000) return c.d;
+  const d = await getInvoice(id);
+  _detCache[id] = { d, at: Date.now() };
+  return d;
+}
 
 /** Lista los PRESUPUESTOS (estimates), igual que las facturas. Puede no estar disponible si el token
  * no tiene acceso; en ese caso el llamador lo trata como vacío (no rompe nada). */
@@ -425,4 +434,4 @@ async function testPayslips() {
   return { ok: true, probes };
 }
 
-module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, listEstimates, listCreditNotes, estimateConcept, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, findInvoicesByNumber, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };
+module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, getInvoiceCached, listEstimates, listCreditNotes, estimateConcept, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, findInvoicesByNumber, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };
