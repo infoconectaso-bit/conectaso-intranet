@@ -1689,7 +1689,12 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
   const travelKm = loc ? loc.travelKm : (ev.lugarOtro ? ev.otroTravelKm : null);
   const destName = loc ? loc.name : (ev.lugarOtro || '—');
   const mt = montajeInfo(ev);
-  const target = _hm2min(ev.ceremoniaFuera ? ev.celebrationHour : ev.hora);
+  // ¿Hay ceremonia en la finca? Solo si NO está marcada "ceremonia fuera" y la parte de ceremonia
+  // tiene música. Si no, el día empieza en el aperitivo (y solo se muestra el aperitivo).
+  const cerKeys = ((musicAreasFor(ev).find(a => a.key === 'ceremony') || {}).moments || []).map(mm => 'ceremony_' + mm[0]);
+  const hasCer = !ev.ceremoniaFuera && cerKeys.some(k => { const mu = (ev.music || {})[k] || {}; return !mu.on && (mu.song || mu.link); });
+  const apMin = _hm2min(ev.celebrationHour) != null ? _hm2min(ev.celebrationHour) : (_hm2min(ev.hora) != null ? _hm2min(ev.hora) + (ev.ceremoniaFuera ? 0 : 60) : null);
+  const target = hasCer ? _hm2min(ev.hora) : apMin;
   const fmtTravel = travel != null ? (travel + ' min' + (travelKm ? ' · ' + travelKm + ' km' : '')) : '—';
   const fechaLarga = f => { if (!f) return '—'; const d = new Date(f + 'T00:00:00'); const dd = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']; const mm = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']; return `${dd[d.getDay()]}, ${d.getDate()} de ${mm[d.getMonth()]} de ${d.getFullYear()}`; };
   let tlHtml = '<p style="color:#b4aeb9">Faltan datos para calcular los tiempos (hora y/o desplazamiento).</p>', salidaTxt = '';
@@ -1700,14 +1705,15 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
     salidaTxt = hhmm(salida);
     tlHtml = t(hhmm(salida), 'Salida', 'Martorelles · ' + fmtTravel)
       + t(hhmm(llegada), 'Montaje', esc(mt.regla) + ' · ' + mt.min + ' min')
-      + t(hhmm(listo), 'Todo listo', 'A la hora de ' + (ev.ceremoniaFuera ? 'inicio' : 'la ceremonia'))
-      + (ev.ceremoniaFuera ? '' : t(_min2hm(_hm2min(ev.hora)), 'Ceremonia', 'En la finca'))
-      + (() => { const ap = ev.ceremoniaFuera ? _hm2min(ev.celebrationHour) : (_hm2min(ev.hora) != null ? _hm2min(ev.hora) + 60 : null); return ap != null ? t(_min2hm(ap), 'Aperitivo', ev.ceremoniaFuera ? '' : 'Ceremonia + 1 h') : ''; })();
+      + t(hhmm(listo), 'Todo listo', hasCer ? 'A la hora de la ceremonia' : 'A la hora del aperitivo')
+      + (hasCer ? t(_min2hm(_hm2min(ev.hora)), 'Ceremonia', 'En la finca') : t(_min2hm(apMin), 'Aperitivo', ev.ceremoniaFuera ? 'Ceremonia fuera de la finca' : ''));
   }
   // plano(s) de montaje por zonas (si está disponible el módulo). Protegido: si falla, se omite.
   let planoZones = [];
   try { planoZones = window.planoZonesForEvent ? await window.planoZonesForEvent(ev) : []; } catch (e) { planoZones = []; }
   const planoHtml = planoZones.length === 1 ? planoZones[0].html : '';
+  // Botón de la escaleta: abre el enlace (Spotify / YouTube / otro) en una pestaña nueva.
+  const escLink = url => { const sv = linkService(url) || {}; const nm = sv.name || 'Abrir'; return `<a class="sp${sv.spotify ? '' : ' sp--other'}" href="${esc(url)}" target="_blank" rel="noopener" title="Abrir ${esc(nm)}">▶ ${esc(nm)}</a>`; };
   const escaleta = () => {
     const secs = musicAreasFor(ev).filter(a => !(a.key === 'ceremony' && ev.ceremoniaFuera))
       .map(a => ({ title: a.title, moments: a.moments.map(mm => [a.key + '_' + mm[0], mm[1]]) }));
@@ -1718,44 +1724,47 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
       const rows = s.moments.map(([k, def]) => {
         const mu = (ev.music || {})[k] || {};
         if (mu.on || (!mu.song && !mu.link)) return '';
-        const chip = mu.link ? '<span class="sp">Spotify</span>' : '<span class="warn">Sin enlace</span>';
+        const chip = mu.link ? escLink(mu.link) : '<span class="warn">Sin enlace</span>';
         return `<tr><td class="mic"><span class="box"></span></td><td class="mom">${esc(momentTitle(ev, k, def))}</td><td>${esc(mu.song || '')}</td><td class="notes">${chip}</td></tr>`;
       }).filter(Boolean).join('');
       if (!rows) return; n++;
       html += `<tr class="sec"><td></td><td colspan="3" class="sname">${n} · ${esc(s.title)}</td></tr>` + rows;
     });
-    if (pl) html += `<tr class="sec"><td></td><td colspan="3" class="sname">Playlist general</td></tr><tr><td class="mic"><span class="box"></span></td><td class="mom">Ambiente / fiesta</td><td>${esc(pl)}</td><td class="notes">${linkChip(pl) || '<span class="sp">Spotify</span>'}</td></tr>`;
+    if (pl) html += `<tr class="sec"><td></td><td colspan="3" class="sname">Playlist general</td></tr><tr><td class="mic"><span class="box"></span></td><td class="mom">Ambiente / fiesta</td><td>${esc(pl)}</td><td class="notes">${escLink(pl)}</td></tr>`;
     return html;
   };
   const escRows = escaleta();
   const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(destName + ' Barcelona');
   // aviso (no el contenido) si hay observaciones ocultas
   const obsAviso = (ev.obsPriv && String(ev.obsPriv).trim()) ? '<div class="note-tip" style="margin-top:12px">⚠ Este evento tiene <b>observaciones ocultas</b>. Entra en la intranet para leerlas (no se muestran aquí).</div>' : '';
-  // Servicios con su técnico responsable (para la hoja de ruta).
-  const svcList = (ev.services || []).filter(s => s.servicio).map(s => ({
-    nm: extraName(s.servicio),
-    resp: [s.resp, s.resp2].filter(Boolean).map(r => userName(r)).join(' · ') || 'Sin asignar',
-  }));
-  // Numeración de páginas del PDF. pg() se evalúa en el ORDEN del documento, por eso svcSlide
-  // es una función que se llama en su posición dentro de la plantilla (no un const precalculado).
+  // Servicios del evento con un icono según lo que son (fotomatón, fuego frío, humo…).
+  const SVC_ICONS = [[/fotomat|photo ?booth|cabina/, '📸'], [/photocall|photo ?call|photowall/, '🖼️'], [/fuego|chispa|pirotec|bengal|sparkular/, '🎆'], [/baja densidad|nube|humo|niebla|nebuliz/, '☁️'], [/co2|criog|chorro/, '💨'], [/confet/, '🎉'], [/saxo/, '🎷'], [/viol/, '🎻'], [/trompet/, '🎺'], [/percus|tambor|bater/, '🥁'], [/cantant|voz|karaoke|coro/, '🎤'], [/robot/, '🤖'], [/letra|love|neon/, '💡'], [/ilumin|luz|luces|led|foco|uplight/, '🔦'], [/proyec|pantalla|video/, '📽️'], [/micro|discurso|parlament/, '🎙️'], [/ceremon/, '💒'], [/sonido|altavoz|sonoriz|equipo/, '🔊'], [/\bdj\b|disco/, '🎧'], [/pista|baile|tarima/, '🕺'], [/carro|carrito|candy|helad/, '🛒'], [/guitarr/, '🎸'], [/piano/, '🎹'], [/flor/, '💐']];
+  const svcIcon = nm => { const n = String(nm || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); const hit = SVC_ICONS.find(([re]) => re.test(n)); return hit ? hit[1] : '✨'; };
+  const svcList = [...new Set((ev.services || []).filter(s => s.servicio).map(s => extraName(s.servicio)).filter(Boolean))];
+  const svcHtml = svcList.length ? `<div class="card"><h3>Servicios <span class="ic">✨</span></h3><div class="svc-chips">${svcList.map(nm => `<div class="svc-chip"><span class="svc-ic">${svcIcon(nm)}</span><span>${esc(nm)}</span></div>`).join('')}</div></div>` : '';
+  // Numeración de páginas del PDF (se evalúa en el orden del documento).
   let pageNo = 1;
   const pg = () => ('0' + (++pageNo)).slice(-2);
-  const svcSlide = () => !svcList.length ? '' : `<section class="slide dark page slide--auto" style="min-height:auto">
-      <h2>Servicios y técnicos</h2>
-      <p style="color:#b4aeb9;margin-bottom:18px">Quién se encarga de cada servicio en este evento.</p>
-      <div class="svc-resp-grid">${svcList.map(s => `<div class="card"><h3>${esc(s.nm)} <span class="ic">🔧</span></h3><div class="v" style="font-size:19px">${esc(s.resp)}</div></div>`).join('')}</div>
-      <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
-    </section>`;
   shell(`${pageHead('Hoja de ruta', 'Boda #' + ev.id)}
     <div class="pdf-toolbar"><a class="btn" href="#/eventos/${ev.id}">← Volver</a> <button class="btn btn--primary" onclick="window.print()">Imprimir / Guardar PDF</button></div>
     <div class="ruta-deck">
 
-      <section class="slide dark cover">
+      <section class="slide dark cover cover--norm">
         <span class="stripe"></span>
-        <img src="/assets/brand/logo-principal-blanco.svg" class="logo" alt="Conecta So">
-        <div class="kick">Hoja de ruta · equipo</div>
-        <h1>${esc(ev.conyuges || ('Boda #' + ev.id))}</h1>
-        <div class="meta"><b>Boda #${ev.id}</b> · ${val(ev.tipo)}<br>${esc(fechaLarga(ev.fecha))} · <b>${esc(destName)}</b></div>
+        <div class="cover-main">
+          <img src="/assets/brand/logo-principal-blanco.svg" class="logo" alt="Conecta So">
+          <div class="kick">Hoja de ruta · equipo</div>
+          <h1>${esc(ev.conyuges || ('Boda #' + ev.id))}</h1>
+          <div class="meta"><b>Boda #${ev.id}</b> · ${val(ev.tipo)}<br>${esc(fechaLarga(ev.fecha))}<br><b>${esc(destName)}</b></div>
+        </div>
+        <div class="card cover-norm"><h3>Normativa interna <span class="ic">📋</span></h3>
+          <div class="norm-list">
+            <div class="nvc"><b>👔 Uniformidad</b><span>Ropa negra + camiseta/sudadera Conecta So, calzado cerrado. Nada de corto, chándal ni roturas.</span></div>
+            <div class="nvc"><b>🔧 Montaje y seguridad</b><span>Todo montado y recogido antes de la llegada de invitados. Cableado fijado y tapado. Altura: solo autorizados.</span></div>
+            <div class="nvc"><b>🤝 Conducta</b><span>No compartir fotos ni datos. Trato discreto y respetuoso. Sin alcohol ni tabaco en zonas visibles.</span></div>
+            <div class="nvc"><b>📦 Material y cierre</b><span>Orden; cajas vacías ocultas. Averías: marcar "NO FUNCIONA". Revisar restos de cinta al cerrar.</span></div>
+          </div>
+        </div>
         <img src="/assets/brand/el-vinilo.svg" class="vinilo" alt="">
         <div class="pg">Conecta So</div>
       </section>
@@ -1765,7 +1774,7 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
         <div class="grid3" style="margin-bottom:14px">
           <div class="card"><h3>Localización <span class="ic">📍</span></h3>
             <div class="row"><div class="k">Finca</div><div class="v">${val(destName)}</div></div>
-            <div class="row"><div class="k">Hora ceremonia</div><div class="v sm">${val(ev.hora)}</div></div>
+            <div class="row"><div class="k">${hasCer ? 'Hora ceremonia' : 'Hora aperitivo'}</div><div class="v sm">${val(hasCer ? ev.hora : (apMin != null ? _min2hm(apMin) : ''))}</div></div>
           </div>
           <div class="card"><h3>Equipo <span class="ic">🎧</span></h3>
             <div class="row"><div class="k">DJ / Técnico</div><div class="v">${val(djOf(ev))}</div></div>
@@ -1777,17 +1786,9 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
             <div class="row"><div class="k">Web</div><div class="v sm">conectaso.es</div></div>
           </div>
         </div>
-        <div class="resumen-2col">
-          <div class="card"><h3>Timing del día <span class="ic">⏱️</span></h3><div class="tl tl--compact">${tlHtml}</div></div>
-          <div class="card"><h3>Normativa interna <span class="ic">📋</span></h3>
-            <div class="norm-grid">
-              <div class="nvc"><b>Uniformidad</b><span>Ropa negra + camiseta/sudadera Conecta So, calzado cerrado. Nada de corto, chándal ni roturas.</span></div>
-              <div class="nvc"><b>Montaje y seguridad</b><span>Todo montado y recogido antes de la llegada de invitados. Cableado fijado y tapado. Altura: solo autorizados.</span></div>
-              <div class="nvc"><b>Conducta</b><span>No compartir fotos ni datos. Trato discreto y respetuoso. Sin alcohol ni tabaco en zonas visibles.</span></div>
-              <div class="nvc"><b>Material y cierre</b><span>Orden; cajas vacías ocultas. Averías: marcar "NO FUNCIONA". Revisar restos de cinta al cerrar.</span></div>
-            </div>
-            ${obsAviso}
-          </div>
+        <div class="resumen-2col${svcHtml ? '' : ' resumen-2col--solo'}">
+          <div class="card"><h3>Timing del día <span class="ic">⏱️</span></h3><div class="tl tl--compact">${tlHtml}</div>${obsAviso}</div>
+          ${svcHtml}
         </div>
         <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
       </section>
@@ -1822,8 +1823,6 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
         </div>
         <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
       </section>` : ''}
-
-      ${svcSlide()}
 
       ${escRows ? `<section class="slide light slide--auto" style="padding:48px 64px 40px">
         <h2 style="font-size:40px;margin-bottom:14px">Escaleta musical</h2>

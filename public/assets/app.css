@@ -1116,3 +1116,21 @@ button.nom-tile--empty:hover .nom-tile__m{color:var(--pink)}
 .nom-tile__hint{font-size:11.5px}
 .nom-tile--future{opacity:.45}
 html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok{background:#221c15}
+
+/* Hoja de ruta v3: portada con normativa, servicios con icono, enlaces de la escaleta clicables */
+.ruta-deck .cover.cover--norm{flex-direction:row;align-items:center;gap:48px;padding:0 64px 0 80px}
+.ruta-deck .cover--norm .cover-main{flex:1 1 0;min-width:0;position:relative;z-index:1}
+.ruta-deck .cover--norm .logo{height:64px;margin-bottom:34px}
+.ruta-deck .cover--norm h1{font-size:58px;margin-bottom:20px}
+.ruta-deck .cover--norm .meta{font-size:18px;line-height:1.5}
+.ruta-deck .cover--norm .cover-norm{flex:0 0 500px;position:relative;z-index:1;background:#ffffff0d;padding:22px 26px}
+.ruta-deck .cover--norm .vinilo{right:auto;left:38%;opacity:.06}
+.ruta-deck .norm-list{display:flex;flex-direction:column;gap:14px}
+.ruta-deck .norm-list .nvc span{display:block}
+.ruta-deck .resumen-2col--solo{grid-template-columns:1fr}
+.ruta-deck .svc-chips{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ruta-deck .svc-chip{display:flex;align-items:center;gap:12px;background:#ffffff10;border:1px solid #ffffff22;border-radius:12px;padding:10px 14px;font-family:var(--disp);text-transform:uppercase;font-size:14px;color:var(--cream);line-height:1.2}
+.ruta-deck .svc-ic{font-size:24px;line-height:1;flex:none}
+.ruta-deck .esc a.sp{text-decoration:none;font-style:normal;font-weight:700;cursor:pointer}
+.ruta-deck .esc a.sp:hover{filter:brightness(.95);text-decoration:none}
+.ruta-deck .esc a.sp--other{background:#ffd9e9;color:#7a0c3f}
