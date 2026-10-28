@@ -4,12 +4,26 @@
 	email info@conectaso.es
 }
 
+# App Cuentas (independiente, contenedor 'cuentas'): se sirve en /cuentas/ del dominio y de la IP.
+(cuentas) {
+	redir /cuentas /cuentas/
+	handle_path /cuentas/* {
+		reverse_proxy cuentas:8083
+	}
+}
+
 # Dominio: HTTPS automático. http://prueba.lol redirige SOLO a https (comportamiento por defecto).
 prueba.lol {
-	reverse_proxy gestor:3000
+	import cuentas
+	handle {
+		reverse_proxy gestor:3000
+	}
 }
 
 # Acceso por IP (sin dominio): se sirve por HTTP, SIN redirigir (no existe certificado para una IP).
 http://200.234.226.246 {
-	reverse_proxy gestor:3000
+	import cuentas
+	handle {
+		reverse_proxy gestor:3000
+	}
 }

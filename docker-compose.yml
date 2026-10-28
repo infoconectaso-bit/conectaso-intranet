@@ -28,6 +28,7 @@ services:
       - caddy_config:/config
     depends_on:
       - gestor
+      - cuentas
 
   # App del préstamo: independiente de la intranet (otro contenedor, puerto 8080 y datos propios).
   prestamo:
@@ -59,6 +60,17 @@ services:
       - "8082:8082"
     volumes:
       - ./data-reforma:/data
+
+  # App de cuentas de la vivienda (casa / piso): independiente de la intranet (otro contenedor, puerto 8083 y datos propios).
+  # Se abre en http://IP/cuentas/ (a través de Caddy) o en http://IP:8083
+  cuentas:
+    build: ./cuentas
+    container_name: conectaso-cuentas
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./data-cuentas:/data
 
 volumes:
   # Certificados y estado de Caddy (persisten para no re-emitir el certificado en cada despliegue).
