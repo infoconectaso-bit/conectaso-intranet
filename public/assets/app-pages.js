@@ -1105,8 +1105,11 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
           ${noCand ? `<div class="hint" style="color:#d9534f">❌ ${esc(s.error || 'sin resultados en Spotify')}</div>` : `<div style="display:flex;flex-wrap:wrap;gap:8px">${cards}</div>`}
         </div>`;
       }).join('');
+      const plSongs = songs.filter(s => s.kind === 'playlist');
+      const plNote = plSongs.length ? `<div class="alert alert--warn" style="margin-bottom:10px">⚠️ <b>Ojo:</b> esta boda tiene ${plSongs.length} ${plSongs.length > 1 ? 'enlaces de playlist' : 'enlace de playlist'} (${plSongs.map(s => esc(s.title)).join(', ')}). Ábrelas con «Abrir playlist» y <b>guárdalas o síguelas en tu Spotify</b> para tenerlas a mano el día de la boda.</div>` : '';
       out.innerHTML = `<div class="hint" style="margin-bottom:6px">Toca la versión correcta de cada canción (o «Omitir» para no añadirla). Título: <b>${esc(data.title || '')}</b></div>
         <div class="hint" style="margin-bottom:6px">La playlist es privada. «Actualizar» reemplaza su contenido por lo seleccionado aquí.</div>
+        ${plNote}
         ${rows}
         <div class="btn-row" style="margin-top:14px"><button type="button" class="btn btn--primary btn--sm" id="spGen">${ev.spotifyUrl ? '↻ Actualizar con esta selección' : '✅ Generar con esta selección'}</button></div>
         <div id="spGenMsg" style="margin-top:10px"></div>`;
