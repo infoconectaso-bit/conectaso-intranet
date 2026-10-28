@@ -1134,3 +1134,8 @@ html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok
 .ruta-deck .esc a.sp{text-decoration:none;font-style:normal;font-weight:700;cursor:pointer}
 .ruta-deck .esc a.sp:hover{filter:brightness(.95);text-decoration:none}
 .ruta-deck .esc a.sp--other{background:#ffd9e9;color:#7a0c3f}
+
+.yrchip--unpaid{display:inline-flex;align-items:center;gap:6px;margin-left:6px}
+.yrchip--unpaid .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+.yrchip--unpaid.on{background:#D50000;color:#fff;border-color:#D50000}
+.yrchip--unpaid.on .dot{background:#fff!important}
