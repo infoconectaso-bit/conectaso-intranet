@@ -427,6 +427,61 @@ async function handle(req, res, seg, method, url) {
     // AUDITORÍA 1 a 1: el navegador (sesión en la intranet real) envía las fichas CRUDAS vivas y el
     // servidor las mapea y compara campo a campo con la réplica. Devuelve informe SIN datos personales
     // (nombres/emails solo como coincide/difiere; importes, fechas, ids y recuentos sí, no son PII).
+    // COMPARACIÓN PROFUNDA de bodas: TODOS los campos que trae la ficha real (mapeados) contra la
+    // réplica, campo a campo (música con su casilla, cónyuges completos, extras, fiesta, parte…).
+    // Devuelve solo nombres de campo e ids (sin datos personales).
+    if (action === 'compare-deep') {
+      const store = dbm0.store;
+      let raws = []; try { raws = fs.readFileSync(STAGE, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch (e) { }
+      const OURS = new Set(['id', 'ceremoniaFuera', 'pagoRestaurante', 'labels', 'entregas', 'files', 'userId']);
+      const nz = v => { if (v === null || v === undefined || v === '' || v === false || v === 0 || v === '0') return ''; if (Array.isArray(v)) { const a = v.map(nz).filter(x => x !== '' && !(typeof x === 'object' && !Object.keys(x).length)); return a.length ? a : ''; } if (typeof v === 'object') { const o = {}; Object.keys(v).sort().forEach(k => { const x = nz(v[k]); if (x !== '' && !(typeof x === 'object' && !Array.isArray(x) && !Object.keys(x).length)) o[k] = x; }); return Object.keys(o).length ? o : ''; } return String(v).trim(); };
+      const sortArr = (a, key) => Array.isArray(a) ? a.slice().sort((x, y) => JSON.stringify(key(x)).localeCompare(JSON.stringify(key(y)))) : a;
+      const hist = {}, ids = {}, sub = {}; let n = 0, okN = 0, missing = 0;
+      raws.forEach(raw => {
+        let m; try { m = mapEvent(raw); } catch (e) { return; }
+        const R = m.ev; const id = +raw.__id; const E = store.get('events', id); n++;
+        if (!E) { missing++; return; }
+        let bad = false;
+        Object.keys(R).forEach(k => {
+          if (OURS.has(k)) return;
+          let a = R[k], b = E[k];
+          if (k === 'services') { const kk = x => [x.servicio, x.resp || '', x.resp2 || '']; a = sortArr((a || []).map(x => ({ s: x.servicio, r: x.resp || '', r2: x.resp2 || '', h: +x.horas || 0 })), x => x); b = sortArr((b || []).map(x => ({ s: x.servicio, r: x.resp || '', r2: x.resp2 || '', h: +x.horas || 0 })), x => x); }
+          if (k === 'optionals') { const f = x => ({ a: x.area, t: x.title, v: x.value, l: x.link, o: x.order, c: x.comment, id: x.id }); a = sortArr((a || []).map(f), x => x.id); b = sortArr((b || []).map(f), x => x.id); }
+          if (k === 'coUsers') { a = (a || []).slice().sort(); b = (b || []).slice().sort(); }
+          if (k === 'plus') { a = sortArr(a || [], x => x.userId); b = sortArr(b || [], x => x.userId); }
+          const A = JSON.stringify(nz(a)), B = JSON.stringify(nz(b));
+          if (A !== B) {
+            bad = true; hist[k] = (hist[k] || 0) + 1; (ids[k] = ids[k] || []).length < 40 && ids[k].push(id);
+            if (k === 'music' || k === 'spouses' || k === 'disco' || k === 'extras') {
+              const ra = nz(a) || {}, rb = nz(b) || {}; const keys = new Set([...Object.keys(ra), ...Object.keys(rb)]);
+              keys.forEach(x => { if (JSON.stringify(ra[x]) !== JSON.stringify(rb[x])) { const sk = k + '.' + x; sub[sk] = (sub[sk] || 0) + 1; } });
+            }
+          }
+        });
+        if (!bad) okN++;
+      });
+      const subTop = Object.entries(sub).sort((x, y) => y[1] - x[1]).slice(0, 40);
+      return send(res, 200, { ok: true, comparadas: n, iguales: okN, noEnReplica: missing, campos: hist, ids, subcampos: subTop });
+    }
+    // Catálogos (fincas, furgonetas, servicios extra, normativas): staging -> comparar / importar.
+    if (action === 'small-diff' || action === 'small-import') {
+      const store = dbm0.store; const kind = String(body.kind || '');
+      const CFG = { loc: ['locations', mapLocation], veh: ['vehicles', mapVehicle], ext: ['extras', mapExtra], tac: ['tacs', r => ({ id: +r.__id || undefined, date: r.date || '', text: r.text || '', deposit_amount: r.deposit_amount || '' })] };
+      if (!CFG[kind]) return send(res, 400, { error: 'kind?' });
+      const [col, mapper] = CFG[kind];
+      const raws = readK(kind); const out = [], hist = {}; const falta = [];
+      const recs = raws.map(r => { const x = mapper(r); x.id = +r.__id || x.id; return x; }).filter(x => x.id);
+      recs.forEach(x => {
+        const E = store.get(col, x.id); if (!E) { falta.push(x.id); return; }
+        const ch = Object.keys(x).filter(k => k !== 'id' && String(x[k] == null ? '' : x[k]).trim() !== String(E[k] == null ? '' : E[k]).trim());
+        if (ch.length) { out.push({ id: x.id, campos: ch }); ch.forEach(c => hist[c] = (hist[c] || 0) + 1); }
+      });
+      if (action === 'small-diff') return send(res, 200, { ok: true, kind, leidos: recs.length, falta, difs: out, hist });
+      const imp = require('./volcado-import'); let n = 0;
+      dbm0.transaction(() => { recs.forEach(x => { store.put(col, imp.mergeRecord(store.get(col, x.id), x)); n++; }); });
+      return send(res, 200, { ok: true, kind, importados: n });
+    }
+
     if (action === 'compare' || action === 'compare-staged') {
       const store = dbm0.store, users = dbm0.users;
       let raws = Array.isArray(body.raws) ? body.raws : [];
@@ -702,6 +757,14 @@ async function handle(req, res, seg, method, url) {
         if ((+u.worker_type || 0) !== (+d.worker_type || 0)) ch.push('tipo_trabajador');
         if (!!u.vehicle_allowed !== !!d.vehicle_allowed) ch.push('furgoneta');
         if (!!u.tyc !== !!d.tyc) ch.push('tyc');
+        const J = v => JSON.stringify(v == null ? '' : v);
+        if (u.role !== 'user') {
+          if (J(u.prices || {}) !== J(d.prices || {})) ch.push('precios');
+          if (J(u.djFincas || []) !== J(d.djFincas || [])) ch.push('precios_por_finca');
+          if (J(u.djServices || []) !== J(d.djServices || [])) ch.push('precios_por_servicio');
+          if (String(u.color || '') !== String(d.color || '')) ch.push('color');
+        }
+        if (String(u.sending || 'Si') !== String(d.sending || 'Si')) ch.push('envio_emails');
         if (ch.length) { difs.push({ id: u.id, campos: ch }); ch.forEach(c => hist[c] = (hist[c] || 0) + 1); }
       });
       const enListaNoLeidos = listIds.filter(id => !mapped.some(u => u.id === id));
