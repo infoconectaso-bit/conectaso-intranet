@@ -322,11 +322,15 @@ async function handle(req, res, seg, method, url) {
       const S = v => String(v == null ? '' : v);
       const unmapped = new Set();
       const built = []; const fileMap = {};
-      const nuevos = [], nuevosPasados = [], descartados = [], cambios = [];
+      const nuevos = [], nuevosPasados = [], descartados = [], cambios = [], excluidosFijos = [];
       const seenIds = new Set();
+      // Exclusión FIJA y persistente: eventos que Adrià marcó como errores/eliminados y que el volcado
+      // NO debe volver a traer nunca (setting 'refreshExclude').
+      const fixedExcl = new Set((store.setting('refreshExclude') || []).map(Number));
       for (const raw of raws) {
         let m; try { m = mapEvent(raw); } catch (e) { continue; }
         const ev = m.ev; ev.id = +raw.__id; if (!ev.id || seenIds.has(ev.id)) continue; seenIds.add(ev.id);
+        if (fixedExcl.has(ev.id)) { excluidosFijos.push(ev.id); continue; }
         m.unmapped.forEach(u => unmapped.add(u));
         if (Array.isArray(raw.__files) && raw.__files.length) fileMap[ev.id] = raw.__files;
         const prev = store.get('events', ev.id);
@@ -357,6 +361,7 @@ async function handle(req, res, seg, method, url) {
         staged: raws.length, aImportar: built.length,
         existentesConCambios: cambios.length, nuevosMantenidos: nuevos.length,
         nuevosPasadosParaRevisar: nuevosPasados.length, nuevosDescartadosVacios: descartados.length,
+        excluidosFijos: excluidosFijos.length, excluidosFijosIds: excluidosFijos,
         enReplicaNoVistos: noVistos.length, conAdjuntos: Object.keys(fileMap).length,
         unmapped: [...unmapped],
         histCambios,
@@ -468,6 +473,16 @@ async function handle(req, res, seg, method, url) {
       }
       try { fs.writeFileSync(path.join(dbm0.DATA_DIR, 'volcado-compare.json'), JSON.stringify({ at: new Date().toISOString(), results })); } catch (e) { }
       return send(res, 200, { ok: true, n: results.length });
+    }
+
+    // Gestiona la lista de exclusión FIJA del volcado (ids que no se deben traer nunca).
+    if (action === 'set-exclude') {
+      const store = dbm0.store;
+      const cur = (store.setting('refreshExclude') || []).map(Number);
+      const incoming = (body.ids || []).map(Number);
+      const list = (body.mode === 'set') ? [...new Set(incoming)] : [...new Set(cur.concat(incoming))];
+      store.setSetting('refreshExclude', list);
+      return send(res, 200, { ok: true, refreshExclude: list });
     }
 
     if (action === 'compare-report') {
