@@ -1163,3 +1163,29 @@ html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok
 .pie-svg{width:170px;height:170px}
 .pie-wrap{gap:16px}
 .ana-pane .line-svg{max-height:270px}
+
+/* DJ: aviso de partes pendientes + mis horas extra */
+.parte-alert{background:#fff4d6;border:2px solid var(--onyx);border-radius:14px;box-shadow:var(--shadow-sticker);padding:14px 16px;margin-bottom:16px}
+.parte-alert__head{font-family:var(--display);font-size:15px;margin-bottom:8px}
+.parte-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:9px 10px;border-radius:10px;color:var(--ink);background:#fff;margin-top:6px;border:1px solid var(--line)}
+.parte-row:hover{text-decoration:none;border-color:var(--pink)}
+.parte-date{font-weight:900;font-family:var(--display);min-width:88px}
+.parte-where{flex:1 1 160px;font-weight:700}
+.parte-miss{font-size:12.5px;color:var(--red)}
+.parte-go{font-weight:700;color:var(--pink)}
+.dj-hx-strip{display:flex;gap:18px;flex-wrap:wrap;align-items:center;background:var(--white);border:2px solid var(--onyx);border-radius:14px;padding:12px 16px;margin:16px 0;color:var(--ink);box-shadow:var(--shadow-sticker)}
+.dj-hx-strip:hover{text-decoration:none}
+.dj-hx-strip .go{margin-left:auto;color:var(--pink);font-weight:700}
+.mh-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+@media(max-width:820px){.mh-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mh-delta,.mh-sub{font-size:12.5px;margin-top:4px;opacity:.85}
+.mh-chart{width:100%;max-width:760px;height:auto;color:var(--ink)}
+.mh-leg{display:flex;gap:14px;font-size:12.5px;margin-top:6px}
+.mh-leg i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.mh-list{display:flex;flex-direction:column}
+.mh-li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.mh-li:last-child{border-bottom:0}
+.mh-li__v{white-space:nowrap;color:var(--muted)}
+.mh-li__v b{color:var(--ink)}
+html.night-dim .parte-alert{background:#2a2312}
+html.night-dim .parte-row,html.night-dim .dj-hx-strip{background:#221c15}

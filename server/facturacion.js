@@ -368,4 +368,4 @@ function reapplyRateToEvents(eventIds) {
 // Fija la puesta a cero en cuanto arranca el servidor con esta versión (una sola vez).
 try { const r = resetInfo(); console.log('[facturación] puesta a cero vigente desde', r.date); } catch (e) {}
 
-module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, assignedWorkers, withFacturacion, aggregateFor, allBalances, volcadoCutoff, freshStart, resetInfo, countsPayment, freezeRates, freezeRealized, reapplyRateToEvents, HOURLY_RATE, OVERTIME };
+module.exports = { computeFact, computeRevenue, factTotal, eventTotals, prime, workerEarning, workerOvertime, assignedWorkers, withFacturacion, aggregateFor, allBalances, volcadoCutoff, freshStart, resetInfo, countsPayment, freezeRates, freezeRealized, reapplyRateToEvents, HOURLY_RATE, OVERTIME };

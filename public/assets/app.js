@@ -586,7 +586,7 @@ function navFor(role) {
       { t: 'Realizados', i: 'events', h: '#/eventos/realizados' },
       ...(tt ? [{ s: 'Tiempo' }, { t: 'Mi control horario', i: 'clock', h: '#/horario' }, { t: 'Mis vacaciones', i: 'plane', h: '#/vacaciones' }] : []),
       ...((tt || [723, 292].includes(S.user && S.user.id)) ? [{ s: 'Nóminas' }, { t: 'Mis nóminas', i: 'doc', h: '#/nominas' }] : []),
-      { s: 'Otros' }, { t: 'Mis pagos', i: 'euro', h: '#/mis-pagos' },
+      { s: 'Otros' }, { t: 'Mis horas extra', i: 'clock', h: '#/mis-horas' }, { t: 'Mis pagos', i: 'euro', h: '#/mis-pagos' },
       ...(veh ? [{ t: 'Vehículos', i: 'car', h: '#/vehiculos' }] : []),
       { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' },
     ];
@@ -978,14 +978,21 @@ function wirePriceAlerts() {
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 async function dashboardDj() {
   const tt = !!(S.user && S.user.time_tracking);  // solo quien ficha horas ve "Horas este mes"
-  const [ev, bal] = await Promise.all([api('events'), api('finance/me').catch(() => ({}))]);
+  const [ev, bal, st] = await Promise.all([api('events'), api('finance/me').catch(() => ({})), api('dj-stats').catch(() => ({}))]);
   const next = ev.events.sort((a, b) => a.fecha.localeCompare(b.fecha)).slice(0, 8);
+  // Aviso de PARTE PENDIENTE: bodas ya celebradas sin horas extra o sin "pedir opinión".
+  const partes = (st && st.partes) || [];
+  const parteBox = partes.length ? `<div class="parte-alert"><div class="parte-alert__head">📝 Tienes <b>${partes.length}</b> ${partes.length === 1 ? 'parte pendiente' : 'partes pendientes'} de rellenar</div>
+      ${partes.map(p => `<a class="parte-row" href="#/parte/${p.id}"><span class="parte-date">${dmy(p.fecha)}</span><span class="parte-where">${esc(p.lugar || ('Boda #' + p.id))}</span><span class="parte-miss">Falta: ${esc(p.falta.join(' y '))}</span><span class="parte-go">Rellenar →</span></a>`).join('')}</div>` : '';
+  const yNow = String(new Date().getFullYear()); const yst = (st && st.byYear && st.byYear[yNow]) || null;
   shell(`${pageHead('Hola, ' + (S.user.name || '').split(' ')[0], 'Tus próximos eventos y tu actividad.')}
+    ${parteBox}
     <div class="grid-3">
       <div class="stat stat--pink"><div class="k">Eventos próximos</div><div class="v">${ev.events.length}</div></div>
       <div class="stat stat--blue"><div class="k">Pendiente de cobro</div><div class="v">${bal.history ? fmtEur(bal.history.rest - (bal.payments || []).reduce((t, p) => t + (+p.amount || 0), 0)) : '—'}</div></div>
       ${tt ? `<div class="stat stat--yellow"><div class="k">Horas este mes</div><div class="v" id="hMes">—</div></div>` : ''}
     </div>
+    ${yst ? `<a class="dj-hx-strip" href="#/mis-horas"><span>⏱ <b>${String(yst.horas).replace('.', ',')} h</b> extra en ${yNow}</span><span>💍 <b>${yst.bodas}</b> bodas</span><span>📊 media <b>${String(yst.media).replace('.', ',')} h</b>/boda</span><span class="go">Ver mis horas →</span></a>` : ''}
     <div class="panel"><div class="panel__head"><h2>Tus próximos eventos</h2></div><div class="panel__body" style="padding:0">${eventMiniList(next)}</div></div>`, ['Inicio']);
   if (tt) api('attendance-summary').then(s => { const r = (s.rows || [])[0]; if (r && el('hMes')) el('hMes').textContent = hm(r.m0) + ' h'; }).catch(() => {});
 }

@@ -511,6 +511,43 @@ async function api(req, res, url) {
   // --- solicitudes de servicios extras (admin) ---
   if (seg[0] === 'extra-requests') return extraRequestsApi(req, res, user);
 
+  // --- Mis horas extra y estadísticas del DJ (DJ: las suyas; admin: ?uid=) + partes pendientes ---
+  if (seg[0] === 'dj-stats' && method === 'GET') {
+    if (!(user.role === 'dj' || user.role === 'admin')) return fail(res, 403, 'Sin acceso');
+    const uid = user.role === 'admin' ? (+url.searchParams.get('uid') || user.id) : user.id;
+    fact.prime();
+    const today = bizToday();
+    const OT = fact.OVERTIME;
+    const locName = id => (store.get('locations', id) || {}).name || '';
+    const mine = store.all('events').filter(e => String(e.djId) === String(uid) && e.fecha && evRealized(e));
+    const byMonth = {}, byYear = {}, fincas = {}, extras = {};
+    const eventsOut = [];
+    mine.forEach(e => {
+      const ym = e.fecha.slice(0, 7), y = e.fecha.slice(0, 4);
+      const h = OT[e.djOvertime] || 0;
+      let eur = 0; try { eur = fact.workerOvertime ? fact.workerOvertime(e) : 0; } catch (x) {}
+      const m = byMonth[ym] = byMonth[ym] || { horas: 0, bodas: 0, eur: 0 }; m.horas += h; m.bodas++; m.eur += eur;
+      const yy = byYear[y] = byYear[y] || { horas: 0, bodas: 0, eur: 0, conHoras: 0 }; yy.horas += h; yy.bodas++; yy.eur += eur; if (h) yy.conHoras++;
+      const ln = locName(e.lugar) || e.lugarOtro || 'Otro'; const f = fincas[ln] = fincas[ln] || { bodas: 0, horas: 0 }; f.bodas++; f.horas += h;
+      (e.services || []).forEach(sv => { if (!sv.servicio) return; if (sv.resp && String(sv.resp) !== String(uid) && sv.resp2 !== uid) return; const n = (store.get('extras', sv.servicio) || {}).name; if (n) extras[n] = (extras[n] || 0) + 1; });
+      eventsOut.push({ id: e.id, fecha: e.fecha, lugar: ln, horas: h, ot: e.djOvertime || '' });
+    });
+    // Partes pendientes: bodas ya celebradas (últimos 120 días) sin horas extra indicadas o sin "pedir opinión".
+    const lim = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10);
+    const partes = store.all('events').filter(e => String(e.djId) === String(uid) && e.fecha && e.fecha >= lim && e.fecha < today && evRealized(e) && (!e.djOvertime || !e.opinion))
+      .map(e => ({ id: e.id, fecha: e.fecha, lugar: locName(e.lugar) || e.lugarOtro || '', conyuges: e.conyuges || '', falta: [!e.djOvertime ? 'horas extra' : '', !e.opinion ? 'pedir opinión' : ''].filter(Boolean) }))
+      .sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const r2 = v => Math.round(v * 100) / 100;
+    Object.values(byMonth).forEach(m => { m.horas = r2(m.horas); m.eur = r2(m.eur); });
+    Object.values(byYear).forEach(m => { m.horas = r2(m.horas); m.eur = r2(m.eur); m.media = m.bodas ? r2(m.horas / m.bodas) : 0; });
+    return ok(res, {
+      uid, name: (users.get(uid) || {}).name || '', today, byMonth, byYear,
+      fincas: Object.entries(fincas).map(([k, v]) => ({ finca: k, bodas: v.bodas, horas: r2(v.horas) })).sort((a, b) => b.bodas - a.bodas).slice(0, 10),
+      extras: Object.entries(extras).map(([k, v]) => ({ extra: k, n: v })).sort((a, b) => b.n - a.n).slice(0, 10),
+      events: eventsOut.sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 40), partes,
+    });
+  }
+
   // --- control horario (resúmenes) ---
   if (seg[0] === 'attendance-summary') return attendanceSummary(req, res, user, url);
 

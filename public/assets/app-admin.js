@@ -2243,3 +2243,67 @@ on(/^#\/cuenta$/, async () => {
   }
 });
 })();
+
+/* =========================================================================
+   MIS HORAS EXTRA (DJ) — horas extra por mes con gráfico, comparación con
+   el año anterior, media por boda, cobrado por horas extra y estadísticas
+   (fincas y extras). Admin puede verlo de cualquier DJ con ?uid=.
+   ========================================================================= */
+on(/^#\/mis-horas$/, async () => {
+  if (!(S.user.role === 'dj' || S.user.role === 'admin')) { location.hash = '#/'; return; }
+  const qUid = (location.hash.split('?')[1] || '').match(/uid=(\d+)/); const m = [null, qUid ? qUid[1] : null];
+  loading(['Mis horas extra']);
+  const st = await api('dj-stats' + (m[1] ? '?uid=' + m[1] : '')).catch(() => null);
+  if (!st) { shell('<div class="empty">No se pudieron cargar tus datos.</div>', ['Mis horas extra']); return; }
+  const MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const nf = v => String(Math.round((+v || 0) * 10) / 10).replace('.', ',');
+  const eur = v => (Math.round((+v || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' €';
+  const years = Object.keys(st.byYear || {}).sort();
+  const curY = new Date().getFullYear();
+  let Y = +(sessionStorage.getItem('mhY') || curY); if (!years.includes(String(Y))) Y = years.length ? +years[years.length - 1] : curY;
+  const draw = () => {
+    const prevY = Y - 1;
+    const mo = mm => (st.byMonth || {})[Y + '-' + String(mm).padStart(2, '0')] || { horas: 0, bodas: 0, eur: 0 };
+    const moP = mm => (st.byMonth || {})[prevY + '-' + String(mm).padStart(2, '0')] || { horas: 0, bodas: 0, eur: 0 };
+    const yy = (st.byYear || {})[Y] || { horas: 0, bodas: 0, eur: 0, media: 0, conHoras: 0 };
+    const yp = (st.byYear || {})[prevY] || null;
+    const diff = yp ? Math.round((yy.horas - yp.horas) * 10) / 10 : null;
+    // Gráfico de barras: horas por mes del año elegido (rosa) + año anterior (gris, detrás).
+    const W = 720, H = 240, pl = 30, pb = 26, pt = 18, bw = (W - pl - 10) / 12;
+    const maxV = Math.max(1, ...Array.from({ length: 12 }, (_, i) => Math.max(mo(i + 1).horas, moP(i + 1).horas)));
+    const yv = v => pt + (H - pt - pb) * (1 - v / maxV);
+    const ticks = [0, maxV / 2, maxV].map(v => Math.round(v * 2) / 2);
+    let bars = ticks.map(t => `<line x1="${pl}" x2="${W - 6}" y1="${yv(t)}" y2="${yv(t)}" stroke="currentColor" stroke-opacity=".12"/><text x="${pl - 6}" y="${yv(t) + 4}" text-anchor="end" font-size="11" fill="currentColor" opacity=".55">${nf(t)}</text>`).join('');
+    for (let i = 0; i < 12; i++) {
+      const x = pl + i * bw, a = mo(i + 1), b = moP(i + 1);
+      if (yp && b.horas) bars += `<rect x="${x + bw * 0.14}" y="${yv(b.horas)}" width="${bw * 0.34}" height="${H - pb - yv(b.horas)}" rx="3" fill="#CFC9BC"><title>${MES[i]} ${prevY}: ${nf(b.horas)} h</title></rect>`;
+      if (a.horas) bars += `<rect x="${x + bw * 0.5}" y="${yv(a.horas)}" width="${bw * 0.36}" height="${H - pb - yv(a.horas)}" rx="3" fill="#E82C88"><title>${MES[i]} ${Y}: ${nf(a.horas)} h en ${a.bodas} bodas</title></rect><text x="${x + bw * 0.68}" y="${yv(a.horas) - 5}" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">${nf(a.horas)}</text>`;
+      bars += `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">${MES[i]}</text>`;
+    }
+    const chart = `<svg viewBox="0 0 ${W} ${H}" class="mh-chart" role="img" aria-label="Horas extra por mes">${bars}</svg>
+      <div class="mh-leg"><span><i style="background:#E82C88"></i>${Y}</span>${yp ? `<span><i style="background:#CFC9BC"></i>${prevY}</span>` : ''}</div>`;
+    const yearTabs = `<div class="mtabs">${years.slice().reverse().map(y => `<button class="mtab${+y === Y ? ' on' : ''}" data-mhy="${y}">${y}</button>`).join('')}</div>`;
+    const kpis = `<div class="mh-kpis">
+      <div class="stat stat--pink"><div class="k">Horas extra ${Y}</div><div class="v">${nf(yy.horas)} h</div>${diff != null ? `<div class="mh-delta">${diff >= 0 ? '▲' : '▼'} ${nf(Math.abs(diff))} h vs ${prevY}</div>` : ''}</div>
+      <div class="stat"><div class="k">Bodas ${Y}</div><div class="v">${yy.bodas}</div><div class="mh-sub">${yy.conHoras} con horas extra</div></div>
+      <div class="stat stat--blue"><div class="k">Media por boda</div><div class="v">${nf(yy.media)} h</div></div>
+      <div class="stat stat--yellow"><div class="k">Cobrado por horas extra</div><div class="v">${eur(yy.eur)}</div></div>
+    </div>`;
+    const monthRows = Array.from({ length: 12 }, (_, i) => ({ i, a: mo(i + 1) })).filter(r => r.a.bodas).reverse();
+    const monthTable = monthRows.length ? `<div class="table-wrap"><table class="dt"><thead><tr><th>Mes</th><th style="text-align:right">Bodas</th><th style="text-align:right">Horas extra</th><th style="text-align:right">Cobrado</th></tr></thead><tbody>${monthRows.map(r => `<tr><td><b>${MES[r.i]} ${Y}</b></td><td style="text-align:right">${r.a.bodas}</td><td style="text-align:right"><b>${nf(r.a.horas)} h</b></td><td style="text-align:right">${eur(r.a.eur)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin bodas este año.</div>';
+    const fincas = (st.fincas || []).length ? `<div class="mh-list">${st.fincas.map(f => `<div class="mh-li"><span class="mh-li__n">🏡 ${esc(f.finca)}</span><span class="mh-li__v"><b>${f.bodas}</b> bodas · ${nf(f.horas)} h</span></div>`).join('')}</div>` : '<div class="empty">Sin datos.</div>';
+    const extras = (st.extras || []).length ? `<div class="mh-list">${st.extras.map(x => `<div class="mh-li"><span class="mh-li__n">✨ ${esc(x.extra)}</span><span class="mh-li__v"><b>${x.n}</b> veces</span></div>`).join('')}</div>` : '<div class="empty">Aún no has montado extras.</div>';
+    shell(`${pageHead(m[1] ? 'Horas extra · ' + (st.name || '') : 'Mis horas extra', 'Horas extra que has hecho cada mes, comparadas con el año anterior, y tus estadísticas.')}
+      ${yearTabs}${kpis}
+      <div class="panel"><div class="panel__head"><h3>Horas extra por mes</h3></div><div class="panel__body">${chart}</div></div>
+      <div class="grid-2">
+        <div class="panel"><div class="panel__head"><h3>Detalle por mes · ${Y}</h3></div><div class="panel__body">${monthTable}</div></div>
+        <div>
+          <div class="panel"><div class="panel__head"><h3>Fincas donde más has ido</h3></div><div class="panel__body">${fincas}</div></div>
+          <div class="panel"><div class="panel__head"><h3>Extras que más montas</h3></div><div class="panel__body">${extras}</div></div>
+        </div>
+      </div>`, [m[1] ? 'Horas extra' : 'Mis horas extra']);
+    $$('[data-mhy]').forEach(b => b.onclick = () => { Y = +b.dataset.mhy; try { sessionStorage.setItem('mhY', Y); } catch (e) {} draw(); });
+  };
+  draw();
+});
