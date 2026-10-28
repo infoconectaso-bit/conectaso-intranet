@@ -1538,9 +1538,10 @@ on(/^#\/backups$/, async () => {
       const script = ['#!/bin/sh',
         'DEST="/volume1/copias-intranet"',
         'mkdir -p "$DEST"',
-        'curl -fsS "' + full + '" -o "$DEST/conectaso-$(date +%Y%m%d-%H%M).tar.gz"',
+        'OUT="$DEST/conectaso-$(date +%Y%m%d-%H%M).tar.gz"',
+        'if command -v curl >/dev/null 2>&1; then curl -fsS "' + full + '" -o "$OUT"; else wget -q "' + full + '" -O "$OUT"; fi',
         '# conserva las ultimas 21 copias y borra las mas viejas',
-        'ls -1t "$DEST"/conectaso-*.tar.gz | tail -n +22 | xargs -r rm -f'].join('\n');
+        'ls -1t "$DEST"/conectaso-*.tar.gz 2>/dev/null | tail -n +22 | while read f; do rm -f "$f"; done'].join('\n');
       const out = el('nasOut'); if (!out) return;
       out.innerHTML = `<p style="margin:0 0 6px"><b>Enlace seguro</b> (no lo compartas, da acceso a las copias):</p>
         <textarea class="inp" rows="2" readonly style="width:100%;font-family:monospace;font-size:12px" onclick="this.select()">${esc(full)}</textarea>
