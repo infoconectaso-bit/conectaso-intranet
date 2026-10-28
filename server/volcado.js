@@ -366,8 +366,12 @@ async function handle(req, res, seg, method, url) {
       };
       if (mode === 'diff') { try { fs.writeFileSync(FILEMAP, JSON.stringify(fileMap)); } catch (e) { } return send(res, 200, { ok: true, mode, summary }); }
       if (mode === 'import') {
-        const seed = { type: 'volcado-refresh', events: built, users: [], locations: [], vehicles: [], extras: [], tacs: [], staffIds: store.setting('staffIds') || [], beneficios: store.setting('beneficios') || null };
+        // excludeIds: ids que Adrià decide NO traer (p.ej. altas antiguas sin fecha con pinta de prueba).
+        const excl = new Set((body.excludeIds || []).map(Number));
+        const toImport = built.filter(e => !excl.has(e.id));
+        const seed = { type: 'volcado-refresh', events: toImport, users: [], locations: [], vehicles: [], extras: [], tacs: [], staffIds: store.setting('staffIds') || [], beneficios: store.setting('beneficios') || null };
         const counts = require('./volcado-import').run(seed, { store, users, transaction: dbm0.transaction });
+        counts.excluidos = built.length - toImport.length;
         try { fs.writeFileSync(FILEMAP, JSON.stringify(fileMap)); } catch (e) { }
         return send(res, 200, { ok: true, mode, counts, summary });
       }
