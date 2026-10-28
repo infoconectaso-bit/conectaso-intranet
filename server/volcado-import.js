@@ -100,10 +100,12 @@ function run(seed, db) {
     for (const t of seed.tacs) { store.put('tacs', mergeRecord(store.get('tacs', t.id), t)); counts.tacs++; }
 
     // ---- Ajustes (catálogos). No pisar staffIds/beneficios si ya existen. ----
-    store.setSetting('estados', [
-      { n: 'No contactado admin', c: '#D50000' }, { n: 'No contactado dj', c: '#8E24AA' },
-      { n: 'Contactado', c: '#F6BF26' }, { n: 'Meeting realizado', c: '#FF7800' }, { n: 'Completado', c: '#0B8043' }]);
-    store.setSetting('tipos', ['Recomendado', 'Fiesta', 'Bodorrio', 'Tinglado', 'Corporativo', 'Extras']);
+    // OJO: NO se reescribe la lista de estados si ya existe. Antes se ponía la de 5 estados (con
+    // "No contactado admin") y al reiniciar la migración volvía a bajar un índice TODOS los eventos
+    // (Completado acababa como "Meeting realizado"). La réplica usa 4 estados.
+    if (!store.setting('estados')) store.setSetting('estados', [
+      { n: 'No contactado dj', c: '#8E24AA' }, { n: 'Contactado', c: '#F6BF26' }, { n: 'Meeting realizado', c: '#FF7800' }, { n: 'Completado', c: '#0B8043' }]);
+    if (!store.setting('tipos')) store.setSetting('tipos', ['Recomendado', 'Fiesta', 'Bodorrio', 'Tinglado', 'Corporativo', 'Extras']);
     if (store.setting('staffIds') == null && seed.staffIds) store.setSetting('staffIds', seed.staffIds);
     if (store.setting('beneficios') == null && seed.beneficios) store.setSetting('beneficios', seed.beneficios);
     store.setSetting('volcadoAt', new Date().toISOString());
