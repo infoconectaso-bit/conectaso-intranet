@@ -347,13 +347,22 @@ async function handle(req, res, seg, method, url) {
       // eventos que YA están en la réplica pero NO aparecieron en el recorrido (no se tocan; se informan)
       const noVistos = [];
       store.all('events').forEach(e => { if (!seenIds.has(e.id)) noVistos.push({ id: e.id, fecha: e.fecha || '', conyuges: (e.conyuges || '').slice(0, 36) }); });
+      // Diagnóstico de cambios: histograma por campo + subconjuntos de alto riesgo (importes y fechas), sin tope.
+      const histCambios = {}; cambios.forEach(c => Object.keys(c.ch).forEach(k => histCambios[k] = (histCambios[k] || 0) + 1));
+      const MONEY = ['pagado', 'pagoCliente', 'totalCost'];
+      const cambiosImporte = cambios.filter(c => Object.keys(c.ch).some(k => MONEY.includes(k)));
+      const cambiosFecha = cambios.filter(c => c.ch.fecha);
+      const cambiosNoEstado = cambios.filter(c => Object.keys(c.ch).some(k => k !== 'estado'));
       const summary = {
         staged: raws.length, aImportar: built.length,
         existentesConCambios: cambios.length, nuevosMantenidos: nuevos.length,
         nuevosPasadosParaRevisar: nuevosPasados.length, nuevosDescartadosVacios: descartados.length,
         enReplicaNoVistos: noVistos.length, conAdjuntos: Object.keys(fileMap).length,
         unmapped: [...unmapped],
-        cambios: cambios.slice(0, 100), nuevos: nuevos.slice(0, 100), nuevosPasados: nuevosPasados.slice(0, 60), noVistos: noVistos.slice(0, 60), descartados: descartados.slice(0, 40),
+        histCambios,
+        nImporte: cambiosImporte.length, nFecha: cambiosFecha.length, nNoEstado: cambiosNoEstado.length,
+        cambiosImporte: cambiosImporte.slice(0, 300), cambiosFecha: cambiosFecha.slice(0, 300), cambiosNoEstado: cambiosNoEstado.slice(0, 300),
+        cambios: cambios.slice(0, 60), nuevos: nuevos.slice(0, 100), nuevosPasados: nuevosPasados.slice(0, 60), noVistos: noVistos.slice(0, 60), descartados: descartados.slice(0, 40),
       };
       if (mode === 'diff') { try { fs.writeFileSync(FILEMAP, JSON.stringify(fileMap)); } catch (e) { } return send(res, 200, { ok: true, mode, summary }); }
       if (mode === 'import') {
