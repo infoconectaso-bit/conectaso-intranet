@@ -12,6 +12,14 @@ const SECRET = 'vlc_7Kp2Qm9Xr4Tz8Lw_conectaso';
 
 // real estados (1-5, incluye "No contactado admin") -> nuestros índices (0-4).
 const ESTADO_MAP = { '1': 0, '2': 1, '3': 2, '4': 3, '5': 4 };
+// La réplica ELIMINÓ el estado "No contactado admin" (índice 0) y bajó un índice el resto. Si ya está
+// migrada, el estado de la intranet real se traduce restando 1 (y "No contactado admin" pasa a "No
+// contactado dj"), para que el volcado no desplace los estados.
+function mapEstado(v) {
+  let e = ESTADO_MAP[String(v)] != null ? ESTADO_MAP[String(v)] : +v;
+  try { const est = require('./db').store.setting('estados') || []; if (est.length && !/no\s+contactad[oa]\s+admin/i.test(est[0].n || '')) e = Math.max(0, e - 1); } catch (x) {}
+  return e;
+}
 // momentos con clave distinta en nuestra app
 const MOMENT_TX = { bride_car_entrance: 'vehicle_entry', votes: 'vows' };
 const DMY2ISO = (s) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s || '').trim()); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
@@ -67,7 +75,7 @@ function mapEvent(raw) {
       case 'religious_celebration': ev.religiosa = truthy(v); break;
       case 'guest_number': ev.guests = v; break;
       case 'payment_method': ev.metodo = v; break;
-      case 'event_status': ev.estado = ESTADO_MAP[String(v)] != null ? ESTADO_MAP[String(v)] : +v; break;
+      case 'event_status': ev.estado = mapEstado(v); break;
       case 'event_total_import': ev.pagoCliente = +v || 0; break;
       case 'event_payed_import': ev.pagado = +v || 0; break;
       case 'event_total_cost': ev.totalCost = +v || 0; break;
