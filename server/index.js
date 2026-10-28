@@ -1567,11 +1567,12 @@ let lastTestRun = null;
 /* ---------- login / cuenta ---------- */
 async function login(req, res) {
   const ip = auth.clientIp(req);
-  if (auth.rateLimited('login:' + ip)) return fail(res, 429, 'Demasiados intentos. Espera unos minutos.');
+  // Reintentar la contraseña NO bloquea: solo se cuentan los intentos FALLIDOS y el margen es amplio
+  // (defensa mínima anti fuerza bruta). Un login correcto reinicia el contador.
+  if (auth.rateLimited('login:' + ip, 40)) return fail(res, 429, 'Demasiados intentos fallidos seguidos. Espera unos minutos.');
   const { email, password } = await readBody(req);
-  auth.noteAttempt('login:' + ip);
   const row = users.byEmail(email);
-  if (!row || !row.active || !auth.verifyPassword(password || '', row.password_hash)) return fail(res, 401, 'Email o contraseña incorrectos.');
+  if (!row || !row.active || !auth.verifyPassword(password || '', row.password_hash)) { auth.noteAttempt('login:' + ip); return fail(res, 401, 'Email o contraseña incorrectos.'); }
   auth.clearAttempts('login:' + ip);
   users.touch(row.id);
   auth.createSession(req, res, row.id);
