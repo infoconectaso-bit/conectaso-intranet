@@ -683,8 +683,10 @@ function paneMusica(ev, canEdit) {
   sections.push({ key: 'recomendaciones', label: 'Recomendaciones', body: `<div class="inner">
     <p class="hint" style="margin-bottom:12px">¿No sabéis qué poner en cada momento? Aquí tenéis <b>playlists con propuestas</b> para inspiraros. Abridlas y coged las ideas que más os gusten.</p>
     <div class="recs-list">${MUSIC_RECS.map(r => `<a class="rec-card" href="${esc(r[1])}" target="_blank" rel="noopener"><span class="rec-ic">🎧</span><span class="rec-nm">${esc(r[0])}</span><span class="rec-go">Ver propuestas ↗</span></a>`).join('')}</div></div>` });
+  // Pestaña propia de Spotify (solo DJ/administración; aquí se monta el panel de generar/elegir la playlist).
+  if (S.user.role === 'admin' || S.user.role === 'dj') sections.push({ key: 'spotify', label: '🎵 Spotify', body: `<div class="inner" id="spotifyPaneHost"></div>` });
   const nav = `<div class="mtabs" data-mtabs role="tablist">${sections.map((s, i) => `<button type="button" class="mtab${i === 0 ? ' on' : ''}" data-mtab="${s.key}">${esc(s.label)}</button>`).join('')}</div>`;
-  const panes = sections.map((s, i) => `<section class="mblock mpane${i === 0 ? ' on' : ''}" data-mpane="${s.key}"${i === 0 ? '' : ' style="display:none"'}><h4>${esc(s.label)}${(s.key === 'extras' || s.key === 'recomendaciones') ? '' : reorderHint}</h4>${s.body}</section>`).join('');
+  const panes = sections.map((s, i) => `<section class="mblock mpane${i === 0 ? ' on' : ''}" data-mpane="${s.key}"${i === 0 ? '' : ' style="display:none"'}><h4>${esc(s.label)}${(s.key === 'extras' || s.key === 'recomendaciones' || s.key === 'spotify') ? '' : reorderHint}</h4>${s.body}</section>`).join('');
   // si todos los momentos tienen enlace de Spotify, se ofrece abrir/crear la playlist
   // El botón de abrir/montar la playlist solo lo ven el DJ y administración, no los novios.
   const spoti = (allSpotify(ev) && (S.user.role === 'admin' || S.user.role === 'dj')) ? `<div class="spoti-bar"><button type="button" class="btn btn--spoti" id="openSpoti">🎵 Abre tu playlist de Spotify</button><span class="hint">Todos los momentos tienen enlace de Spotify, así que podemos montar la playlist automáticamente.</span></div>` : '';
@@ -1041,7 +1043,9 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
     if (!musPane) return;
     const canGen = S.user.role === 'admin' || S.user.role === 'dj';
     if (!canGen) return;   // Spotify SOLO lo ven DJ y administración; los novios no ven esta sección
-    const box = document.createElement('div'); box.className = 'panel'; box.style.marginBottom = '12px';
+    const host = musPane.querySelector('#spotifyPaneHost');   // la sub-pestaña «Spotify» dentro de Música
+    if (!host) return;
+    const box = document.createElement('div'); box.className = 'panel'; box.style.marginBottom = '0';
     const linkBtn = () => ev.spotifyUrl ? `<a class="btn btn--sm" href="${esc(ev.spotifyUrl)}" target="_blank" rel="noopener">🎵 Abrir</a>${ev.spotifyCount ? ` <span class="hint">${ev.spotifyCount} canc.</span>` : ''}` : '';
     const synced = () => ev.spotifySyncedAt ? `<span class="hint">· actualizada ${esc(new Date(ev.spotifySyncedAt).toLocaleDateString('es-ES'))}</span>` : '';
     // Cabecera compacta en una línea; el selector grande solo aparece al pulsar «Preparar».
@@ -1053,7 +1057,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
       </div>
       <div id="spGenOut" style="margin-top:8px"></div>
     </div>`;
-    musPane.insertBefore(box, musPane.firstChild);
+    host.appendChild(box);
     const out = box.querySelector('#spGenOut');
     const prep = box.querySelector('#spPrep');
 
