@@ -297,6 +297,24 @@ async function api(req, res, url) {
   // --- Calendario ICS (sin sesión: autenticado por el token del propio enlace) ---
   if (seg[0] === 'calendar' && seg[1] && method === 'GET') return serveCalendar(req, res, seg[1]);
 
+  // --- Copia externa para el NAS (sin sesión: autenticada por una CLAVE del enlace) ---
+  // Devuelve un .tar.gz con la base de datos (copia fresca) + la carpeta de archivos subidos.
+  if (seg[0] === 'backups' && seg[1] === 'pull' && method === 'GET') {
+    const want = store.setting('nasPullToken') || '';
+    const given = String(req.headers['x-backup-token'] || '').trim() || new URL(req.url, 'http://x').searchParams.get('token') || '';
+    if (!want || given !== want) return fail(res, 403, 'Clave no válida.');
+    let snap; try { snap = backup.snapshot('nas'); } catch (e) { return fail(res, 500, 'No se pudo preparar la copia: ' + e.message); }
+    const rel = path.relative(DATA_DIR, path.join(backup.BACKUP_DIR, snap.name));
+    const stamp2 = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.writeHead(200, { 'Content-Type': 'application/gzip', 'Content-Disposition': 'attachment; filename="conectaso-' + stamp2 + '.tar.gz"', 'Cache-Control': 'no-store' });
+    const args = ['-czf', '-', '-C', DATA_DIR, 'uploads', rel];
+    const tar = require('child_process').spawn('tar', args);
+    tar.stdout.pipe(res);
+    tar.stderr.on('data', () => {});
+    tar.on('error', () => { try { res.destroy(); } catch (_) {} });
+    return;
+  }
+
   if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
 
   // Modo mantenimiento: durante una actualización, los usuarios bloqueados (todos, o todos menos
@@ -964,6 +982,20 @@ ${(!go && willSync) ? `<a class="btn" href="/api/holded-payslip-sync?go=1">⬇ D
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(html);
     return;
+  }
+  // --- Copia externa al NAS: clave + instrucciones (admin) ---
+  if (seg[0] === 'backups' && seg[1] === 'nas-config' && method === 'GET') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    let t = store.setting('nasPullToken') || '';
+    if (!t) { t = crypto.randomBytes(24).toString('hex'); store.setSetting('nasPullToken', t); }
+    const base = 'https://' + (req.headers.host || 'prueba.lol');
+    return ok(res, { token: t, base, url: base + '/api/backups/pull' });
+  }
+  if (seg[0] === 'backups' && seg[1] === 'nas-token' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const t = crypto.randomBytes(24).toString('hex'); store.setSetting('nasPullToken', t); store.audit(user.id, 'nas-token');
+    const base = 'https://' + (req.headers.host || 'prueba.lol');
+    return ok(res, { token: t, base, url: base + '/api/backups/pull' });
   }
   if (seg[0] === 'backups' && seg[1] === 'create' && method === 'POST') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');

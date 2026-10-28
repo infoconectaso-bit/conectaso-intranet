@@ -1502,6 +1502,13 @@ on(/^#\/backups$/, async () => {
         <p class="hint" style="margin-top:10px">La copia incluye <b>la base de datos</b> (bodas, pagos, facturas, tarifas, observaciones…) <b>y todos los archivos subidos</b> (nóminas, planos, adjuntos y fotos de eventos, logos de fotomatón). Los archivos solo se vuelven a subir cuando cambian.</p>
       </div>
 
+      <h2 style="margin:26px 0 6px">💽 Copia local en tu NAS (Synology)</h2>
+      <p class="hint" style="margin-bottom:12px">El NAS de la nave puede descargar <b>cada noche</b> una copia completa (base de datos + archivos) desde aquí, sin exponer el NAS a internet. Pulsa el botón para obtener el enlace seguro y el script que hay que pegar en el <b>Programador de tareas</b> del NAS.</p>
+      <div class="card" style="padding:16px;border:1px solid var(--line,#e5e7eb);border-radius:12px;max-width:680px">
+        <div class="btn-row" style="flex-wrap:wrap;gap:8px"><button class="btn btn--primary" id="nasGet">🔑 Preparar enlace para el NAS</button> <button class="btn" id="nasRegen">♻ Regenerar clave</button></div>
+        <div id="nasOut" style="margin-top:12px"></div>
+      </div>
+
       <h2 style="margin:26px 0 6px">🧹 Liberar espacio (bodas antiguas)</h2>
       <p class="hint" style="margin-bottom:12px">Borra los archivos adjuntos (fotos, documentos) y el logo de fotomatón de las bodas que ya pasaron hace más de los meses indicados, para no acumular peso. <b>Nunca toca nóminas.</b> Es irreversible en el servidor, aunque los archivos siguen en la copia de la nube durante su retención (hasta ~90 días).</p>
       <div class="card" style="padding:16px;border:1px solid var(--line,#e5e7eb);border-radius:12px;max-width:560px">
@@ -1525,6 +1532,26 @@ on(/^#\/backups$/, async () => {
     if (bn) bn.onclick = async () => { bn.disabled = true; bn.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST' }); toast('Copia creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
     const bp = el('bkPre');
     if (bp) bp.onclick = async () => { bp.disabled = true; bp.textContent = 'Creando…'; try { await api('backups/create', { method: 'POST', body: { pre: true } }); toast('Copia previa a mantenimiento creada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } render(); };
+    // Copia local al NAS: obtener el enlace seguro + el script para el Programador de tareas.
+    const showNas = (d) => {
+      const full = d.url + '?token=' + d.token;
+      const script = ['#!/bin/sh',
+        'DEST="/volume1/copias-intranet"',
+        'mkdir -p "$DEST"',
+        'curl -fsS "' + full + '" -o "$DEST/conectaso-$(date +%Y%m%d-%H%M).tar.gz"',
+        '# conserva las ultimas 21 copias y borra las mas viejas',
+        'ls -1t "$DEST"/conectaso-*.tar.gz | tail -n +22 | xargs -r rm -f'].join('\n');
+      const out = el('nasOut'); if (!out) return;
+      out.innerHTML = `<p style="margin:0 0 6px"><b>Enlace seguro</b> (no lo compartas, da acceso a las copias):</p>
+        <textarea class="inp" rows="2" readonly style="width:100%;font-family:monospace;font-size:12px" onclick="this.select()">${esc(full)}</textarea>
+        <p style="margin:12px 0 6px"><b>Script para el NAS</b> (Programador de tareas → Tarea programada → Script definido por el usuario):</p>
+        <textarea class="inp" rows="6" readonly style="width:100%;font-family:monospace;font-size:12px" onclick="this.select()">${esc(script)}</textarea>
+        <p class="hint" style="margin-top:8px">Crea en el NAS una carpeta compartida llamada <b>copias-intranet</b> y una tarea programada (p. ej. a las 03:30) que ejecute este script. Guardará cada noche una copia y mantendrá las <b>últimas 21</b>.</p>`;
+    };
+    const nasGet = el('nasGet');
+    if (nasGet) nasGet.onclick = async () => { nasGet.disabled = true; try { const d = await api('backups/nas-config'); showNas(d); } catch (e) { toast(e.message || 'Error', 'err'); } nasGet.disabled = false; };
+    const nasRegen = el('nasRegen');
+    if (nasRegen) nasRegen.onclick = () => modal('♻ Regenerar clave', '<p>Se creará una clave nueva y <b>el script anterior dejará de funcionar</b>. Tendrás que pegar el nuevo script en el NAS.</p><p class="hint">¿Seguro?</p>', { okText: 'Regenerar', onOk: async () => { try { const d = await api('backups/nas-token', { method: 'POST' }); showNas(d); toast('Clave regenerada', 'ok'); } catch (e) { toast(e.message || 'Error', 'err'); } } });
     // Restaurar desde una copia: doble confirmación (es una acción fuerte) y reinicio automático.
     $$('[data-restore]').forEach(btn => btn.onclick = () => {
       const name = btn.dataset.restore;
