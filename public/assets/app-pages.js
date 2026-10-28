@@ -1040,14 +1040,19 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
     const musPane = form.querySelector('[data-pane="musica"]');
     if (!musPane) return;
     const canGen = S.user.role === 'admin' || S.user.role === 'dj';
-    if (!canGen && !ev.spotifyUrl) return;   // a los novios solo se les muestra si ya hay playlist
-    const box = document.createElement('div'); box.className = 'panel'; box.style.marginBottom = '14px';
-    const linkBtn = () => ev.spotifyUrl ? `<a class="btn btn--sm" href="${esc(ev.spotifyUrl)}" target="_blank" rel="noopener">🎵 Abrir en Spotify</a>${ev.spotifyCount ? ` <span class="hint">${ev.spotifyCount} canciones</span>` : ''}` : '<span class="hint">Aún no se ha generado la playlist.</span>';
-    const synced = () => ev.spotifySyncedAt ? `<p class="hint" style="margin:6px 0 0">Última actualización: ${esc(new Date(ev.spotifySyncedAt).toLocaleString('es-ES'))}</p>` : '';
-    const collabNote = canGen ? '<p class="hint" style="margin:8px 0 0">La playlist es privada y <b>colaborativa</b>: los novios pueden reordenar y añadir canciones abriéndola con el enlace. Ojo: al pulsar «Actualizar» se reemplaza por lo seleccionado aquí.</p>' : '';
-    box.innerHTML = `<div class="panel__head"><h3>🎵 Playlist de Spotify</h3></div><div class="panel__body">
-      <div id="spLink" style="margin-bottom:${canGen ? '10px' : '0'}">${linkBtn()}</div>
-      ${canGen ? `<div class="btn-row"><button type="button" class="btn btn--primary" id="spPrep">${ev.spotifyUrl ? '↻ Revisar y actualizar' : '🎵 Preparar playlist'}</button></div><div id="spSynced">${synced()}</div>${collabNote}<div id="spGenOut" style="margin-top:10px"></div>` : ''}</div>`;
+    if (!canGen) return;   // Spotify SOLO lo ven DJ y administración; los novios no ven esta sección
+    const box = document.createElement('div'); box.className = 'panel'; box.style.marginBottom = '12px';
+    const linkBtn = () => ev.spotifyUrl ? `<a class="btn btn--sm" href="${esc(ev.spotifyUrl)}" target="_blank" rel="noopener">🎵 Abrir</a>${ev.spotifyCount ? ` <span class="hint">${ev.spotifyCount} canc.</span>` : ''}` : '';
+    const synced = () => ev.spotifySyncedAt ? `<span class="hint">· actualizada ${esc(new Date(ev.spotifySyncedAt).toLocaleDateString('es-ES'))}</span>` : '';
+    // Cabecera compacta en una línea; el selector grande solo aparece al pulsar «Preparar».
+    box.innerHTML = `<div class="panel__body" style="padding:9px 12px">
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+        <b style="font-size:14px">🎵 Playlist Spotify</b>
+        <button type="button" class="btn btn--sm btn--primary" id="spPrep">${ev.spotifyUrl ? '↻ Revisar / actualizar' : 'Preparar playlist'}</button>
+        <span id="spLink">${linkBtn()}</span><span id="spSynced">${synced()}</span>
+      </div>
+      <div id="spGenOut" style="margin-top:8px"></div>
+    </div>`;
     musPane.insertBefore(box, musPane.firstChild);
     const out = box.querySelector('#spGenOut');
     const prep = box.querySelector('#spPrep');
@@ -1083,8 +1088,9 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
         </div>`;
       }).join('');
       out.innerHTML = `<div class="hint" style="margin-bottom:6px">Toca la versión correcta de cada canción (o «Omitir» para no añadirla). Título: <b>${esc(data.title || '')}</b></div>
+        <div class="hint" style="margin-bottom:6px">Privada y colaborativa (quien tenga el enlace puede reordenar/añadir). «Actualizar» reemplaza por lo de aquí.</div>
         ${rows}
-        <div class="btn-row" style="margin-top:14px"><button type="button" class="btn btn--primary" id="spGen">${ev.spotifyUrl ? '↻ Actualizar playlist con esta selección' : '✅ Generar playlist con esta selección'}</button></div>
+        <div class="btn-row" style="margin-top:14px"><button type="button" class="btn btn--primary btn--sm" id="spGen">${ev.spotifyUrl ? '↻ Actualizar con esta selección' : '✅ Generar con esta selección'}</button></div>
         <div id="spGenMsg" style="margin-top:10px"></div>`;
       const paint = () => out.querySelectorAll('.sp-opt').forEach(b => {
         const on = (b.dataset.uri || '') === (sel[+b.dataset.song] || '');
