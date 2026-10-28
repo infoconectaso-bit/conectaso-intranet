@@ -647,7 +647,10 @@ async function handle(req, res, seg, method, url) {
       const users = dbm0.users, store = dbm0.store;
       const raws = readK('att');
       const nn = s => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
-      const byName = {}; users.all().forEach(u => { if (u.role !== 'user') { const k = nn(u.name); (byName[k] = byName[k] || []).push(u.id); } });
+      // Trabajador por nombre: primero cuentas de equipo (no cliente); si no hay, cualquier cuenta con ese nombre.
+      const byName = {}, byNameAny = {}; users.all().forEach(u => { const k = nn(u.name); (byNameAny[k] = byNameAny[k] || []).push(u.id); if (u.role !== 'user') (byName[k] = byName[k] || []).push(u.id); });
+      // Además, el trabajador que ya tenía fichajes en la réplica con ese mismo id de fichaje manda.
+      const attById = {}; store.all('attendances').forEach(a => { if (a.id) attById[a.id] = a.userId; });
       const toISO = f => { let m = String(f || '').match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if (m) { let y = +m[3]; if (y < 100) y += 2000; return y + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); } m = String(f || '').match(/(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ''; };
       const hm = x => { const m = String(x).match(/(\d{1,2})[:.h](\d{2})/); return m ? String(+m[1]).padStart(2, '0') + ':' + m[2] : ''; };
       const slotsOf = t => { const out = []; const re = /(\d{1,2}[:.h]\d{2})\s*(?:-|–|a|hasta|→)\s*(\d{1,2}[:.h]\d{2})/gi; let m; while ((m = re.exec(String(t || '')))) out.push({ in: hm(m[1]), out: hm(m[2]) }); return out; };
@@ -655,6 +658,8 @@ async function handle(req, res, seg, method, url) {
       raws.forEach(r => {
         let uid = +r.userId || 0;
         if (!uid) { const c = byName[nn(r.user)] || []; if (c.length === 1) uid = c[0]; }
+        if (!uid) { const c = byNameAny[nn(r.user)] || []; if (c.length === 1) uid = c[0]; }
+        if (!uid && attById[+r.id]) uid = +attById[+r.id];
         if (!uid) { sinUsuario.add(nn(r.user).slice(0, 3) + '…'); }
         const date = toISO(r.fecha); if (!date) sinFecha.push(r.id);
         const slots = slotsOf(r.franja); if (!slots.length) sinFranja.push({ id: r.id, muestra: String(r.franja || '').replace(/[a-záéíóúñ]/gi, 'x').slice(0, 40) });
