@@ -456,6 +456,10 @@ async function handle(req, res, seg, method, url) {
           const A = JSON.stringify(nz(a)), B = JSON.stringify(nz(b));
           if (A !== B) {
             bad = true; hist[k] = (hist[k] || 0) + 1; (ids[k] = ids[k] || []).length < 40 && ids[k].push(id);
+            if (k === 'optionals' && (sub._opt = sub._opt || []).length < 12) {
+              const sig = arr => (arr || []).map(o => (o.kind || 'opt') + '/' + (o.area || '') + '/' + (o.sec || '') + '/' + (String(o.title || '').length) + '/' + (String(o.value || '').length) + '/' + (o.order || '')).sort().join(' ');
+              sub._opt.push({ id, real: sig(R.optionals), replica: sig(E.optionals) });
+            }
             if (k === 'music' || k === 'spouses' || k === 'disco' || k === 'extras') {
               const ra = nz(a) || {}, rb = nz(b) || {}; const keys = new Set([...Object.keys(ra), ...Object.keys(rb)]);
               keys.forEach(x => { if (JSON.stringify(ra[x]) !== JSON.stringify(rb[x])) { const sk = k + '.' + x; sub[sk] = (sub[sk] || 0) + 1; } });
@@ -464,8 +468,9 @@ async function handle(req, res, seg, method, url) {
         });
         if (!bad) okN++;
       });
+      const optDet = sub._opt || []; delete sub._opt;
       const subTop = Object.entries(sub).sort((x, y) => y[1] - x[1]).slice(0, 40);
-      return send(res, 200, { ok: true, comparadas: n, iguales: okN, noEnReplica: missing, campos: hist, ids, subcampos: subTop });
+      return send(res, 200, { ok: true, optDet, comparadas: n, iguales: okN, noEnReplica: missing, campos: hist, ids, subcampos: subTop });
     }
     // Catálogos (fincas, furgonetas, servicios extra, normativas): staging -> comparar / importar.
     if (action === 'small-diff' || action === 'small-import') {
