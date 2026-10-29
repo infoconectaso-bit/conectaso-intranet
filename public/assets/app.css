@@ -938,7 +938,11 @@ html.night-dim .pie-hole{fill:#1a140a}
 .ruta-deck .tl .sub{color:#b4aeb9;font-size:13.5px;margin-top:1px}
 .ruta-deck .tl .dot{width:12px;height:12px;border-radius:50%;background:var(--pink);flex:none}
 .ruta-deck .deck-plano{flex:1;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#05050655}
-.ruta-deck .deck-plano .plan-view{max-width:100%;max-height:430px;border:0}
+/* El plano del deck/PDF debe mantener la PROPORCIÓN de la imagen para que los iconos (posicionados
+   en %) cuadren exactamente. Antes se recortaba a 430px de alto (overflow) y los iconos se movían.
+   Ahora la imagen cabe dentro del marco sin deformarse y .plan-view se ajusta a ella. */
+.ruta-deck .deck-plano .plan-view{max-width:100%;max-height:430px;width:auto;height:auto;border:0}
+.ruta-deck .deck-plano .plan-view img{width:auto;height:auto;max-width:100%;max-height:430px}
 .ruta-deck .mapbox{border:2px dashed #ffffff30;border-radius:16px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8d8792;text-align:center;gap:10px;padding:30px}
 .ruta-deck .mapbox .big{font-family:var(--disp);font-size:20px;color:#b4aeb9;text-transform:uppercase}
 .ruta-deck .esc{width:100%;border-collapse:collapse;font-size:14px}
@@ -975,6 +979,7 @@ html.night-dim .pie-hole{fill:#1a140a}
 .ruta-deck .plano-zonas-grid .card{display:flex;flex-direction:column;padding:12px 16px}
 .ruta-deck .plano-zonas-grid .card h3{font-size:15px;margin-bottom:8px}
 .ruta-deck .plano-zonas-grid .deck-plano{max-height:205px}
+.ruta-deck .plano-zonas-grid .deck-plano .plan-view,.ruta-deck .plano-zonas-grid .deck-plano .plan-view img{max-height:205px}
 .plan-tabs--zonas{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line,#e2e2e6)}
 .plan-tabs--zonas .plan-tab{font-size:12.5px}
 .ruta-plano-zone{margin-bottom:16px}
@@ -1183,6 +1188,7 @@ html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok
   .ruta-deck .tl--compact .hh,.ruta-deck .tl .hh{font-size:17px;width:62px;min-width:62px}
   .ruta-deck .tl--compact .lbl{font-size:14px}
   .ruta-deck .deck-plano .plan-view,.ruta-deck .plano-zonas-grid .deck-plano{max-height:240px}
+  .ruta-deck .deck-plano .plan-view img{max-height:240px}
   .ruta-deck .mapbox{height:auto;padding:30px 20px}
   .ruta-deck .wm{position:static;display:block;margin:18px auto 0;height:22px;opacity:.5}
   .ruta-deck .pg{position:static;display:block;text-align:right;margin-top:6px;opacity:.4}
