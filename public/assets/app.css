@@ -1150,7 +1150,8 @@ html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok
 .ruta-deck .resumen-2col--solo{grid-template-columns:1fr}
 .ruta-deck .svc-chips{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .ruta-deck .svc-chip{display:flex;align-items:center;gap:12px;background:#ffffff10;border:1px solid #ffffff22;border-radius:12px;padding:10px 14px;font-family:var(--disp);text-transform:uppercase;font-size:14px;color:var(--cream);line-height:1.2}
-.ruta-deck .svc-ic{font-size:24px;line-height:1;flex:none}
+.ruta-deck .svc-ic{line-height:1;flex:none;color:var(--pink);display:flex;align-items:center}
+.ruta-deck .svc-ic .svc-svg{width:23px;height:23px;display:block}
 .ruta-deck .esc a.sp{text-decoration:none;font-style:normal;font-weight:700;cursor:pointer}
 .ruta-deck .esc a.sp:hover{filter:brightness(.95);text-decoration:none}
 .ruta-deck .esc a.sp--other{background:#ffd9e9;color:#7a0c3f}
