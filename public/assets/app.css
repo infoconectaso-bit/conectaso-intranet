@@ -969,14 +969,17 @@ html.night-dim .pie-hole{fill:#1a140a}
 .ruta-deck .note-tip{background:#ffffff12;border-left:3px solid var(--pink);border-radius:8px;padding:12px 16px;font-size:14px;color:#cfc9d1;margin-top:18px}
 .ruta-deck .warn-tip{background:rgba(240,232,90,.14);border-left:3px solid var(--yellow);border-radius:8px;padding:12px 16px;font-size:14px;color:#f3edc0;margin-top:12px;font-weight:600}
 @media print{
-  body:has(.ruta-deck){background:#0f0c12}
-  .ruta-deck{gap:0 !important;display:block !important}
+  html:has(.ruta-deck),body:has(.ruta-deck){background:#130F17 !important}
+  .ruta-deck{gap:0 !important;display:block !important;background:#130F17}
   /* Cada folio fijo (1280x720) ocupa EXACTAMENTE su página 16:9 (el @page 16:9 lo inyecta la ruta
      de la hoja de ruta). zoom:1 anula el encoge de fitDeck para que no salga pequeño con blancos. */
   /* Salto ANTES de cada folio (no después): un break-after en un folio que mide justo lo que la
      página hace que Chromium emita un fragmento de continuación vacío (página en negro con solo el
      pie). Con break-before en los folios 2..N y ninguno en la portada, cada folio = 1 página, sin fantasma. */
-  .ruta-deck .slide:not(.slide--auto){zoom:1 !important;width:1280px !important;height:720px !important;margin:0 !important;aspect-ratio:auto;border-radius:0;box-shadow:none;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  /* 708px (no 720=altura exacta de página): Chromium parte la caja por redondeo de píxel y manda el
+     borde inferior (con el pie anclado abajo) a una página en negro. Con ~12px de holgura rellenados
+     por el fondo onyx del deck, el folio nunca se desborda y no se ve ninguna franja. */
+  .ruta-deck .slide:not(.slide--auto){zoom:1 !important;width:1280px !important;height:708px !important;margin:0 !important;aspect-ratio:auto;border-radius:0;box-shadow:none;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .ruta-deck > .slide:not(:first-child){page-break-before:always;break-before:page}
   .ruta-deck > .slide:first-child{page-break-before:avoid;break-before:avoid}
   .ruta-deck .slide--auto{zoom:1 !important;width:1280px !important;margin:0 !important;border-radius:0;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
