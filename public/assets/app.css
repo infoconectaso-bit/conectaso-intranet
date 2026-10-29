@@ -979,7 +979,7 @@ html.night-dim .pie-hole{fill:#1a140a}
   /* 708px (no 720=altura exacta de página): Chromium parte la caja por redondeo de píxel y manda el
      borde inferior (con el pie anclado abajo) a una página en negro. Con ~12px de holgura rellenados
      por el fondo onyx del deck, el folio nunca se desborda y no se ve ninguna franja. */
-  .ruta-deck .slide:not(.slide--auto){zoom:1 !important;width:1280px !important;height:708px !important;margin:0 !important;aspect-ratio:auto;border-radius:0;box-shadow:none;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .ruta-deck .slide:not(.slide--auto){zoom:1 !important;width:1280px !important;height:708px !important;margin:0 !important;aspect-ratio:auto;border-radius:0;box-shadow:none;overflow:hidden;break-inside:avoid !important;page-break-inside:avoid !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .ruta-deck > .slide:not(:first-child){page-break-before:always;break-before:page}
   .ruta-deck > .slide:first-child{page-break-before:avoid;break-before:avoid}
   .ruta-deck .slide--auto{zoom:1 !important;width:1280px !important;margin:0 !important;border-radius:0;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
