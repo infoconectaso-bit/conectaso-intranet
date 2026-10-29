@@ -1870,6 +1870,13 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
       if (!w) return;
       const k = Math.max(0.25, Math.min(1, w / REF_PLANO));
       pv.style.setProperty('--pk', k.toFixed(4));
+      // Cada marca lleva su transform inline (translate + rotate), así que el scale se añade por JS.
+      // Se guarda el transform base en data-bt para poder reaplicar el scale al redimensionar.
+      pv.querySelectorAll('.pm').forEach(m => {
+        let base = m.getAttribute('data-bt');
+        if (base == null) { base = (m.style.transform || 'translate(-50%,-50%)').replace(/\s*scale\([^)]*\)/g, ''); m.setAttribute('data-bt', base); }
+        m.style.transform = base + ' scale(' + k.toFixed(4) + ')';
+      });
     });
   };
   const fitDeck = () => { const deck = document.querySelector('.ruta-deck'); if (!deck) return; const mobile = window.innerWidth <= 820; const avail = deck.clientWidth || (deck.parentElement ? deck.parentElement.clientWidth : 1280); const s = Math.min(1, avail / 1280); deck.querySelectorAll('.slide:not(.slide--auto)').forEach(sl => { sl.style.zoom = mobile ? '' : s; }); fitPlanos(); };
