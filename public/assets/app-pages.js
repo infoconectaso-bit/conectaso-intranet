@@ -4,7 +4,7 @@
    ============================================================================ */
 (function () {
 const CS = window.__CS;
-const { S, api, shell, pageHead, table, refreshTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
+const { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
   estado, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$ } = CS;
 const isAdmin = () => S.user.role === 'admin';
 const el = id => document.getElementById(id);
