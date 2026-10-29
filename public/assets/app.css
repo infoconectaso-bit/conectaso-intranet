@@ -891,7 +891,7 @@ html.night-dim .pie-hole{fill:#1a140a}
 .ln-leg{display:inline-flex;align-items:center;gap:6px}
 .ln-dot{width:11px;height:11px;border-radius:3px;display:inline-block}
 @media(max-width:640px){.pie-wrap{justify-content:center}.pie-svg{width:180px;height:180px}}
-@media print{.sidebar,.topbar,.tabs,.tabs-row,.floatbar,.mtabs{display:none!important}.ruta-row{break-inside:avoid}}
+@media print{.sidebar,.topbar,.tabs,.tabs-row,.floatbar,.mtabs,.page-head,.pdf-toolbar{display:none!important}.ruta-row{break-inside:avoid}}
 
 /* ======== Hoja de ruta · deck apaisado (portado de la demo) ======== */
 .ruta-deck{--onyx:#130F17;--cream:#F9F5E1;--pink:#E82C88;--blue:#31B9CB;--yellow:#F0E85A;--disp:'Outer Sans',system-ui,sans-serif;--body:'Evolve Sans',system-ui,sans-serif;display:flex;flex-direction:column;gap:18px;align-items:flex-start}
