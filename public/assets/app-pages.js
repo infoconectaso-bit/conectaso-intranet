@@ -1882,8 +1882,9 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
     });
   };
   const fitDeck = () => { const deck = document.querySelector('.ruta-deck'); if (!deck) return; const mobile = window.innerWidth <= 820; const avail = deck.clientWidth || (deck.parentElement ? deck.parentElement.clientWidth : 1280); const s = Math.min(1, avail / 1280); deck.querySelectorAll('.slide:not(.slide--auto)').forEach(sl => { sl.style.zoom = mobile ? '' : s; }); fitPlanos(); };
-  // Página del PDF a 16:9 (igual que el folio) para que cada folio llene su hoja sin blancos. Solo
-  // para la hoja de ruta; el PDF de resumen de boda usa su página por defecto.
+  // Modo PDF (render del servidor con ?pdftoken): fuerza el layout de ESCRITORIO (nunca el móvil) y
+  // la página del PDF a 16:9 (igual que el folio) para que cada folio llene su hoja sin blancos.
+  if (/pdftoken=/.test(location.search)) document.documentElement.classList.add('pdf-render');
   if (!document.getElementById('rutaPageSize')) { const ps = document.createElement('style'); ps.id = 'rutaPageSize'; ps.textContent = '@media print{@page{size:338.667mm 190.5mm;margin:0}}'; document.head.appendChild(ps); }
   setTimeout(fitDeck, 30);
   // Reajusta cuando las imágenes del plano terminan de cargar (si no estaban listas al render).
