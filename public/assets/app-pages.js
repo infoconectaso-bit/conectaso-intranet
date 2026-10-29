@@ -1671,6 +1671,8 @@ on(/^#\/parte\/(\d+)$/, async m => {
    ========================================================================= */
 on(/^#\/eventos\/(\d+)\/pdf$/, async m => {
   loading(['Eventos', 'PDF']);
+  // Este PDF usa su página por defecto (no la 16:9 de la hoja de ruta): quita el @page de la ruta.
+  const _rps = document.getElementById('rutaPageSize'); if (_rps) _rps.remove();
   const { event: ev } = await api('events/' + m[1]);
   const NI = '<b>No indicado</b>', val = v => v ? `<b>${esc(v)}</b>` : NI;
   // En el resumen musical: el MOMENTO va en negrita y el título de la canción normal.
@@ -1689,7 +1691,7 @@ on(/^#\/eventos\/(\d+)\/pdf$/, async m => {
   const sp = ev.spouses || [{}, {}];
   const head = `<div class="pdf-head"><img src="assets/brand/logo-principal-azul.svg" alt="Conecta So"><div style="text-align:right;color:#777;font-size:10px">Configuración musical de boda<br>${esc(ev.conyuges)}<br>${dmy(ev.fecha)}</div></div>`;
   shell(`${pageHead('Resumen musical', S.user.role === 'user' ? esc(ev.conyuges || '') : 'Boda #' + ev.id)}
-    <div class="pdf-toolbar"><button class="btn" onclick="window.print()" title="Imprimir en papel">🖨 Imprimir</button> <button class="btn btn--primary" onclick="window.__CS.toast('En el cuadro de impresión, elige el destino: Guardar como PDF','ok');setTimeout(window.print,150)" title="Descargar en PDF: en el cuadro de impresión, elige el destino Guardar como PDF">⬇ Descargar PDF</button></div>
+    <div class="pdf-toolbar"><button class="btn" onclick="window.print()" title="Imprimir en papel">🖨 Imprimir</button> <button class="btn btn--primary" onclick="window.__CS.downloadBodaPdf(${ev.id})" title="Descargar el resumen de la boda en PDF">⬇ Descargar PDF</button></div>
     <div class="pdf-page">${head}<h2>Resumen de configuración musical de boda</h2>
       ${ev.obsPriv && String(ev.obsPriv).trim() ? '<div class="pdf-notice">⚠ Este evento tiene <b>observaciones ocultas</b>. Entra en la intranet para leerlas (no se muestran en este PDF).</div>' : ''}
       <h3>1. Datos previos</h3><div class="pdf-grid">
@@ -1880,6 +1882,9 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
     });
   };
   const fitDeck = () => { const deck = document.querySelector('.ruta-deck'); if (!deck) return; const mobile = window.innerWidth <= 820; const avail = deck.clientWidth || (deck.parentElement ? deck.parentElement.clientWidth : 1280); const s = Math.min(1, avail / 1280); deck.querySelectorAll('.slide:not(.slide--auto)').forEach(sl => { sl.style.zoom = mobile ? '' : s; }); fitPlanos(); };
+  // Página del PDF a 16:9 (igual que el folio) para que cada folio llene su hoja sin blancos. Solo
+  // para la hoja de ruta; el PDF de resumen de boda usa su página por defecto.
+  if (!document.getElementById('rutaPageSize')) { const ps = document.createElement('style'); ps.id = 'rutaPageSize'; ps.textContent = '@media print{@page{size:338.667mm 190.5mm;margin:0}}'; document.head.appendChild(ps); }
   setTimeout(fitDeck, 30);
   // Reajusta cuando las imágenes del plano terminan de cargar (si no estaban listas al render).
   document.querySelectorAll('.ruta-deck .deck-plano img').forEach(im => { if (!im.complete) im.addEventListener('load', () => setTimeout(fitPlanos, 20), { once: true }); });

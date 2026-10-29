@@ -411,6 +411,22 @@ async function api(req, res, url) {
     return res.end(buf);
   }
 
+  // --- PDF general de la boda (resumen de configuración musical). Chromium headless. ---
+  if (seg[0] === 'boda-pdf' && seg[1] && method === 'GET') {
+    const id = +seg[1];
+    const ev = store.get('events', id);
+    if (!ev) return fail(res, 404, 'Evento no encontrado.');
+    // Acceso: admin/dj/planner siempre; el titular o co-titular solo su propia boda.
+    const own = String(ev.userId) === String(user.id) || (ev.coUsers || []).map(String).includes(String(user.id));
+    if (!(user.role === 'admin' || user.role === 'dj' || user.role === 'planner' || own)) return fail(res, 403, 'Sin acceso.');
+    if (!pdf.available()) return fail(res, 503, 'El generador de PDF no está disponible en este servidor.');
+    let buf; try { buf = await pdf.renderBodaPdf(id, user.id); } catch (e) { return fail(res, 500, e.message || 'No se pudo generar el PDF.'); }
+    const cony = String(ev.conyuges || id).normalize('NFKD').replace(/[^\w\- ]+/g, '').replace(/\s+/g, '-').slice(0, 50) || ('' + id);
+    res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="Boda-' + cony + '.pdf"', 'Content-Length': buf.length, 'Cache-Control': 'no-store' });
+    store.audit(user.id, 'boda-pdf', 'events', id);
+    return res.end(buf);
+  }
+
   // --- Hora Loca: inventario y packs (admin). Los QR por pack llevan un token firmado. ---
   if (seg[0] === 'hora-loca') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');

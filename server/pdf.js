@@ -28,18 +28,22 @@ function available() { return !!chromiumBin(); }
  * ASÍNCRONO: Chromium necesita que este mismo servidor conteste sus peticiones mientras renderiza,
  * así que NO se puede bloquear el event loop. Devuelve una promesa.
  */
-function renderRutaPdf(id, userId) {
+function renderRoutePdf(route, userId) {
   return new Promise((resolve, reject) => {
     const bin = chromiumBin();
     if (!bin) return reject(new Error('Generador de PDF no disponible en este servidor.'));
     const port = process.env.PORT || 3000;
     const token = auth.mintSession(userId, 120000);           // sesión efímera (2 min)
-    const outFile = path.join(os.tmpdir(), 'ruta-' + id + '-' + crypto.randomBytes(4).toString('hex') + '.pdf');
+    const outFile = path.join(os.tmpdir(), 'pdf-' + crypto.randomBytes(5).toString('hex') + '.pdf');
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'chr-'));
-    const url = 'http://127.0.0.1:' + port + '/?pdftoken=' + encodeURIComponent(token) + '#/eventos/' + id + '/ruta-doc';
+    const hash = route.charAt(0) === '#' ? route : ('#' + route);
+    const url = 'http://127.0.0.1:' + port + '/?pdftoken=' + encodeURIComponent(token) + hash;
     const args = [
       '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
       '--disable-software-rasterizer', '--hide-scrollbars', '--force-color-profile=srgb',
+      // Ventana ANCHA: si no, la barra lateral encoge el deck y fitDeck lo escala (sale pequeño con
+      // mucho blanco). Con 1800px de ancho el deck se dibuja a tamaño real (1280px, zoom 1).
+      '--window-size=1800,1100', '--force-device-scale-factor=1',
       '--run-all-compositor-stages-before-draw', '--virtual-time-budget=12000',
       '--no-pdf-header-footer', '--user-data-dir=' + profile,
       '--print-to-pdf=' + outFile, url,
@@ -62,4 +66,8 @@ function renderRutaPdf(id, userId) {
   });
 }
 
-module.exports = { renderRutaPdf, available, chromiumBin };
+// Atajos por tipo de documento.
+function renderRutaPdf(id, userId) { return renderRoutePdf('/eventos/' + id + '/ruta-doc', userId); }
+function renderBodaPdf(id, userId) { return renderRoutePdf('/eventos/' + id + '/pdf', userId); }
+
+module.exports = { renderRoutePdf, renderRutaPdf, renderBodaPdf, available, chromiumBin };
