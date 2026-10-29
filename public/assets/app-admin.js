@@ -1055,7 +1055,7 @@ on(/^#\/fotomaton$/, async () => {
     const proxHtml = `
       <p class="hint" style="margin-bottom:12px">Bodas con fotomatón <b>aún sin celebrar</b>. Cuando pase la fecha, pasarán a <b>Realizadas</b> para subir sus fotos.</p>
       <div class="panel"><div class="panel__body">${table('dtFotoProx', { rows: prox, order: [0, 'asc'], filters: true, dense: true, len: 50, cols: colsProx, empty: 'No hay próximas bodas con fotomatón.' })}</div></div>`;
-    shell(`${pageHead('Fotomatón', 'Bodas con fotomatón (servicio, extra o con logo en discoteca) y estado de sus fotos.')}
+    shell(`${pageHead('Fotomatón', 'Bodas con el servicio de fotomatón creado (pestaña Servicios) y estado de sus fotos.')}
       ${tabs}
       <div id="ftReal" style="display:${tab === 'real' ? 'block' : 'none'}">${realHtml}</div>
       <div id="ftProx" style="display:${tab === 'prox' ? 'block' : 'none'}">${proxHtml}</div>`, ['Fotomatón']);

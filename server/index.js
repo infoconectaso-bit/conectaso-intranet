@@ -2307,12 +2307,11 @@ function fotoServiceIds() {
   store.all('extras').forEach(x => { if (x && x.id != null && _fotoNorm(x.name).indexOf('fotomat') >= 0) set.add(x.id); });
   return set;
 }
-// Una boda "lleva fotomatón" si: tiene logo de fotomatón en la pestaña discoteca,
-// tiene el servicio de fotomatón creado, o lo tiene seleccionado como extra.
+// Una boda "lleva fotomatón" SOLO si tiene el servicio de fotomatón creado en la pestaña Servicios.
+// (Antes también contaban el logo de fotomatón de la pestaña discoteca y el extra marcado; Adrià pidió
+//  que NO cuenten: ni el logo ni el extra implican que realmente hagamos nosotros el fotomatón.)
 function eventHasFotomaton(ev, fids) {
   if (!ev) return false;
-  if (ev.disco && ev.disco.fotoLogo) return true;
-  if (ev.extras && Object.keys(ev.extras).some(k => ev.extras[k] && _fotoNorm(k).indexOf('fotomat') >= 0)) return true;
   const ids = fids || fotoServiceIds();
   return Array.isArray(ev.services) && ev.services.some(s => s && ids.has(s.servicio));
 }
