@@ -1249,7 +1249,7 @@ async function renderNominas(uid, admin, workers) {
     if (admin && !future) return `<button class="nom-tile nom-tile--empty" data-nomup="${k}" data-nomdrop="${k}" title="Subir la nómina de ${mn} ${Y}"><span class="nom-tile__m">${mn}</span><span class="nom-plus">+</span><span class="nom-tile__hint">Subir o arrastrar PDF</span></button>`;
     return `<div class="nom-tile nom-tile--empty${future ? ' nom-tile--future' : ''}"><span class="nom-tile__m">${mn}</span><span class="nom-tile__hint">${future ? '' : 'Sin nómina'}</span></div>`;
   }).join('');
-  shell(`${pageHead('Nóminas', admin ? 'Elige un trabajador y un año. Pulsa un mes vacío para subir su nómina.' : 'Tus nóminas por año. Pulsa un mes para verla o descargarla.')}
+  shell(`${pageHead(admin ? 'Facturación equipo' : 'Nóminas', admin ? 'Elige un trabajador y un año. Pulsa un mes vacío para subir su nómina.' : 'Tus nóminas por año. Pulsa un mes para verla o descargarla.')}${admin ? facturacionTabs('nom') : ''}
     ${chips}${hero}${tabs}<div class="nom-grid">${tiles}</div>
     <input type="file" id="nomFile" accept="application/pdf,image/*" style="display:none">`, ['Nóminas']);
 
@@ -1303,12 +1303,20 @@ on(/^#\/cobros$/, async () => {
       { t: 'Pendiente', get: r => r.pend, html: r => `<b>${fmtEur(r.pend)}</b>` },
     ] }) : '<div class="empty"><span class="script">Sin cobros</span>No hay bodas con pago pendiente esta semana.</div>'}</div></div>`, ['Cobros de la semana']);
 });
+// Barra de dos pestañas que agrupa Facturación equipo + Nóminas (solo admin), para no tener
+// dos entradas sueltas en el menú lateral.
+function facturacionTabs(active) {
+  return `<div class="mtabs" style="margin:-2px 0 16px">
+    <a class="mtab${active === 'fact' ? ' on' : ''}" href="#/facturacion">💶 Facturación</a>
+    <a class="mtab${active === 'nom' ? ' on' : ''}" href="#/nominas">📄 Nóminas</a>
+  </div>`;
+}
 on(/^#\/facturacion$/, async () => {
   if (!requireAdmin()) return; loading(['Facturación']);
   const { workers } = await api('finance/workers');
   const totalPend = (workers || []).reduce((t, w) => t + (+w.pend || 0), 0);
   const nPend = (workers || []).filter(w => (+w.pend || 0) > 0).length;
-  shell(`${pageHead('Facturación del equipo', 'Pendiente de pago por trabajador.')}
+  shell(`${pageHead('Facturación equipo', 'Pendiente de pago por trabajador.')}${facturacionTabs('fact')}
     <div class="grid-3" style="margin-bottom:14px">
       <div class="stat stat--pink"><div class="k">Total pendiente de pago</div><div class="v">${fmtEur(totalPend)}</div></div>
       <div class="stat stat--blue"><div class="k">Trabajadores con pendiente</div><div class="v">${nPend}</div></div>

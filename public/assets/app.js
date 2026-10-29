@@ -572,7 +572,7 @@ function navFor(role) {
     { t: 'Servicios extras', i: 'extras', h: '#/extras' },
     { t: 'Fotomatón', i: 'camera', h: '#/fotomaton' },
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
-    { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' }, { t: 'Nóminas', i: 'doc', h: '#/nominas' },
+    { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' },
     { s: 'Negocio' }, { t: 'Cobros de la semana', i: 'euro', h: '#/cobros' }, { t: 'Impagos', i: 'euro', h: '#/impagos' }, { t: 'Descuadre facturas', i: 'euro', h: '#/descuadres' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
     { t: 'Copias de seguridad', i: 'doc', h: '#/backups' },
     { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Inventario Hora Loca', i: 'extras', h: '#/hora-loca' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
