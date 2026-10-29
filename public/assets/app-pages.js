@@ -1797,7 +1797,8 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
         </div>
         <div class="card cover-norm"><h3>Normativa interna <span class="ic">📋</span></h3>
           <div class="norm-list">
-            <div class="nvc"><b>👔 Uniformidad</b><span>Ropa negra + camiseta/sudadera Conecta So, calzado cerrado. Nada de corto, chándal ni roturas.</span></div>
+            <div class="nvc"><b>👕 Uniformidad técnico</b><span>Ropa negra + camiseta/sudadera Conecta So, calzado cerrado. Nada de corto, chándal ni roturas.</span></div>
+            <div class="nvc"><b>🎧 Uniformidad DJ</b><span>Polo o camisa con logo Conecta. Calzado cerrado, nada de corto ni roturas.</span></div>
             <div class="nvc"><b>🔧 Montaje y seguridad</b><span>Todo montado y recogido antes de la llegada de invitados. Cableado fijado y tapado. Altura: solo autorizados.</span></div>
             <div class="nvc"><b>🤝 Conducta</b><span>No compartir fotos ni datos. Trato discreto y respetuoso. Sin alcohol ni tabaco en zonas visibles.</span></div>
             <div class="nvc"><b>📦 Material y cierre</b><span>Orden; cajas vacías ocultas. Averías: marcar "NO FUNCIONA". Revisar restos de cinta al cerrar.</span></div>
