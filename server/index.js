@@ -34,6 +34,7 @@ const fact = require('./facturacion');
 const { evFinished, evRealized } = require('./time');
 const volcado = require('./volcado');
 const holded = require('./holded');
+const horaloca = require('./horaloca');
 const spotify = require('./spotify');
 const backup = require('./backup');
 const cloudBackup = require('./cloud-backup');
@@ -335,6 +336,29 @@ async function api(req, res, url) {
     return ok(res, { ok: true });
   }
 
+  // --- Hora Loca: QR público (token FIRMADO; sin sesión, solo descuenta ESE pack, nada más) ---
+  if (seg[0] === 'hl') {
+    if (seg[1] === 'scan' && method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(horaloca.scanPage());
+    }
+    if (seg[1] === 'peek' && method === 'POST') {
+      const b = await readBody(req).catch(() => ({}));
+      const pack = horaloca.verifyToken(b.token, store);
+      if (!pack) return ok(res, { ok: false, error: 'Enlace no válido' });
+      return ok(res, Object.assign({ ok: true }, horaloca.packView(pack, store)));
+    }
+    if (seg[1] === 'consume' && method === 'POST') {
+      const b = await readBody(req).catch(() => ({}));
+      const pack = horaloca.verifyToken(b.token, store);
+      if (!pack) return ok(res, { ok: false, error: 'Enlace no válido' });
+      const r = horaloca.consume(pack, store);
+      store.audit(null, 'hl-consume', 'horaloca', pack.id);
+      return ok(res, r);
+    }
+    return fail(res, 404, 'Ruta no encontrada');
+  }
+
   if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
 
   // Modo mantenimiento: durante una actualización, los usuarios bloqueados (todos, o todos menos
@@ -372,6 +396,31 @@ async function api(req, res, url) {
   }
 
   // --- metadatos (catálogos para la interfaz) ---
+  // --- Hora Loca: inventario y packs (admin). Los QR por pack llevan un token firmado. ---
+  if (seg[0] === 'hora-loca') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const proto = (req.headers['x-forwarded-proto'] === 'https' || req.socket.encrypted) ? 'https' : 'http';
+    const base = proto + '://' + (req.headers.host || '') + '/api/hl/scan?t=';
+    if (method === 'GET') {
+      const st = horaloca.state(store);
+      const packs = st.packs.map(p => { const tok = horaloca.tokenFor(p.id, store); return Object.assign({}, p, { token: tok, qrUrl: base + encodeURIComponent(tok) }); });
+      return ok(res, { items: st.items, packs, scanBase: base });
+    }
+    if (method === 'POST' && seg[1] === 'stock') {
+      const b = await readBody(req);
+      const r = horaloca.adjust(store, b.id, b.delta, b.qty);
+      store.audit(user.id, 'hl-stock', 'horaloca', String(b.id || ''));
+      return ok(res, r);
+    }
+    if (method === 'POST') {
+      const b = await readBody(req);
+      const st = horaloca.save(store, b);
+      store.audit(user.id, 'hl-save');
+      return ok(res, st);
+    }
+    return fail(res, 404, 'Ruta no encontrada');
+  }
+
   if (seg[0] === 'meta' && method === 'GET') return ok(res, meta(user));
   if (seg[0] === 'brand' && method === 'GET') return ok(res, store.setting('brand') || {});
 

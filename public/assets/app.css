@@ -1232,3 +1232,16 @@ html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok
 .mh-li__v b{color:var(--ink)}
 html.night-dim .parte-alert{background:#2a2312}
 html.night-dim .parte-row,html.night-dim .dj-hx-strip{background:#221c15}
+
+/* --- Inventario Hora Loca --- */
+.hl-stock{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.hl-qty{width:84px!important;text-align:center}
+.hl-neg{color:var(--red,#D50000);font-weight:800}
+.hl-packs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.hl-pack{display:flex;gap:14px;align-items:center;border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--white,#fff)}
+.hl-pack__qr{flex:none;width:118px;height:118px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.hl-pack__qr img,.hl-pack__qr canvas{display:block;width:118px;height:118px}
+.hl-pack__info{min-width:0}
+.hl-pack__info h4{margin:0 0 6px;font-size:15px;font-family:var(--display,inherit)}
+.hl-pack__info .hint{font-size:12px;line-height:1.5}
+@media print{.hl-pack{break-inside:avoid}.hl-pack__info .hint{color:#333}}

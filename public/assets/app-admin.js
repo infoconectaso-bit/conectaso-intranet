@@ -1124,6 +1124,70 @@ on(/^#\/fotomaton$/, async () => {
   draw();
 });
 
+/* =========================================================================
+   INVENTARIO HORA LOCA: stock con +/- y packs por invitados con QR.
+   El QR lleva un token firmado que SOLO descuenta ese pack (sin login).
+   ========================================================================= */
+on(/^#\/hora-loca$/, async () => {
+  if (!isAdmin()) { location.hash = '#/'; return; }
+  let data = { items: [], packs: [], scanBase: '' };
+  const nameOf = id => (data.items.find(x => x.id === id) || {}).name || id;
+
+  const adjust = async (id, delta, qty) => {
+    try {
+      const body = (qty != null) ? { id, qty } : { id, delta };
+      const r = await api('hora-loca/stock', { method: 'POST', body });
+      const it = data.items.find(x => x.id === id); if (it) it.qty = r.qty;
+      const inp = document.querySelector('[data-item="' + id + '"] .hl-qty'); if (inp) inp.value = r.qty;
+      inp && inp.classList.toggle('hl-neg', (+r.qty || 0) < 0);
+    } catch (e) { toast(e.message || 'Error', 'err'); }
+  };
+
+  function draw() {
+    const items = data.items || [], packs = data.packs || [];
+    const itemRow = it => `<tr data-item="${esc(it.id)}">
+      <td><b>${esc(it.name)}</b></td>
+      <td><div class="hl-stock">
+        <button class="btn btn--xs" data-delta="-10" title="Restar 10">−10</button>
+        <button class="btn btn--xs" data-delta="-1" title="Restar 1">−</button>
+        <input type="number" class="control hl-qty ${(+it.qty || 0) < 0 ? 'hl-neg' : ''}" value="${+it.qty || 0}">
+        <button class="btn btn--xs" data-delta="1" title="Sumar 1">+</button>
+        <button class="btn btn--xs" data-delta="10" title="Sumar 10">+10</button>
+      </div></td></tr>`;
+    const invHtml = `<div class="panel"><div class="panel__head"><h3>📦 Stock actual</h3></div>
+      <div class="panel__body"><p class="hint" style="margin-bottom:10px">Suma o resta con los botones, o escribe la cantidad y pulsa Enter / sal del campo. Cuando compres material, lo añades aquí a mano.</p>
+      <div class="table-wrap"><table class="dt"><thead><tr><th>Artículo</th><th>Cantidad en stock</th></tr></thead><tbody>${items.map(itemRow).join('')}</tbody></table></div></div></div>`;
+
+    const packCard = p => {
+      const lines = Object.keys(p.bom || {}).map(id => `${p.bom[id]}× ${esc(nameOf(id))}`).join(' · ');
+      return `<div class="hl-pack"><div class="hl-pack__qr" data-qr="${esc(p.qrUrl || '')}"></div>
+        <div class="hl-pack__info"><h4>${esc(p.label)}</h4><p class="hint">${lines}</p></div></div>`;
+    };
+    const packsHtml = `<div class="panel"><div class="panel__head"><h3>🎉 Packs por nº de invitados · QR</h3><button class="btn btn--sm btn--primary" id="hlPrint">🖨 Imprimir QRs</button></div>
+      <div class="panel__body"><p class="hint" style="margin-bottom:12px">Imprime estos QR y pégalos en las cajas / hojas de montaje. Al escanearlos con el móvil se <b>descuenta ese pack del stock</b>, sin tener que entrar en la intranet y sin dar acceso a nada más.</p>
+      <div class="hl-packs">${packs.map(packCard).join('')}</div></div></div>`;
+
+    shell(`${pageHead('Inventario Hora Loca', 'Material de Hora Loca: stock con +/− y packs por nº de invitados con su QR.')}
+      ${invHtml}${packsHtml}`, ['Inventario Hora Loca']);
+
+    // Render de los QR (librería local qrcode.min.js)
+    $$('[data-qr]').forEach(box => {
+      const url = box.dataset.qr; box.innerHTML = '';
+      if (url && window.QRCode) { try { new QRCode(box, { text: url, width: 118, height: 118, correctLevel: QRCode.CorrectLevel.M }); } catch (e) { box.textContent = 'QR'; } }
+    });
+    // Botones de stock
+    $$('[data-item]').forEach(tr => {
+      const id = tr.dataset.item;
+      $$('[data-delta]', tr).forEach(b => b.onclick = () => adjust(id, +b.dataset.delta));
+      const inp = tr.querySelector('.hl-qty'); if (inp) inp.onchange = () => adjust(id, null, Math.round(+inp.value || 0));
+    });
+    const pb = el('hlPrint'); if (pb) pb.onclick = () => window.print();
+  }
+
+  try { data = await api('hora-loca'); } catch (e) { data = { items: [], packs: [] }; }
+  draw();
+});
+
 on(/^#\/nominas$/, async () => {
   // Acceso a nóminas: SOLO administración y DJ/técnicos (sus propias). Wedding planner y
   // cliente NUNCA tienen acceso a nóminas.

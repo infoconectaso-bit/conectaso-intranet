@@ -575,7 +575,7 @@ function navFor(role) {
     { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' }, { t: 'Nóminas', i: 'doc', h: '#/nominas' },
     { s: 'Negocio' }, { t: 'Cobros de la semana', i: 'euro', h: '#/cobros' }, { t: 'Impagos', i: 'euro', h: '#/impagos' }, { t: 'Descuadre facturas', i: 'euro', h: '#/descuadres' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
     { t: 'Copias de seguridad', i: 'doc', h: '#/backups' },
-    { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
+    { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Inventario Hora Loca', i: 'extras', h: '#/hora-loca' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
     // Papelera y Beneficios se han movido a "Mi cuenta → Configuración avanzada" (protegidos con contraseña).
   ];
   if (role === 'dj') {
