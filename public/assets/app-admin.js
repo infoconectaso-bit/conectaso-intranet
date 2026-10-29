@@ -1010,26 +1010,31 @@ on(/^#\/fotomaton$/, async () => {
     const subidas = real.filter(e => e.uploaded).length;
 
     const estadoReal = e => e.hasLink ? '<span class="tag tag--green">✓ Fotos subidas</span>'
-      : (e.legacy ? '<span class="tag tag--green">✓ Ya entregadas</span>'
-        : '<span class="tag tag--red">⬆ Pendiente de subir</span>');
+      : (e.externo ? '<span class="tag tag--blue">🏢 Empresa externa</span>'
+        : (e.legacy ? '<span class="tag tag--green">✓ Ya entregadas</span>'
+          : '<span class="tag tag--red">⬆ Pendiente de subir</span>'));
     const colFecha = { t: 'Fecha', get: i => i.fecha || '', html: i => `<b>${esc(slash(i.fecha) || '—')}</b>` };
     const colBoda = { t: 'Boda', get: i => i.conyuges || '', html: i => `<a href="#/eventos/${i.id}" title="Abrir la boda">${esc(i.conyuges || '—')}</a><div class="hint">#${i.id}</div>` };
     const colLugar = { t: 'Lugar', get: i => i.lugar || '', html: i => esc(i.lugar || '—') };
     const colDj = { t: 'DJ', get: i => i.djName || '', html: i => esc(i.djName || '—') };
     const colsReal = [
       colFecha, colBoda, colLugar, colDj,
-      { t: 'Estado', get: i => i.hasLink ? 2 : (i.legacy ? 1 : 0), html: estadoReal },
+      { t: 'Estado', get: i => i.hasLink ? 3 : (i.externo ? 2 : (i.legacy ? 1 : 0)), html: estadoReal },
       { t: 'Galería', nosort: true, nofilter: true, html: i => i.fotosLink
         ? `<a class="btn btn--xs" href="${esc(i.fotosLink)}" target="_blank" rel="noopener" title="Abrir la galería de fotos">🔗 Abrir</a>`
-        : (i.legacy ? '<span class="hint">entregada a mano</span>' : '<span class="hint">— sin enlace —</span>') },
+        : (i.externo ? '<span class="hint">la entrega la empresa externa</span>' : (i.legacy ? '<span class="hint">entregada a mano</span>' : '<span class="hint">— sin enlace —</span>')) },
       { t: 'Email enviado', get: i => i.fotosSentAt || '', html: i => i.fotosSentAt
         ? `<span class="tag tag--green" title="${esc(i.fotosSentAt)}">✓ ${esc(slash(i.fotosSentAt.slice(0, 10)))}</span>`
         : '<span class="hint">—</span>' },
       { t: 'Acciones', nosort: true, nofilter: true, html: i => {
         if (i.legacy && !i.hasLink) return `<button class="btn btn--xs" data-setlink="${i.id}" title="Si quieres, puedes subir también el enlace de esta boda antigua">➕ Enlace</button>`;
         const emails = (i.emails || []).length;
-        return `<button class="btn btn--xs ${i.hasLink ? '' : 'btn--primary'}" data-setlink="${i.id}" title="Pegar o cambiar el enlace de la galería de Google Drive">${i.hasLink ? '✏️ Enlace' : '➕ Añadir enlace'}</button>`
-          + (i.hasLink ? ` <button class="btn btn--xs btn--primary" data-sendmail="${i.id}" title="Enviar el email de fotos listas a los novios"${emails ? '' : ' disabled'}>📧 Enviar aviso${emails ? ` (${emails})` : ''}</button>` : '');
+        let out = `<button class="btn btn--xs ${(i.hasLink || i.externo) ? '' : 'btn--primary'}" data-setlink="${i.id}" title="Pegar o cambiar el enlace de la galería de Google Drive">${i.hasLink ? '✏️ Enlace' : '➕ Añadir enlace'}</button>`;
+        if (i.hasLink) out += ` <button class="btn btn--xs btn--primary" data-sendmail="${i.id}" title="Enviar el email de fotos listas a los novios"${emails ? '' : ' disabled'}>📧 Enviar aviso${emails ? ` (${emails})` : ''}</button>`;
+        if (!i.hasLink) out += i.externo
+          ? ` <button class="btn btn--xs" data-ext="0" data-id="${i.id}" title="Volver a marcar como pendiente de subir enlace">↩︎ Quitar externo</button>`
+          : ` <button class="btn btn--xs" data-ext="1" data-id="${i.id}" title="El fotomatón lo hace una empresa externa que entrega las fotos directamente; no tendremos enlace. Lo saca de pendientes (deja de salir en rojo).">🏢 Empresa externa</button>`;
+        return out;
       } },
     ];
     const colsProx = [
@@ -1045,7 +1050,7 @@ on(/^#\/fotomaton$/, async () => {
         <div class="stat"><div class="k"><span class="foto-stat-dot" style="background:#138a3e"></span>Subidas / entregadas</div><div class="v">${subidas}</div></div>
         <div class="stat"><div class="k">Total realizadas</div><div class="v">${real.length}</div></div>
       </div>
-      <p class="hint" style="margin-bottom:12px">Tras la boda, subes las fotos a una carpeta de Google Drive y pegas aquí el <b>enlace para compartir</b> (➕). La boda pasa a <b>verde</b> y la pareja ya puede descargarlas desde su evento. Con <b>📧 Enviar aviso</b> les llega el email a <b>todos los correos de la boda</b> (titular y pareja invitada); es siempre manual. Las bodas de <b>sept. 2026 hacia atrás</b> se dan por <b>ya entregadas</b> (verde) y no hay que subirlas.</p>
+      <p class="hint" style="margin-bottom:12px">Tras la boda, subes las fotos a una carpeta de Google Drive y pegas aquí el <b>enlace para compartir</b> (➕). La boda pasa a <b>verde</b> y la pareja ya puede descargarlas desde su evento. Con <b>📧 Enviar aviso</b> les llega el email a <b>todos los correos de la boda</b> (titular y pareja invitada); es siempre manual. Las bodas de <b>sept. 2026 hacia atrás</b> se dan por <b>ya entregadas</b> (verde) y no hay que subirlas. Si el fotomatón lo hace una <b>empresa externa</b> que entrega las fotos directamente (no nos pasa enlace), márcala con <b>🏢 Empresa externa</b> y dejará de contar como pendiente (deja de salir en rojo).</p>
       <div class="panel"><div class="panel__body">${table('dtFotoReal', { rows: real, order: [0, 'desc'], filters: true, dense: true, len: 50, cols: colsReal, rowClass: i => i.uploaded ? 'row-ok' : 'row-no', empty: 'Todavía no hay bodas realizadas con fotomatón.' })}</div></div>`;
     const proxHtml = `
       <p class="hint" style="margin-bottom:12px">Bodas con fotomatón <b>aún sin celebrar</b>. Cuando pase la fecha, pasarán a <b>Realizadas</b> para subir sus fotos.</p>
@@ -1101,9 +1106,15 @@ on(/^#\/fotomaton$/, async () => {
         }
       });
     };
+    const setExterno = async (id, externo) => {
+      try { await api('events/' + id + '/fotos-externo', { method: 'POST', body: { externo } }); toast(externo ? '✅ Marcado como empresa externa' : '↩︎ Vuelto a pendiente', 'ok'); }
+      catch (e) { toast(e.message || 'Error', 'err'); return; }
+      draw();
+    };
     const wireFoto = () => {
       $$('[data-setlink]').forEach(b => b.onclick = () => setLink(+b.dataset.setlink));
       $$('[data-sendmail]').forEach(b => b.onclick = () => sendMail(+b.dataset.sendmail));
+      $$('[data-ext]').forEach(b => b.onclick = () => setExterno(+b.dataset.id, b.dataset.ext === '1'));
     };
     bindTable('dtFotoReal', wireFoto);
     bindTable('dtFotoProx', () => {});

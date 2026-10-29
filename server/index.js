@@ -2329,11 +2329,12 @@ function fotomatonList() {
     ids.forEach(uid => { const u = users.get(uid); if (u && u.email && !seen.has(u.email.toLowerCase())) { seen.add(u.email.toLowerCase()); emails.push(u.email); } });
     const fecha = e.fecha || '';
     const hasLink = !!e.fotosLink;
-    const legacy = !hasLink && !!fecha && fecha.slice(0, 10) <= FOTOS_LEGACY_CUTOFF;
+    const externo = !hasLink && !!e.fotosExterno;
+    const legacy = !hasLink && !externo && !!fecha && fecha.slice(0, 10) <= FOTOS_LEGACY_CUTOFF;
     return {
       id: e.id, conyuges: e.conyuges || '', fecha, lugar: finca,
       djName: (users.get(e.djId) || {}).name || '',
-      realized: evRealized(e), hasLink, legacy, uploaded: hasLink || legacy,
+      realized: evRealized(e), hasLink, legacy, externo, uploaded: hasLink || legacy || externo,
       fotosLink: e.fotosLink || '', fotosSentAt: e.fotosSentAt || '', emails,
     };
   }).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
@@ -2598,6 +2599,17 @@ async function events(req, res, user, seg, method, url) {
     if (link) ev.fotosLink = link; else { delete ev.fotosLink; delete ev.fotosSentAt; }
     store.put('events', ev); store.audit(user.id, 'fotos-link', 'events', id);
     return ok(res, { ok: true, fotosLink: ev.fotosLink || '', fotosSentAt: ev.fotosSentAt || '' });
+  }
+  // --- Fotomatón: marcar que lo hace una EMPRESA EXTERNA (no habrá enlace) o deshacerlo (admin) ---
+  // La empresa externa entrega las fotos directamente a la pareja, así que nunca tendremos enlace:
+  // esto saca la boda de "pendientes" para que deje de salir en rojo. Campo propio de la réplica
+  // (fotosExterno): el volcado lo conserva porque no viene de la intranet oficial.
+  if (seg[2] === 'fotos-externo' && method === 'POST') {
+    if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
+    const body = await readBody(req);
+    if (body.externo) ev.fotosExterno = true; else delete ev.fotosExterno;
+    store.put('events', ev); store.audit(user.id, 'fotos-externo', 'events', id);
+    return ok(res, { ok: true, externo: !!ev.fotosExterno });
   }
   // --- Fotomatón: enviar el email de "fotos listas" a TODOS los emails de la boda ---
   // (titular + pareja invitada / co-titulares). Con body.testTo envía solo una prueba a esa
