@@ -527,7 +527,7 @@ function paneRuta(ev) {
   return `${head}
     <p class="hint">Tiempos calculados automáticamente: desplazamiento desde Martorelles a <b>${esc(destName)}</b> (${travel} min${travelKm ? ' · ' + travelKm + ' km' : ''}) y montaje según el tipo de boda: <b>${esc(mt.regla)}</b> (${mt.min} min).</p>
     ${mt.note ? `<div class="alert alert--warn" style="margin-bottom:12px">⚠ ${esc(mt.note)}</div>` : ''}
-    ${ev.vehicleId ? `<div class="ruta-veh"><span class="ruta-veh-ic">🚐</span> <b>Furgoneta asignada:</b> ${esc(vehLabel(ev.vehicleId))}</div>` : ''}
+    ${ev.vehicleId ? `<div class="ruta-veh"><span class="ruta-veh-ic">🚐</span> Furgoneta asignada: <b>${esc(vehLabel(ev.vehicleId))}</b></div>` : ''}
     <div class="ruta">
       ${row('🚗', 'Salida desde Martorelles', hhmm(salida), 'Desplazamiento ' + travel + ' min' + (travelKm ? ' · ' + travelKm + ' km' : ''))}
       ${row('📍', 'Llegada a ' + esc(destName), hhmm(llegada), 'Inicio del montaje')}
