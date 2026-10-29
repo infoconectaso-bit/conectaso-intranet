@@ -279,10 +279,8 @@ async function loadEventInfo(id) {
   let d; try { d = await api('event-weather/' + id); } catch (e) { return; }
   const chip = (html, muted) => `<span style="display:inline-flex;align-items:center;gap:6px;background:${muted ? 'rgba(0,0,0,.04)' : 'rgba(232,44,136,.10)'};color:${muted ? '#7a8392' : 'inherit'};padding:6px 11px;border-radius:999px;font-size:13px;margin:0 8px 8px 0">${html}</span>`;
   const parts = [];
-  if (d.travelKm != null || d.travelMin != null) {
-    const dist = [d.travelKm != null ? d.travelKm + ' km' : '', d.travelMin != null ? d.travelMin + ' min' : ''].filter(Boolean).join(' · ');
-    parts.push(chip(`🚗 ${esc(dist)} desde Martorelles${d.directionLink ? ` · <a href="${esc(d.directionLink)}" target="_blank" rel="noopener">Cómo llegar</a>` : ''}`));
-  }
+  // La distancia/desplazamiento ya se muestra en la sección "Lugar de la celebración"
+  // (con enlace a Google Maps), así que no se repite aquí arriba.
   if (d.weather) {
     const w = d.weather, wm = WMO[w.code] || ['🌡️', ''];
     parts.push(chip(`${wm[0]} ${w.tmax}° / ${w.tmin}°${wm[1] ? ' · ' + wm[1] : ''}${w.precip != null ? ' · 💧 ' + w.precip + '%' : ''}`));
@@ -591,7 +589,7 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
       ${fg('DNI', inp(p + '_spouse_dni', s.dni, ro))}
       ${fg(`<span class="fld-ic">${svg('mail')}</span>Email`, inp(p + '_spouse_email', s.email, { type: 'email', ...ro }))}
       ${fg(`<span class="fld-ic">${svg('phone')}</span>Móvil`, inp(p + '_spouse_mobile', s.mobile, ro))}
-      ${fg('📷 Instagram', inp(p + '_spouse_instagram', s.instagram, ro))}
+      ${fg(`<span class="fld-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg></span>Instagram`, inp(p + '_spouse_instagram', s.instagram, ro))}
       ${fg('Dirección', inp(p + '_spouse_address', s.address, ro))}</div></div>`; }).join('')}
   </div></div></div>` : ''}`;
 }
