@@ -973,8 +973,13 @@ html.night-dim .pie-hole{fill:#1a140a}
   .ruta-deck{gap:0 !important;display:block !important}
   /* Cada folio fijo (1280x720) ocupa EXACTAMENTE su página 16:9 (el @page 16:9 lo inyecta la ruta
      de la hoja de ruta). zoom:1 anula el encoge de fitDeck para que no salga pequeño con blancos. */
-  .ruta-deck .slide:not(.slide--auto){zoom:1 !important;width:1280px !important;height:720px !important;margin:0 !important;aspect-ratio:auto;border-radius:0;box-shadow:none;overflow:hidden;page-break-after:always;break-after:page;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .ruta-deck .slide--auto{zoom:1 !important;width:1280px !important;margin:0 !important;border-radius:0;box-shadow:none;page-break-before:always;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  /* Salto ANTES de cada folio (no después): un break-after en un folio que mide justo lo que la
+     página hace que Chromium emita un fragmento de continuación vacío (página en negro con solo el
+     pie). Con break-before en los folios 2..N y ninguno en la portada, cada folio = 1 página, sin fantasma. */
+  .ruta-deck .slide:not(.slide--auto){zoom:1 !important;width:1280px !important;height:720px !important;margin:0 !important;aspect-ratio:auto;border-radius:0;box-shadow:none;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .ruta-deck > .slide:not(:first-child){page-break-before:always;break-before:page}
+  .ruta-deck > .slide:first-child{page-break-before:avoid;break-before:avoid}
+  .ruta-deck .slide--auto{zoom:1 !important;width:1280px !important;margin:0 !important;border-radius:0;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .ruta-deck .slide *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 
