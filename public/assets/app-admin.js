@@ -820,7 +820,7 @@ const NOM_MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio
 on(/^#\/impagos$/, async () => {
   if (!isAdmin()) { location.hash = '#/'; return; }
   const eur = n => (Math.round((+n || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-  const ignoreImp = async (invId, ignore) => { try { await api('holded-unpaid/ignore', { method: 'POST', body: { invId, ignore } }); toast(ignore ? 'Quitada de impagos' : 'Restaurada a impagos', 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };
+  const ignoreImp = async (invId, ignore, rowEl) => { if (rowEl) rowEl.style.display = 'none'; try { await api('holded-unpaid/ignore', { method: 'POST', body: { invId, ignore } }); toast(ignore ? 'Quitada de impagos' : 'Restaurada a impagos', 'ok'); draw(); } catch (e) { if (rowEl) rowEl.style.display = ''; toast(e.message || 'Error', 'err'); } };
   async function draw() {
     loading(['Impagos']);
     const r = await api('holded-unpaid').catch(() => ({ invoices: [] }));
@@ -848,8 +848,8 @@ on(/^#\/impagos$/, async () => {
     shell(`${pageHead('Impagos', `${invs.length} factura(s) pendiente(s)${overdueN ? ` · ${overdueN} vencida(s)` : ''} · ${eur(totalPend)} por cobrar`)}
       <div class="panel"><div class="panel__body">${table('dtImpagos', { rows: invs, order: [0, 'asc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas pendientes. 🎉' })}</div></div>
       ${igPanel}`, ['Impagos']);
-    bindTable('dtImpagos', () => { $$('[data-ignore-imp]').forEach(b => b.onclick = () => ignoreImp(b.dataset.ignoreImp, true)); });
-    bindTable('dtImpIgn', () => { $$('[data-restore-imp]').forEach(b => b.onclick = () => ignoreImp(b.dataset.restoreImp, false)); });
+    bindTable('dtImpagos', () => { $$('[data-ignore-imp]').forEach(b => b.onclick = () => ignoreImp(b.dataset.ignoreImp, true, b.closest('tr'))); });
+    bindTable('dtImpIgn', () => { $$('[data-restore-imp]').forEach(b => b.onclick = () => ignoreImp(b.dataset.restoreImp, false, b.closest('tr'))); });
   }
   draw();
 });
