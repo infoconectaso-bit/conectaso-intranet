@@ -1858,8 +1858,24 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
     </div>`, ['Eventos', '#' + ev.id, 'Hoja de ruta']);
   // Escala las slides fijas (1280×720) para que quepan; la escaleta musical (.slide--auto) NO se
   // escala con zoom (iOS la renderiza mal): es responsive por sí misma y refluye en móvil.
-  const fitDeck = () => { const deck = document.querySelector('.ruta-deck'); if (!deck) return; const mobile = window.innerWidth <= 820; const avail = deck.clientWidth || (deck.parentElement ? deck.parentElement.clientWidth : 1280); const s = Math.min(1, avail / 1280); deck.querySelectorAll('.slide:not(.slide--auto)').forEach(sl => { sl.style.zoom = mobile ? '' : s; }); };
+  // Escala los iconos del plano en proporción al ancho real del deck (el editor es ~850px, donde se
+  // colocan). Así, en un plano más pequeño, los iconos encogen y no se solapan; su posición en % no
+  // cambia. Se hace sobre la medida en "espacio de slide" (dividiendo por el zoom de la slide).
+  const REF_PLANO = 850;
+  const fitPlanos = () => {
+    document.querySelectorAll('.ruta-deck .deck-plano .plan-view').forEach(pv => {
+      const img = pv.querySelector('img'); if (!img) { pv.style.removeProperty('--pk'); return; }
+      const slide = pv.closest('.slide'); const sz = slide ? (parseFloat(getComputedStyle(slide).zoom) || 1) : 1;
+      const w = img.getBoundingClientRect().width / (sz || 1);
+      if (!w) return;
+      const k = Math.max(0.25, Math.min(1, w / REF_PLANO));
+      pv.style.setProperty('--pk', k.toFixed(4));
+    });
+  };
+  const fitDeck = () => { const deck = document.querySelector('.ruta-deck'); if (!deck) return; const mobile = window.innerWidth <= 820; const avail = deck.clientWidth || (deck.parentElement ? deck.parentElement.clientWidth : 1280); const s = Math.min(1, avail / 1280); deck.querySelectorAll('.slide:not(.slide--auto)').forEach(sl => { sl.style.zoom = mobile ? '' : s; }); fitPlanos(); };
   setTimeout(fitDeck, 30);
+  // Reajusta cuando las imágenes del plano terminan de cargar (si no estaban listas al render).
+  document.querySelectorAll('.ruta-deck .deck-plano img').forEach(im => { if (!im.complete) im.addEventListener('load', () => setTimeout(fitPlanos, 20), { once: true }); });
   if (!window.__rutaFitBound) { window.__rutaFitBound = true; window.addEventListener('resize', () => { clearTimeout(window.__rutaFitT); window.__rutaFitT = setTimeout(fitDeck, 120); }); }
 });
 
