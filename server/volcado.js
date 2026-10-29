@@ -722,6 +722,37 @@ async function handle(req, res, seg, method, url) {
       return send(res, 200, { ok: true, q: body.text, hits: out });
     }
 
+    // PRUEBA DE RESTAURAR UNA COPIA: copia el backup a un archivo TEMPORAL aparte, lo abre como BD,
+    // comprueba integridad y recuentos, y borra el temporal. No toca la BD viva ni la copia original,
+    // y no deja nada. Sirve para confirmar que las copias de seguridad son restaurables.
+    if (action === 'backup-verify') {
+      const fs = require('fs'); const os = require('os'); const backup = require('./backup'); const dbm = require('./db');
+      const { DatabaseSync } = require('node:sqlite');
+      const items = backup.list();
+      const name = body.name || (items[0] && items[0].name);
+      const file = backup.fileFor(name);
+      if (!file) return send(res, 200, { ok: false, error: 'copia no encontrada: ' + name });
+      const tmp = path.join(os.tmpdir(), 'verify-' + Date.now() + '.db');
+      let r = {};
+      try {
+        fs.copyFileSync(file, tmp);  // COPIA APARTE
+        const d2 = new DatabaseSync(tmp);
+        const integ = d2.prepare('PRAGMA integrity_check').get();
+        const tables = d2.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(x => x.name);
+        const counts = {}; tables.forEach(t => { try { counts[t] = d2.prepare('SELECT COUNT(*) n FROM "' + t + '"').get().n; } catch (e) { counts[t] = 'err'; } });
+        let eventos = null, usuarios = null, fincas = null;
+        try { eventos = d2.prepare("SELECT COUNT(*) n FROM records WHERE collection='events'").get().n; } catch (e) { }
+        try { usuarios = d2.prepare('SELECT COUNT(*) n FROM users').get().n; } catch (e) { }
+        try { fincas = d2.prepare("SELECT COUNT(*) n FROM records WHERE collection='locations'").get().n; } catch (e) { }
+        d2.close();
+        r = { integridad: (integ && (integ.integrity_check || JSON.stringify(integ))), nTablas: tables.length, counts, eventosEnCopia: eventos, usuariosEnCopia: usuarios, fincasEnCopia: fincas };
+      } catch (e) { r = { error: 'no se pudo abrir/restaurar: ' + e.message }; }
+      try { fs.unlinkSync(tmp); } catch (e) { }   // no se mantiene nada
+      const vivos = { eventos: dbm.store.all('events').length, usuarios: dbm.users.all().length, fincas: dbm.store.all('locations').length };
+      const cuadra = r.eventosEnCopia != null && Math.abs((r.eventosEnCopia || 0) - vivos.eventos) <= 5;
+      return send(res, 200, { ok: true, copia: name, copiaInfo: items.find(i => i.name === name) || null, verificacion: r, vivos, cuadra });
+    }
+
     // Gestiona la lista de exclusión FIJA del volcado (ids que no se deben traer nunca).
     if (action === 'set-exclude') {
       const store = dbm0.store;
