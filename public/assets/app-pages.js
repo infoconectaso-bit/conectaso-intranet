@@ -1689,7 +1689,7 @@ on(/^#\/eventos\/(\d+)\/pdf$/, async m => {
   const sp = ev.spouses || [{}, {}];
   const head = `<div class="pdf-head"><img src="assets/brand/logo-principal-azul.svg" alt="Conecta So"><div style="text-align:right;color:#777;font-size:10px">Configuración musical de boda<br>${esc(ev.conyuges)}<br>${dmy(ev.fecha)}</div></div>`;
   shell(`${pageHead('Resumen musical', S.user.role === 'user' ? esc(ev.conyuges || '') : 'Boda #' + ev.id)}
-    <div class="pdf-toolbar"><button class="btn btn--primary" onclick="window.print()">Imprimir / Guardar PDF</button></div>
+    <div class="pdf-toolbar"><button class="btn" onclick="window.print()" title="Imprimir en papel">🖨 Imprimir</button> <button class="btn btn--primary" onclick="window.__CS.toast('En el cuadro de impresión, elige el destino: Guardar como PDF','ok');setTimeout(window.print,150)" title="Descargar en PDF: en el cuadro de impresión, elige el destino Guardar como PDF">⬇ Descargar PDF</button></div>
     <div class="pdf-page">${head}<h2>Resumen de configuración musical de boda</h2>
       ${ev.obsPriv && String(ev.obsPriv).trim() ? '<div class="pdf-notice">⚠ Este evento tiene <b>observaciones ocultas</b>. Entra en la intranet para leerlas (no se muestran en este PDF).</div>' : ''}
       <h3>1. Datos previos</h3><div class="pdf-grid">
@@ -1777,7 +1777,7 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
   let pageNo = 1;
   const pg = () => ('0' + (++pageNo)).slice(-2);
   shell(`${pageHead('Hoja de ruta', 'Boda #' + ev.id)}
-    <div class="pdf-toolbar"><a class="btn" href="#/eventos/${ev.id}">← Volver</a> <button class="btn btn--primary" onclick="window.print()">Imprimir / Guardar PDF</button></div>
+    <div class="pdf-toolbar"><a class="btn" href="#/eventos/${ev.id}">← Volver</a> <button class="btn" onclick="window.print()" title="Imprimir la hoja de ruta en papel">🖨 Imprimir</button> <button class="btn btn--primary" onclick="window.__CS.toast('En el cuadro de impresión, elige el destino: Guardar como PDF','ok');setTimeout(window.print,150)" title="Descargar en PDF: en el cuadro de impresión, elige el destino Guardar como PDF">⬇ Descargar PDF</button></div>
     <div class="ruta-deck">
 
       <section class="slide dark cover cover--norm">
