@@ -1159,6 +1159,39 @@ html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok
 .ruta-deck .obs-aviso .note-tip{margin-top:0}
 .ruta-deck .slide.page{padding-bottom:110px}
 
+/* --- Hoja de ruta en MÓVIL: folios fluidos, columnas apiladas, sin zoom (antes se recortaba) --- */
+@media (max-width:820px){
+  .pdf-toolbar{flex-wrap:wrap;gap:8px}
+  .ruta-deck{gap:14px;align-items:stretch}
+  .ruta-deck .slide{width:100% !important;height:auto !important;min-height:0 !important;zoom:1 !important;overflow:visible;border-radius:12px;font-size:14px;padding:26px 18px;box-shadow:0 6px 22px rgba(0,0,0,.2)}
+  .ruta-deck .slide.page{padding:26px 18px 22px}
+  .ruta-deck .page>h2,.ruta-deck h2{font-size:26px;margin-bottom:14px}
+  .ruta-deck .cover,.ruta-deck .cover.cover--norm{flex-direction:column !important;align-items:stretch !important;gap:22px !important;padding:30px 20px !important;justify-content:flex-start}
+  .ruta-deck .cover--norm .logo,.ruta-deck .cover .logo{height:46px;margin-bottom:18px;align-self:flex-start}
+  .ruta-deck .cover--norm h1,.ruta-deck .cover h1{font-size:34px;line-height:1;margin-bottom:14px}
+  .ruta-deck .cover--norm .meta,.ruta-deck .cover .meta{font-size:15px;max-width:none;line-height:1.45}
+  .ruta-deck .cover .vinilo,.ruta-deck .cover--norm .vinilo{display:none}
+  .ruta-deck .cover-facts{margin-top:18px;gap:8px}
+  .ruta-deck .cf{min-width:0;flex:1 1 44%}
+  .ruta-deck .cover--norm .cover-norm{flex:none !important;width:auto !important;padding:18px 18px;margin-top:4px}
+  .ruta-deck .resumen-2col,.ruta-deck .grid2,.ruta-deck .grid3,.ruta-deck .plano-zonas-grid{grid-template-columns:1fr !important;height:auto !important;gap:14px !important}
+  .ruta-deck .svc-chips{grid-template-columns:1fr 1fr;gap:8px}
+  .ruta-deck .card{padding:14px 16px}
+  .ruta-deck .card h3{font-size:16px;margin-bottom:10px}
+  .ruta-deck .v{font-size:18px}
+  .ruta-deck .v.sm{font-size:15px}
+  .ruta-deck .tl--compact .hh,.ruta-deck .tl .hh{font-size:17px;width:62px;min-width:62px}
+  .ruta-deck .tl--compact .lbl{font-size:14px}
+  .ruta-deck .deck-plano .plan-view,.ruta-deck .plano-zonas-grid .deck-plano{max-height:240px}
+  .ruta-deck .mapbox{height:auto;padding:30px 20px}
+  .ruta-deck .wm{position:static;display:block;margin:18px auto 0;height:22px;opacity:.5}
+  .ruta-deck .pg{position:static;display:block;text-align:right;margin-top:6px;opacity:.4}
+  .ruta-deck .slide.light{padding:26px 16px !important}
+  .ruta-deck .esc{font-size:13px}
+  .ruta-deck .esc .notes{width:auto}
+  .ruta-deck .esc th,.ruta-deck .esc td{padding:5px 8px}
+}
+
 /* Análisis: gráficos más compactos */
 .pie-svg{width:170px;height:170px}
 .pie-wrap{gap:16px}
