@@ -576,7 +576,6 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
     ${fg('Lugar de la celebración', sel('celebration_location', locOpts, ev.lugar === 0 && ev.lugarOtro ? 'otro' : ev.lugar, roSel + ' data-search') + `<div id="otroWrap" style="margin-top:8px;display:${(!ev.lugar && ev.lugarOtro) ? 'block' : 'none'}">${inp('celebration_location_other', ev.lugarOtro, { ph: 'Indica el lugar', ...ro })}</div>` + travelInfo(ev))}
     ${fg('Lugar de la ceremonia', inp('wedding_location', ev.lugarCeremonia, roH))}
     ${fg(tt('Ceremonia fuera del lugar de la celebración', 'Cerimònia fora del lloc de la celebració', 'Ceremony away from the venue', 'Cérémonie hors du lieu de réception'), `<label class="chk"><input type="checkbox" name="ceremony_outside" ${ev.ceremoniaFuera ? 'checked' : ''} ${(readonly && !horariosEditable) ? 'disabled' : ''}> <span>${tt('Marca si la ceremonia se celebra fuera de la finca (no realizamos la sonorización de ceremonia)', 'Marca si la cerimònia se celebra fora de la finca (no fem la sonorització de cerimònia)', 'Tick if the ceremony is held away from the venue (we do not provide ceremony sound)', 'Cochez si la cérémonie a lieu hors du lieu (nous ne sonorisons pas la cérémonie)')}</span></label>`)}
-    ${fg(tt('Ceremonia religiosa', 'Cerimònia religiosa', 'Religious ceremony', 'Cérémonie religieuse'), `<label class="chk"><input type="checkbox" name="religious_celebration" ${ev.religiosa ? 'checked' : ''} ${(readonly && !horariosEditable) ? 'disabled' : ''}> <span>${tt('Marca si la ceremonia es religiosa', 'Marca si la cerimònia és religiosa', 'Tick if the ceremony is religious', 'Cochez si la cérémonie est religieuse')}</span></label>`)}
     ${fg('Nº de invitados', inp('guest_number', ev.guests, { type: 'number', ...roH }))}
     ${(S.user.role === 'user' && ev.djName) ? fg('Vuestro DJ', `<div class="readbox"><b>${esc(ev.djName)}</b></div><p class="hint">Asignación final de vuestro DJ.</p>`) : ''}
     ${isAdmin() ? fg('Observaciones ocultas', ta('privat_observations', ev.obsPriv, 'Solo las ven administración y el DJ')) : (S.user.role === 'dj' && ev.obsPriv !== undefined ? fg('Observaciones ocultas', `<div class="readbox">${esc(ev.obsPriv) || '<span class="muted">Sin observaciones ocultas</span>'}</div>`) : '')}
@@ -593,7 +592,7 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
       ${fg(`<span class="fld-ic">${svg('mail')}</span>Email`, inp(p + '_spouse_email', s.email, { type: 'email', ...ro }))}
       ${fg(`<span class="fld-ic">${svg('phone')}</span>Móvil`, inp(p + '_spouse_mobile', s.mobile, ro))}
       ${fg('📷 Instagram', inp(p + '_spouse_instagram', s.instagram, ro))}
-      ${i === 0 ? fg('Dirección', inp(p + '_spouse_address', s.address, ro)) : ''}</div></div>`; }).join('')}
+      ${fg('Dirección', inp(p + '_spouse_address', s.address, ro))}</div></div>`; }).join('')}
   </div></div></div>` : ''}`;
 }
 
@@ -1522,14 +1521,14 @@ function buildEventPayload(ev, form, { full, role, canEditMusic }) {
       return o;
     }
     const out = { music: readMoments(), optionals: readOpts(), disco: readDisco(), extras: readExtras(), spouses: readSpouses(),
-      guests: d.guest_number, celebrationHour: d.celebration_hour, lugarCeremonia: d.wedding_location, hora: d.wedding_hour, ceremoniaFuera: !!d.ceremony_outside, religiosa: !!d.religious_celebration };
+      guests: d.guest_number, celebrationHour: d.celebration_hour, lugarCeremonia: d.wedding_location, hora: d.wedding_hour, ceremoniaFuera: !!d.ceremony_outside };
     return out;
   }
   // admin: todo
   return {
     tipo: d.wedding_type, fecha: d.wedding_date, hora: d.wedding_hour, celebrationHour: d.celebration_hour,
     lugar: d.celebration_location === 'otro' ? 0 : +d.celebration_location, lugarOtro: d.celebration_location === 'otro' ? d.celebration_location_other : '',
-    lugarCeremonia: d.wedding_location, ceremoniaFuera: !!d.ceremony_outside, religiosa: !!d.religious_celebration, guests: d.guest_number, obsPriv: d.privat_observations,
+    lugarCeremonia: d.wedding_location, ceremoniaFuera: !!d.ceremony_outside, guests: d.guest_number, obsPriv: d.privat_observations,
     metodo: d.payment_method, estado: +d.event_status, pagoCliente: +d.event_total_import || 0, pagado: +d.event_payed_import || 0, pagoRestaurante: +d.event_restaurant_import || 0,
     editUser: d.habilitar_edicion_para_usuario, editUnlock: d.habilitar_edicion_para_usuario,
     djId: +d.dj_vinculated || '', djOvertime: d.dj_assigned_overtime, wpId: +d.wp_vinculated || '',

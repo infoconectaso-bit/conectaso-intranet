@@ -313,4 +313,18 @@ function migrateMaintenanceOwner() {
 }
 try { migrateMaintenanceOwner(); } catch (e) { console.error('[migración] maint-owner:', e.message); }
 
+// Para Conecta So, una ceremonia religiosa ES una ceremonia fuera del lugar (se celebra en
+// iglesia, no sonorizamos la ceremonia). Se unifican en una sola casilla ("ceremonia fuera"):
+// las bodas marcadas como religiosas en el volcado pasan a ceremoniaFuera=true para no perder
+// ese dato. Solo AÑADE (nunca desmarca). Idempotente. El campo 'religiosa' se conserva en el
+// registro por si hiciera falta reconstruirlo.
+function migrateReligiosaToFuera() {
+  if (store.setting('mig_religiosa_fuera')) return;
+  let n = 0;
+  store.all('events').forEach(e => { if (e.religiosa === true && e.ceremoniaFuera !== true) { e.ceremoniaFuera = true; store.put('events', e); n++; } });
+  store.setSetting('mig_religiosa_fuera', true);
+  if (n) console.log('[migración] ' + n + ' bodas religiosas marcadas como "ceremonia fuera".');
+}
+try { migrateReligiosaToFuera(); } catch (e) { console.error('[migración] religiosa-fuera:', e.message); }
+
 module.exports = { db, store, users, transaction, COLLECTIONS, DATA_DIR, DB_PATH };

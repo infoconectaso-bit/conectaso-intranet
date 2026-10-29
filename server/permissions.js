@@ -13,7 +13,7 @@ const STAFF_HIDDEN = ['pagoCliente', 'pagado', 'pagoRestaurante', 'metodo', 'fac
 // vía enrichEvent → djName) cuando faltan menos de 60 días, que es la asignación final.
 const CLIENT_HIDDEN = ['factRows', 'plus', 'obsPriv', 'obsDj', 'totalCost', 'djOvertime', 'opinion', 'pagoRestaurante', 'djId', 'ratesFrozen'];
 // Campos que el cliente puede modificar cuando la edición está habilitada
-const CLIENT_EDITABLE = ['music', 'optionals', 'disco', 'extras', 'spouses', 'guests', 'celebrationHour', 'lugarCeremonia', 'ceremoniaFuera', 'religiosa', 'hora'];
+const CLIENT_EDITABLE = ['music', 'optionals', 'disco', 'extras', 'spouses', 'guests', 'celebrationHour', 'lugarCeremonia', 'ceremoniaFuera', 'hora'];
 // El wedding planner puede modificar lo mismo que el cliente (música, extras, horarios,
 // datos de la boda) EXCEPTO la fecha y el lugar, y sin el bloqueo de 7 días del cliente.
 const PLANNER_EDITABLE = CLIENT_EDITABLE;
