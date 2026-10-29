@@ -64,6 +64,12 @@ function ensureSeed(store) {
   if (!store.setting('hlSecret')) {
     store.setSetting('hlSecret', crypto.randomBytes(24).toString('hex'));
   }
+  // Dominio FIJO de los QR. Se usa prueba.lol porque seguirá apuntando a este mismo servidor
+  // aunque se cambie intranet.conectaso.es al nuevo dominio: así los QR impresos NO hay que
+  // reimprimirlos nunca. Si algún día se quiere otro dominio, basta cambiar este setting.
+  if (!store.setting('hlScanHost')) {
+    store.setSetting('hlScanHost', 'prueba.lol');
+  }
 }
 
 function state(store) {

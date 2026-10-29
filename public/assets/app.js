@@ -1053,5 +1053,22 @@ window.__CS = { S, api, shell, pageHead, table, refreshTable, bindTable, toast, 
   estado, locName, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, tycTitleYear, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$,
   waSupported, passkeyRegister, passkeyLogin, maintenanceMarkup };
 
+// Descarga la hoja de ruta en PDF (generado en el servidor con Chromium headless). Con blob para
+// manejar bien los errores en vez de navegar a una respuesta de error.
+window.__CS.downloadRutaPdf = async function (id) {
+  toast('Generando PDF… (unos segundos)', 'ok');
+  try {
+    const r = await fetch('/api/ruta-pdf/' + id, { cache: 'no-store' });
+    if (!r.ok) { let m = 'No se pudo generar el PDF.'; try { const j = await r.json(); if (j && j.error) m = j.error; } catch (e) {} toast(m, 'err'); return; }
+    const blob = await r.blob();
+    let name = 'Hoja-de-ruta.pdf';
+    const cd = r.headers.get('Content-Disposition') || ''; const mm = /filename="?([^"]+)"?/.exec(cd); if (mm) name = mm[1];
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 5000);
+    toast('PDF descargado ✅', 'ok');
+  } catch (e) { toast('Error generando el PDF.', 'err'); }
+};
+
 boot();
 })();

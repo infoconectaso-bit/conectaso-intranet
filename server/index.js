@@ -35,6 +35,7 @@ const { evFinished, evRealized } = require('./time');
 const volcado = require('./volcado');
 const holded = require('./holded');
 const horaloca = require('./horaloca');
+const pdf = require('./pdf');
 const spotify = require('./spotify');
 const backup = require('./backup');
 const cloudBackup = require('./cloud-backup');
@@ -396,11 +397,27 @@ async function api(req, res, url) {
   }
 
   // --- metadatos (catálogos para la interfaz) ---
+  // --- PDF de la hoja de ruta (Chromium headless en el servidor). Admin o DJ. ---
+  if (seg[0] === 'ruta-pdf' && seg[1] && method === 'GET') {
+    if (!(user.role === 'admin' || user.role === 'dj')) return fail(res, 403, 'Sin acceso.');
+    const id = +seg[1];
+    const ev = store.get('events', id);
+    if (!ev) return fail(res, 404, 'Evento no encontrado.');
+    if (!pdf.available()) return fail(res, 503, 'El generador de PDF no está disponible en este servidor.');
+    let buf; try { buf = await pdf.renderRutaPdf(id, user.id); } catch (e) { return fail(res, 500, e.message || 'No se pudo generar el PDF.'); }
+    const cony = String(ev.conyuges || id).normalize('NFKD').replace(/[^\w\- ]+/g, '').replace(/\s+/g, '-').slice(0, 50) || ('' + id);
+    res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="Hoja-de-ruta-' + cony + '.pdf"', 'Content-Length': buf.length, 'Cache-Control': 'no-store' });
+    store.audit(user.id, 'ruta-pdf', 'events', id);
+    return res.end(buf);
+  }
+
   // --- Hora Loca: inventario y packs (admin). Los QR por pack llevan un token firmado. ---
   if (seg[0] === 'hora-loca') {
     if (user.role !== 'admin') return fail(res, 403, 'Solo administración.');
-    const proto = (req.headers['x-forwarded-proto'] === 'https' || req.socket.encrypted) ? 'https' : 'http';
-    const base = proto + '://' + (req.headers.host || '') + '/api/hl/scan?t=';
+    horaloca.ensureSeed(store);
+    // Dominio FIJO para los QR (sobrevive al cambio de dominio): setting hlScanHost (p.ej. prueba.lol).
+    const host = store.setting('hlScanHost') || (req.headers.host || '');
+    const base = 'https://' + host + '/api/hl/scan?t=';
     if (method === 'GET') {
       const st = horaloca.state(store);
       const packs = st.packs.map(p => { const tok = horaloca.tokenFor(p.id, store); return Object.assign({}, p, { token: tok, qrUrl: base + encodeURIComponent(tok) }); });
@@ -3405,6 +3422,12 @@ const server = http.createServer(async (req, res) => {
     // HSTS: solo en HTTPS (tras Caddy). Obliga a usar HTTPS durante 180 días. No se envía por HTTP/IP.
     if (req.headers['x-forwarded-proto'] === 'https' || req.socket.encrypted) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
     const url = new URL(req.url, 'http://localhost');
+    // Render de PDF (Chromium headless): la carga inicial trae ?pdftoken=<sesión efímera>. Se fija la
+    // cookie de sesión para que las XHR del SPA la lleven. Solo si aún no hay cookie de sesión.
+    if (req.method === 'GET' && url.searchParams.get('pdftoken') && !auth.parseCookies(req)[auth.COOKIE]) {
+      const u = auth.userFromToken(url.searchParams.get('pdftoken'));
+      if (u) auth.setSessionCookie(res, url.searchParams.get('pdftoken'));
+    }
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
     if (url.pathname.startsWith('/uploads/')) return fail(res, 403, 'Prohibido'); // los archivos van por /api/files
     return serveStatic(req, res, url.pathname);

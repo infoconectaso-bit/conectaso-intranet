@@ -122,5 +122,26 @@ function rateLimited(key, max = 8, windowMs = 15 * 60e3) {
 function noteAttempt(key) { const a = attempts.get(key) || []; a.push(Date.now()); attempts.set(key, a); }
 function clearAttempts(key) { attempts.delete(key); }
 
+// --- Sesión EFÍMERA para render de PDF (Chromium headless). Se pasa a Chromium por ?pdftoken,
+//     se fija como cookie en la carga inicial para que las XHR del SPA la lleven, y se borra al
+//     terminar. Caduca sola en pocos minutos. ---
+function mintSession(userId, ttlMs) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  const now = Date.now();
+  st.ins.run(sha(token), userId, now + (ttlMs || 120000), now, 'pdf-render');
+  return token;
+}
+function userFromToken(token) {
+  if (!token) return null;
+  const s = st.get.get(sha(token));
+  if (!s || s.expires_at < Date.now()) return null;
+  const row = users.getRow(s.user_id);
+  if (!row || !row.active) return null;
+  return users.get(row.id);
+}
+function dropSession(token) { if (token) { try { st.del.run(sha(token)); } catch (e) {} } }
+function setSessionCookie(res, token) { res.setHeader('Set-Cookie', `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax`); }
+
 module.exports = { hashPassword, verifyPassword, passwordProblem, createSession, destroySession, sessionUser, endAllSessions,
-  createToken, checkToken, useToken, rateLimited, noteAttempt, clearAttempts, clientIp, parseCookies, endSessionsExcept };
+  createToken, checkToken, useToken, rateLimited, noteAttempt, clearAttempts, clientIp, parseCookies, endSessionsExcept,
+  mintSession, userFromToken, dropSession, setSessionCookie, COOKIE };

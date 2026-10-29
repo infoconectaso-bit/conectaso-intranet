@@ -1777,7 +1777,7 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
   let pageNo = 1;
   const pg = () => ('0' + (++pageNo)).slice(-2);
   shell(`${pageHead('Hoja de ruta', 'Boda #' + ev.id)}
-    <div class="pdf-toolbar"><a class="btn" href="#/eventos/${ev.id}">← Volver</a> <button class="btn" onclick="window.print()" title="Imprimir la hoja de ruta en papel">🖨 Imprimir</button> <button class="btn btn--primary" onclick="window.__CS.toast('En el cuadro de impresión, elige el destino: Guardar como PDF','ok');setTimeout(window.print,150)" title="Descargar en PDF: en el cuadro de impresión, elige el destino Guardar como PDF">⬇ Descargar PDF</button></div>
+    <div class="pdf-toolbar"><a class="btn" href="#/eventos/${ev.id}">← Volver</a> <button class="btn" onclick="window.print()" title="Imprimir la hoja de ruta en papel">🖨 Imprimir</button> <button class="btn btn--primary" onclick="window.__CS.downloadRutaPdf(${ev.id})" title="Descargar la hoja de ruta en PDF">⬇ Descargar PDF</button></div>
     <div class="ruta-deck">
 
       <section class="slide dark cover cover--norm">
