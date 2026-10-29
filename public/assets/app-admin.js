@@ -415,7 +415,9 @@ const RECO_FINCAS = { '1': 1, '5': 1, '8': 1, '9': 1, '10': 1, '14': 1, '15': 1,
 const isRecoFinca = id => !!RECO_FINCAS[String(id)];
 const zonaLabel = (pack, zona) => pack === 'recomendado' ? ((RECO_ZONAS.find(z => z[0] === zona) || [, zona])[1]) : ((PLAN_ZONAS.find(z => z[0] === pack) || [, pack])[1]);
 // Fincas que NO llevan plano en el pack Recomendado (el montaje es siempre el mismo).
-const NO_PLANO = { '9_recomendado': 1, '10_recomendado': 1, '12_recomendado': 1, '18_recomendado': 1 };
+// Fincas/pack que NO llevan plano de montaje. Castell de Tous (9) SÍ tiene plano de ceremonia,
+// así que se quitó de la lista (sus otras zonas sin imagen simplemente no se muestran).
+const NO_PLANO = { '10_recomendado': 1, '12_recomendado': 1, '18_recomendado': 1 };
 const planoBlocked = (locId, pack) => !!NO_PLANO[locId + '_' + pack];
 const tipoToPack = tipo => { const t = (tipo || '').toLowerCase(); return /recomendad/.test(t) ? 'recomendado' : /fiesta/.test(t) ? 'fiesta' : /bodorrio/.test(t) ? 'bodorrio' : /tinglado/.test(t) ? 'tinglado' : null; };
 const PLAN_SYMS = {

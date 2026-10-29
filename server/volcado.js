@@ -63,8 +63,12 @@ function mapEvent(raw) {
     if (sm = key.match(/^event_user_(\d+)$/)) { if (v !== '' && v != null) (svcRows[sm[1]] = svcRows[sm[1]] || {}).resp = +v || ''; continue; }
     // horas extra de esta fila de servicio
     if (sm = key.match(/^horas_extras_servicio_(\d+)$/)) { if (v !== '' && v != null) (svcRows[sm[1]] = svcRows[sm[1]] || {}).horas = v; continue; }
-    // co-titular: el id del cliente está en el VALOR (no en el id de fila)
-    if (sm = key.match(/^event_second_user_(\d+)$/)) { if (v && v !== '0' && v !== '') ev.coUsers.push(+v); continue; }
+    // SEGUNDO responsable (técnico) de esta fila de servicio. En la intranet real el bloque
+    // "Responsables:" de cada servicio tiene dos selects de PERSONAL: event_user_{fila} y
+    // event_second_user_{fila}. OJO: antes esto se interpretaba mal como co-titular de la boda y se
+    // metía en ev.coUsers, lo que dejaba resp2 siempre vacío (la hoja de ruta solo mostraba un
+    // técnico) y colaba al técnico como co-titular del evento (acceso y correos de los novios).
+    if (sm = key.match(/^event_second_user_(\d+)$/)) { if (v && v !== '0' && v !== '') (svcRows[sm[1]] = svcRows[sm[1]] || {}).resp2 = +v || ''; continue; }
     if (/^plus_(\d+)$/.test(key)) { if (v && v !== '0' && v !== '') { const id = +key.match(/\d+/)[0]; let p = ev.plus.find(x => x.userId === id); if (!p) { p = { userId: id }; ev.plus.push(p); } p.amount = v; } continue; }
     if (/^plus_reason_(\d+)$/.test(key)) { if (v) { const id = +key.match(/\d+/)[0]; let p = ev.plus.find(x => x.userId === id); if (!p) { p = { userId: id }; ev.plus.push(p); } p.concept = v; } continue; }
     if (/^event_files_(\d+)_(value|description|hidden)$/.test(key)) { const id = key.match(/\d+/)[0]; let f = ev.files.find(x => x._id === id); if (!f) { f = { _id: id }; ev.files.push(f); } f[key.split('_').pop()] = v; continue; }
@@ -117,7 +121,7 @@ function mapEvent(raw) {
     }
   }
   // servicios extra: una entrada por fila con servicio de catálogo, con su responsable y horas.
-  ev.services = Object.values(svcRows).filter(r => r.servicio != null && r.servicio !== '').map(r => ({ servicio: +r.servicio, resp: (r.resp == null ? '' : r.resp), resp2: '', horas: (r.horas == null ? '' : r.horas) }));
+  ev.services = Object.values(svcRows).filter(r => r.servicio != null && r.servicio !== '').map(r => ({ servicio: +r.servicio, resp: (r.resp == null ? '' : r.resp), resp2: (r.resp2 == null ? '' : r.resp2), horas: (r.horas == null ? '' : r.horas) }));
   // co-titulares únicos
   ev.coUsers = [...new Set(ev.coUsers)];
   // limpieza de ids temporales de opcionales/archivos
