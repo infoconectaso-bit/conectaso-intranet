@@ -2327,7 +2327,6 @@ on(/^#\/cuenta$/, async () => {
     };
   }
 });
-})();
 
 /* =========================================================================
    MIS HORAS EXTRA (DJ) — horas extra por mes con gráfico, comparación con
@@ -2392,3 +2391,4 @@ on(/^#\/mis-horas$/, async () => {
   };
   draw();
 });
+})();
