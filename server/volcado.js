@@ -1089,6 +1089,18 @@ async function handle(req, res, seg, method, url) {
         const f = Array.isArray(body.fields) ? body.fields : null;
         return send(res, 200, { ok: true, col, total: all.length, records: all.slice(+body.offset || 0, (+body.offset || 0) + (+body.limit || 5000)).map(r => f ? f.reduce((o, k) => (o[k] = r[k], o), {}) : r) });
       }
+      if (cmd === 'pw-audit') { // SOLO LECTURA: de dónde sale la contraseña de los clientes "Activo" (sin devolver hashes)
+        const D = dbm.db;
+        const rows = D.prepare("SELECT id, name, email, role, created_at, last_login, substr(password_hash,1,7) AS algo FROM users WHERE password_hash IS NOT NULL AND password_hash <> '' AND role = 'user'").all();
+        const out = rows.map(r => ({
+          id: r.id, name: r.name, created_at: r.created_at, last_login: r.last_login, hashPrefix: (r.algo || '').replace(/[^a-z0-9$]/gi, '').slice(0, 4),
+          audit: D.prepare('SELECT at, user_id, action, collection, record_id FROM audit WHERE user_id = ? OR (record_id = ? AND collection = \'users\') ORDER BY at').all(r.id, r.id),
+          tokens: D.prepare('SELECT kind, expires_at, used_at FROM tokens WHERE user_id = ?').all(r.id),
+          sessions: D.prepare('SELECT created_at, ip FROM sessions WHERE user_id = ?').all(r.id).map(x => ({ created_at: new Date(x.created_at).toISOString(), ip: x.ip ? String(x.ip).replace(/\.\d+$/, '.x') : '' })),
+        }));
+        const totalHash = D.prepare("SELECT role, COUNT(*) n FROM users WHERE password_hash IS NOT NULL AND password_hash <> '' GROUP BY role").all();
+        return send(res, 200, { ok: true, totalHash, users: out });
+      }
       if (cmd === 'users-brief') { // listado breve de usuarios para cotejar con la intranet
         return send(res, 200, { ok: true, users: users.all().map(u => ({ id: u.id, role: u.role, name: u.name, email: u.email, active: u.active, data: u.data })) });
       }
