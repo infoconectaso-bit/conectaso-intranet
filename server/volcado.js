@@ -1108,6 +1108,19 @@ async function handle(req, res, seg, method, url) {
             ips: [...new Set(D.prepare('SELECT ip FROM sessions WHERE user_id = ?').all(id).map(x => x.ip ? String(x.ip).replace(/\.\d+$/, '.x') : ''))] }; }),
           events: (body.evs || []).map(id => { const e = store.get('events', +id); return e ? { id: e.id, conyuges: e.conyuges, fecha: e.fecha, userId: e.userId, coUsers: e.coUsers || [] } : { id, missing: true }; }) });
       }
+      if (cmd === 'reset-test-accounts') { // deja "Sin activar" las cuentas indicadas (solo clientes) y quita firmas TYC hechas en la intranet nueva
+        const D = dbm.db; const ids = (body.ids || []).map(Number); const noTyc = new Set((body.noTyc || []).map(Number)); const done = [];
+        ids.forEach(id => {
+          const r = D.prepare('SELECT id, role, data FROM users WHERE id = ?').get(id); if (!r || r.role !== 'user') return;
+          D.prepare('UPDATE users SET password_hash = NULL, last_login = NULL WHERE id = ?').run(id);
+          D.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
+          D.prepare('DELETE FROM tokens WHERE user_id = ? AND used_at IS NULL').run(id);
+          let tyc = false;
+          if (noTyc.has(id)) { const d = JSON.parse(r.data || '{}'); if (d.tycSign) { delete d.tycSign; D.prepare('UPDATE users SET data = ? WHERE id = ?').run(JSON.stringify(d), id); tyc = true; } }
+          done.push({ id, tycQuitado: tyc });
+        });
+        return send(res, 200, { ok: true, done });
+      }
       if (cmd === 'users-brief') { // listado breve de usuarios para cotejar con la intranet
         return send(res, 200, { ok: true, users: users.all().map(u => ({ id: u.id, role: u.role, name: u.name, email: u.email, active: u.active, data: u.data })) });
       }
