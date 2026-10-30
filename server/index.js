@@ -3239,6 +3239,9 @@ fs.mkdirSync(PLANO_DIR, { recursive: true });
 const planoSafe = k => String(k || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
 async function planosApi(req, res, user, seg, method) {
   if (!user || !(user.role === 'admin' || user.role === 'dj')) return fail(res, 403, 'Sin acceso');
+  // GET /api/planos (sin clave): lista las claves de plano que TIENEN imagen subida. Se usa para
+  // pintar en verde el botón "Plano" de las fincas que ya tienen plano y en blanco las pendientes.
+  if (!seg[1] && method === 'GET') return ok(res, { keys: Object.keys(store.setting('planoImgMime') || {}) });
   const key = planoSafe(seg[1]);
   if (!key) return fail(res, 400, 'Falta la clave del plano');
   const full = path.join(PLANO_DIR, key);

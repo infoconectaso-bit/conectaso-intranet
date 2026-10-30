@@ -376,13 +376,18 @@ function userForm(u, all) {
 on(/^#\/localizaciones$/, async () => {
   if (!requireAdmin()) return; loading(['Localizaciones']);
   const items = await coll.list('locations');
+  // Fincas que YA tienen algún plano subido (para pintar su botón en verde). La clave de un plano
+  // de finca es "<locId>_<pack>" o "<locId>_recomendado_<zona>"; nos quedamos con el locId inicial.
+  const planoKeys = await api('planos').then(r => (r && r.keys) || []).catch(() => []);
+  const planoLocs = new Set(planoKeys.filter(k => !/^ev_/.test(k)).map(k => String(k).split('_')[0]));
+  const hasPlano = id => planoLocs.has(String(planoLoc(id)));
   shell(`${pageHead('Localizaciones', 'Lugares de celebración con sus precios y color de agenda.', `<button class="btn btn--primary" id="newLoc">+ Crear localización</button>`)}
     <div class="panel"><div class="panel__body">${table('dtLocs', { rows: items, order: [1, 'asc'], filters: true, cols: [
       { t: 'Id', get: l => l.id }, { t: 'Nombre', get: l => l.name, html: l => `<a data-edit="${l.id}">${esc(l.name)}</a>` },
       { t: 'Dirección', get: l => l.direction || '' }, { t: 'Responsable', get: l => l.responsable || '' },
       { t: 'Precio boda', get: l => l.weddingPrice ? l.weddingPrice + ' €' : '—', nofilter: true }, { t: 'Precio ceremonia', get: l => l.ceremonyPrice ? l.ceremonyPrice + ' €' : '—', nofilter: true }, { t: 'Hora extra', get: l => l.extraPrice ? l.extraPrice + ' €' : '—', nofilter: true },
       { t: 'Color', get: l => l.colorHex || '', html: l => `<span class="loc-badge" style="background:${esc(l.colorHex || '#777')}">${esc(l.colorHex || '')}</span>`, nofilter: true },
-      { t: '', nosort: true, nofilter: true, html: l => `<div class="row-actions"><a class="btn btn--sm" href="#/plano/${l.id}">Plano</a><button class="btn btn--sm" data-edit="${l.id}">Editar</button><button class="btn btn--icon" data-del="${l.id}">🗑</button></div>` },
+      { t: '', nosort: true, nofilter: true, html: l => `<div class="row-actions"><a class="btn btn--sm ${hasPlano(l.id) ? 'btn--plano-ok' : ''}" href="#/plano/${l.id}" title="${hasPlano(l.id) ? 'Plano subido' : 'Pendiente de subir plano'}">Plano</a><button class="btn btn--sm" data-edit="${l.id}">Editar</button><button class="btn btn--icon" data-del="${l.id}">🗑</button></div>` },
     ] })}</div></div>`, ['Localizaciones']);
   el('newLoc').onclick = () => locForm({});
   bindTable('dtLocs', () => {

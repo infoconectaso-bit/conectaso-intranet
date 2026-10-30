@@ -137,6 +137,8 @@ input[type=date]::-webkit-datetime-edit,input[type=time]::-webkit-datetime-edit{
 .btn:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--onyx)}
 .btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:var(--shadow-sticker);transform:none}
 .btn--primary{background:var(--pink);color:#fff}
+.btn--plano-ok{background:#28A745;color:#fff;border-color:#28A745}
+.btn--plano-ok:hover{background:#23913d}
 /* estados del botón Guardar: rosa (normal) → cargando (spinner) → verde (guardado) */
 .btn--loading{background:var(--pink);color:#fff;opacity:.92;cursor:progress}
 .btn--ok{background:#0B8043!important;color:#fff!important}
