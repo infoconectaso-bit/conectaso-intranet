@@ -370,6 +370,7 @@ function eventEditorAdmin(ev) {
   const prog = eventProgress(ev);
   const shiftIso = (iso, n) => { const p = String(iso || '').slice(0, 10).split('-'); if (p.length < 3) return ''; const d = new Date(+p[0], +p[1] - 1, +p[2]); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
   const simple = isSimpleEvent(ev);
+  // Aviso informativo de cierre/recordatorios: ya no se muestra (la intranet lo gestiona sola).
   const lockNotice = (ev.fecha && !simple) ? `<p class="hint evtop-notice">Edición del cliente: se cierra sola el <b>${dmy(shiftIso(ev.fecha, -7))}</b> (7 días antes). Avisos al cliente: ${prog >= 100 ? `solo <b>${dmy(shiftIso(ev.fecha, -15))}</b> (ya está al 100%)` : `<b>${dmy(shiftIso(ev.fecha, -30))}</b> y <b>${dmy(shiftIso(ev.fecha, -15))}</b>`} <span class="muted">· el envío real de email se activa al conectar el dominio</span></p>` : '';
   const adminTabs = simple
     ? `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="servicios">Servicios</button><button data-tab="facturacion">Facturación</button><button data-tab="archivos">Archivos</button></div>`
@@ -402,7 +403,7 @@ function eventEditorAdmin(ev) {
       ${adminTabs}
       ${simple ? '' : `<label class="switch switch--onoff edituser-toggle" title="La edición del cliente se cierra sola 7 días antes de la boda. Dentro de esos 7 días, actívala aquí para reabrirla puntualmente."><span class="edituser-lbl">Edición cliente</span><input type="checkbox" name="habilitar_edicion_para_usuario" ${(ev.editUser || ev.editUnlock) ? 'checked' : ''}><span class="track"></span><span class="switch-state">${(typeof ev.daysToEvent === 'number' && ev.daysToEvent > 7) ? 'Abierta (auto)' : ((ev.editUser || ev.editUnlock) ? 'Reabierta' : 'Cerrada')}</span></label>`}
     </div>
-    ${lockNotice}
+    
     <div data-pane="datos">${paneDatos(ev, locOpts)}${simple ? '' : accessBlock(ev)}</div>
     ${simple ? '' : `<div data-pane="musica" style="display:none">${paneMusica(ev, true)}</div>
     <div data-pane="extras" style="display:none">${paneExtras(ev)}</div>`}
