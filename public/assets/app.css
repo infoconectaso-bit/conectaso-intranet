@@ -1507,3 +1507,5 @@ html .switch .track::after{border-radius:50%!important}
 .ev-estado-head{display:inline-flex}
 .ev-estado-head .control{width:auto;min-width:130px;padding:6px 30px 6px 10px;font-size:13px;font-weight:700;line-height:1.25;height:auto}
 .ev-head .edituser-toggle{padding-bottom:0;margin-left:4px}
+/* Modo noche: caja de "Pasos recomendados" del mantenimiento legible */
+html.night-dim .mnt-steps{background:#182340!important;border-color:#2B3A5C!important;color:var(--ink)!important}

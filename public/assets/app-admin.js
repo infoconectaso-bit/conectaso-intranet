@@ -2161,7 +2161,7 @@ on(/^#\/cuenta$/, async () => {
          <hr style="border:none;border-top:1px solid var(--line,#eee);margin:18px 0">
          <h4 style="margin:0 0 6px">🛠 Modo mantenimiento</h4>
          <p class="hint" style="margin-bottom:12px">Al activarlo, <b>todos</b> (novios, DJs y wedding planners) ven la pantalla de "En mantenimiento". <b>Tú y el resto de administración seguís entrando con normalidad</b> para hacer los cambios. Actívalo antes de una actualización y desactívalo al terminar.</p>
-         <div style="background:#f6f3ff;border:1px solid #e2daf7;border-left:4px solid #E82C88;border-radius:10px;padding:14px 16px 14px 18px;margin-bottom:16px;max-width:620px">
+         <div class="mnt-steps" style="background:#f6f3ff;color:#130F17;border:1px solid #e2daf7;border-left:4px solid #E82C88;border-radius:10px;padding:14px 16px 14px 18px;margin-bottom:16px;max-width:620px">
            <div style="font-weight:800;margin-bottom:8px">📋 Pasos recomendados</div>
            <ol style="margin:0;padding-left:20px;line-height:1.9;font-size:14px">
              <li>🛡 <b>Crea una copia previa a mantenimiento</b> (punto seguro, abajo).</li>
