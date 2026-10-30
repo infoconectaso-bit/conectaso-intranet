@@ -585,7 +585,7 @@ function navFor(role) {
     { t: 'Reservas', i: 'events', h: '#/reservas' },
     { t: 'Fotomatón', i: 'camera', h: '#/fotomaton' },
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
-    { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' },
+    { t: 'Control horario', i: 'clock', h: '#/horario', badge: 'horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' },
     { s: 'Negocio' }, { t: 'Económicos', i: 'euro', h: '#/cobros', alt: ['#/impagos', '#/descuadres'], badge: 'descuadres' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
     { t: 'Copias de seguridad', i: 'doc', h: '#/backups', dot: 'backups' },
     { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento', badge: 'mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
@@ -765,6 +765,13 @@ const _badgeFetch = {
     : ((r.sinVincularN || (r.sinVincular || []).length || 0) + ((r.payMismatches || []).length) + ((r.serviceWarnings || []).length))),
   impagos: () => api('holded-unpaid').then(r => (!r || r.enabled === false) ? 0 : ((r.invoices || []).length)),
   mantenimiento: () => api('collections/maintenance').then(r => ((r && r.items) || []).filter(m => (m.status || 'pendiente') !== 'completado').length),
+  horario: () => api('collections/attendances').then(r => {
+    const items = (r && r.items) || [], ym = new Date().toISOString().slice(0, 7);
+    const tm = s => { const [h, m] = String(s || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
+    const by = {};
+    items.forEach(a => { if (!String(a.date || '').startsWith(ym)) return; const mins = (a.slots || []).reduce((t, s) => { let d = tm(s.out) - tm(s.in); if (d < 0) d += 1440; return t + d; }, 0); by[a.userId] = (by[a.userId] || 0) + mins; });
+    return Object.keys(by).filter(k => by[k] > 160 * 60).length;
+  }),
 };
 function paintBadge(key, n) {
   $$('[data-badge="' + key + '"]').forEach(b => {

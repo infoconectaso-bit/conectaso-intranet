@@ -709,6 +709,14 @@ on(/^#\/horario$/, async () => {
   loading(['Control horario']);
   const items = await coll.list('attendances');
   const admin = isAdmin();
+  // Aviso de SOBRECARGA: trabajadores que ya pasan de 160 h TRABAJADAS (fichadas) en el MES EN CURSO,
+  // para localizarlos rápido y no cargarles más entre semana. Solo cuenta horas fichadas (no vacaciones).
+  const H_MAX = 160 * 60, curYm = new Date().toISOString().slice(0, 7);
+  const minByUser = {};
+  items.forEach(a => { if (!String(a.date || '').startsWith(curYm)) return; minByUser[a.userId] = (minByUser[a.userId] || 0) + attMin(a); });
+  const over = Object.keys(minByUser).filter(id => minByUser[id] > H_MAX).map(id => ({ id, m: minByUser[id] })).sort((a, b) => b.m - a.m);
+  if (admin) CS.setBadgeCount('horario', over.length);
+  const overBox = (admin && over.length) ? `<div class="over160"><b>⚠ ${over.length} ${over.length === 1 ? 'trabajador' : 'trabajadores'} por encima de 160 h este mes</b> — repártele menos entre semana: ${over.map(o => `<span class="over160__w">${esc(userName(o.id))} · <b>${hm(o.m)} h</b></span>`).join('')}</div>` : '';
   const cols = [
     { t: 'Id', get: a => a.id },
     ...(admin ? [{ t: 'Usuario', get: a => a.userName || userName(a.userId) }] : []),
@@ -721,6 +729,7 @@ on(/^#\/horario$/, async () => {
   const links = admin ? `<div class="btn-row"><button class="btn" id="newAtt">+ Fichaje</button><a class="btn" href="#/horario/calendario">Calendario</a><a class="btn" href="#/horario/resumen">Resumen</a></div>`
     : `<div class="btn-row"><button class="btn btn--primary" id="newAtt">+ Registrar jornada</button></div>`;
   shell(`${pageHead('Control horario', admin ? 'Fichajes de todo el equipo.' : 'Tus jornadas registradas.', links)}
+    ${overBox}
     <div class="panel"><div class="panel__body">${table('dtAtt', { rows: items, order: [admin ? 2 : 1, 'desc'], cols, empty: 'Sin fichajes.' })}</div></div>`, ['Control horario']);
   el('newAtt').onclick = () => attForm({ date: ymd(TODAY), slots: [{ in: '09:00', out: '14:00' }] });
   bindTable('dtAtt', () => {
@@ -1926,7 +1935,7 @@ on(/^#\/vehiculos$/, async () => {
       <div class="veh-card__meta"><span class="${itvWarn ? 'veh-warn' : ''}" title="Próxima ITV">🛠 ITV ${v.itvDate ? slash(v.itvDate) : '—'}${itvWarn ? ` · ${itvD < 0 ? '¡vencida!' : '¡' + itvD + ' días!'}` : ''}</span><span title="Renovación del seguro">🛡 Seguro ${v.insuranceRenewal ? slash(v.insuranceRenewal) : '—'}</span></div>
       <div class="veh-card__use">${u ? `<b>${esc(userName(u.userId))}</b> desde ${fmtDT(u.start)}` : (last ? `Último uso: <b>${esc(userName(last.userId))}</b> · ${fmtDT(last.start)}${last.end ? ' → ' + fmtDT(last.end) : ''}` : '<span class="muted">Sin usos todavía</span>')}</div>
       <div class="veh-card__actions">${action}${admin ? ` <button class="btn btn--sm" data-edit="${v.id}">Editar</button>` : ''}${hist.length ? ` <button class="btn btn--sm btn--ghost" data-more="${v.id}">Ver historial (${hist.length})</button>` : ''}</div>
-      ${hist.length ? `<div class="veh-hist" id="vehhist-${v.id}" hidden>${hist.slice(0, 40).map(h => `<div class="veh-hist__row"><span>${esc(userName(h.userId))}</span><span class="muted">${fmtDT(h.start)}${h.end ? ' → ' + fmtDT(h.end) : ' · <span class="tag tag--yellow">en uso</span>'}</span></div>`).join('')}</div>` : ''}
+      ${hist.length ? `<div class="veh-hist" id="vehhist-${v.id}" hidden>${hist.slice(0, 6).map(h => `<div class="veh-hist__row"><span>${esc(userName(h.userId))}</span><span class="muted">${fmtDT(h.start)}${h.end ? ' → ' + fmtDT(h.end) : ' · <span class="tag tag--yellow">en uso</span>'}</span></div>`).join('')}${hist.length > 6 ? `<div class="veh-hist__more">… y ${hist.length - 6} usos más</div>` : ''}</div>` : ''}
     </div>`;
   }).join('');
   shell(`${pageHead('Vehículos', admin ? 'Flota y uso. Pulsa "Coger" al salir y "Devolver" al volver — te identifica solo.' : 'Pulsa "Coger furgoneta" al salir y "Devolver" al volver. Te identifica automáticamente.', admin ? `${openUsages.length ? `<button class="btn btn--blue" id="endAllUse">Terminar usos activos (${openUsages.length})</button> ` : ''}<button class="btn btn--primary" id="newVeh">+ Añadir vehículo</button>` : '')}
