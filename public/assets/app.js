@@ -780,7 +780,8 @@ function paintBadge(key, n) {
   });
 }
 function badgeCount(key) {
-  const c = _badgeCache[key]; if (!c) return Promise.resolve(0);
+  if (!_badgeFetch[key]) return Promise.resolve(0);
+  const c = _badgeCache[key] || (_badgeCache[key] = { t: 0, n: null, p: null });
   const now = Date.now();
   if (c.n != null && now - c.t < 120000) return Promise.resolve(c.n);
   if (c.p) return c.p;
