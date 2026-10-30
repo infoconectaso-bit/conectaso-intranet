@@ -582,6 +582,7 @@ function navFor(role) {
     { s: 'Principal' }, { t: 'Inicio', i: 'home', h: '#/' },
     { s: 'Eventos' }, { t: 'Bodas pendientes', i: 'events', h: '#/eventos' }, { t: 'Bodas realizadas', i: 'events', h: '#/eventos/realizados' },
     { t: 'Servicios extras', i: 'extras', h: '#/extras' },
+    { t: 'Reservas', i: 'events', h: '#/reservas' },
     { t: 'Fotomatón', i: 'camera', h: '#/fotomaton' },
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
     { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' },

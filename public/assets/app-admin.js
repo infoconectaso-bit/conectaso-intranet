@@ -27,6 +27,16 @@ const exName = k => ((CS.momentHelpers.EXTRAS_CLIENTE || []).find(e => e[0] === 
 const EX_STATE = { solicitado: ['⏳ Pendiente de confirmación', 'tag--yellow'], pendiente_pago: ['💳 Pendiente de pago', 'tag--blue'], reservado: ['✓ Reservado', 'tag--green'] };
 on(/^#\/extras$/, () => solicitudesExtras());
 on(/^#\/extras-catalogo$/, () => extrasCatalogo());
+// RESERVAS: apartado nuevo, de momento solo el esqueleto. El usuario dará la info para construirlo.
+on(/^#\/reservas$/, () => {
+  if (!requireAdmin()) return;
+  shell(`${pageHead('Reservas', 'Apartado de reservas (en construcción).')}
+    <div class="panel"><div class="panel__body" style="text-align:center;padding:48px 24px">
+      <div style="font-size:40px;margin-bottom:8px">🗓️</div>
+      <h3 style="margin:0 0 6px">Pendiente de construir</h3>
+      <p class="hint" style="max-width:420px;margin:0 auto">Este apartado está reservado para la gestión de reservas. En cuanto me pases la información, lo montamos aquí.</p>
+    </div></div>`, ['Reservas']);
+});
 on(/^#\/papelera$/, () => papeleraEventos());
 async function papeleraEventos() {
   if (!requireAdmin()) return;
@@ -1237,21 +1247,35 @@ async function renderNominas(uid, admin, workers) {
   const last = sorted[0];
   const lastLbl = last ? (NOM_MESES[+String(last.period).slice(5, 7) - 1] || '') + ' ' + String(last.period).slice(0, 4) : '—';
   const nYear = files.filter(f => String(f.period || '').startsWith(Y + '-')).length;
-  // meses "debidos" del año elegido (hasta el mes pasado si es el año en curso)
-  const dueN = Y < curY ? 12 : (Y === curY ? Math.max(0, curM - 1) : 0);
-  let missing = 0; for (let m = 1; m <= dueN; m++) if (!byYM[Y + '-' + String(m).padStart(2, '0')]) missing++;
+  // Mes de ALTA (antigüedad): si el trabajador tiene fecha de alta la usamos; si no, la PRIMERA
+  // nómina que tenga (todas las nóminas arrancan en el alta). Antes del alta NO se esperan nóminas,
+  // así no salen falsos "faltan" (p. ej. Josué, alta en septiembre).
+  const startYM = (() => {
+    const a = String(me.alta || me.fechaAlta || '').match(/(\d{4})-(\d{2})/); if (a) return a[1] + '-' + a[2];
+    const ps = files.map(f => String(f.period || '').slice(0, 7)).filter(p => /^\d{4}-\d{2}$/.test(p)).sort();
+    return ps[0] || null;
+  })();
+  const startY = startYM ? +startYM.slice(0, 4) : null, startM = startYM ? +startYM.slice(5, 7) : null;
+  const beforeStart = i => !!startYM && (Y < startY || (Y === startY && (i + 1) < startM));
+  // meses "debidos" del año elegido (del mes de alta hasta el mes pasado si es el año en curso)
+  const dueTo = Y < curY ? 12 : (Y === curY ? Math.max(0, curM - 1) : 0);
+  const dueFrom = startYM ? (Y < startY ? 13 : (Y === startY ? startM : 1)) : 1;
+  const dueN = dueTo; // compatibilidad con el resto del render
+  const dueCount = Math.max(0, dueTo - dueFrom + 1);
+  let missing = 0; for (let m = dueFrom; m <= dueTo; m++) if (!byYM[Y + '-' + String(m).padStart(2, '0')]) missing++;
 
   const chips = admin ? `<div class="nom-people">${workers.map(w => `<button class="nom-person${w.id == uid ? ' on' : ''}" data-nomw="${w.id}" title="${esc(w.name)}"><span class="nom-av">${esc(nomInitials(w.name))}</span><span class="nom-pname">${esc((w.name || '').split(' ').slice(0, 2).join(' '))}</span></button>`).join('')}</div>` : '';
   const hero = `<div class="nom-hero">
       <div class="nom-hero__av">${esc(nomInitials(me.name))}</div>
       <div class="nom-hero__txt"><div class="nom-hero__name">${esc(me.name || 'Mis nóminas')}</div>
-        <div class="nom-hero__meta"><span>📄 <b>${files.length}</b> nóminas</span><span>🕒 Última: <b>${esc(lastLbl)}</b></span>${missing ? `<span class="nom-warn">⚠ Faltan <b>${missing}</b> en ${Y}</span>` : (dueN ? `<span class="nom-ok">✓ ${Y} al día</span>` : '')}</div></div>
+        <div class="nom-hero__meta"><span>📄 <b>${files.length}</b> nóminas</span><span>🕒 Última: <b>${esc(lastLbl)}</b></span>${missing ? `<span class="nom-warn">⚠ Faltan <b>${missing}</b> en ${Y}</span>` : (dueCount ? `<span class="nom-ok">✓ ${Y} al día</span>` : '')}</div></div>
       ${admin ? `<a class="btn btn--sm nom-sync" href="/api/holded-payslip-sync" target="_blank" rel="noopener" title="Trae de Holded las nóminas que falten (primero muestra una prueba)">⬇ Traer de Holded</a>` : ''}
     </div>`;
   const tabs = `<div class="mtabs nom-years">${years.map(y => `<button class="mtab${y === Y ? ' on' : ''}" data-nomy="${y}">${y}</button>`).join('')}</div>`;
   const tiles = NOM_MESES.map((mn, i) => {
     const mm = String(i + 1).padStart(2, '0'), k = Y + '-' + mm, fs = byYM[k] || [];
     const future = Y > curY || (Y === curY && i + 1 > curM);
+    if (beforeStart(i) && !fs.length) return `<div class="nom-tile nom-tile--empty nom-tile--future" title="Anterior al alta del contrato"><span class="nom-tile__m">${mn}</span><span class="nom-tile__hint">—</span></div>`;
     if (fs.length) {
       const f = fs[0];
       return `<div class="nom-tile nom-tile--ok" data-nomdrop="${k}">
