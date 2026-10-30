@@ -935,6 +935,58 @@ async function handle(req, res, seg, method, url) {
     return send(res, 200, { ok: true, processed, changedEv, changedOpt, noFicha, errors: errors.slice(0, 15), errorCount: errors.length });
   }
 
+  // Igual que resection-optionals pero EN SEGUNDO PLANO: recorre todos los eventos con opcionales
+  // (o los ids dados) leyendo cada ficha real, sin bloquear la respuesta HTTP (que caduca a los ~45s
+  // en el navegador). Guarda el progreso en el setting 'resectionProgress' para poder consultarlo.
+  if (action === 'resection-bg') {
+    const dbm = require('./db'); const store = dbm.store;
+    const cookie = body.cookie, ua = body.ua;
+    let ids = (body.ids || []).map(Number);
+    if (body.all || !ids.length) ids = store.all('events').filter(e => Array.isArray(e.optionals) && e.optionals.length).map(e => e.id);
+    const SM = { ceremony: 'C', aperitif: 'A', banquet: 'B', disco: 'D' };
+    const AREA = { C: 'ceremony', A: 'aperitif', B: 'banquet', D: 'disco' };
+    const sectionsFromHtml = (html) => {
+      const names = (html.match(/name=["'][^"']+["']/g) || []).map(s => s.slice(6, -1));
+      const out = {}; let curSec = null; const idx = {};
+      for (const n of names) {
+        let m;
+        if ((m = n.match(/^(ceremony|aperitif|banquet|disco)_([a-z_]+)$/)) && !/_optionals_|^(check|order|link|comment)_/.test(n) && !/_(restrictions|observations|logo_fotomaton_image|logo_fotomato|logo)/.test(n)) {
+          curSec = SM[m[1]]; idx[curSec] = (idx[curSec] || 0) + 1;
+        } else if (m = n.match(/^(ceremony|aperitif|banquet|disco)_optionals_(\d+)_title$/)) {
+          const sec = curSec || 'C'; idx[sec] = (idx[sec] || 0) + 1; out[m[2]] = { sec, order: idx[sec] };
+        }
+      }
+      return out;
+    };
+    const prog = { total: ids.length, done: 0, changedEv: 0, changedOpt: 0, noFicha: 0, errorCount: 0, running: true, startedAt: Date.now(), finishedAt: null };
+    store.setSetting('resectionProgress', prog);
+    const queue = ids.slice();
+    const worker = async () => {
+      while (queue.length) {
+        const id = queue.shift();
+        try {
+          const ev = store.get('events', id);
+          if (!ev || !Array.isArray(ev.optionals) || !ev.optionals.length) { prog.done++; continue; }
+          const r = await srcFetch('/admin/events/update/' + id, cookie, ua);
+          const html = r.text || '';
+          if (!/name=["']wedding_date["']/.test(html)) { prog.noFicha++; prog.done++; continue; }
+          const map = sectionsFromHtml(html);
+          let ch = false;
+          ev.optionals.forEach(o => { const mm = map[String(o.id)]; if (!mm || !AREA[mm.sec]) return; o.sec = mm.sec; o.area = AREA[mm.sec]; o.order = String(mm.order); ch = true; prog.changedOpt++; });
+          if (ch) { store.put('events', ev); prog.changedEv++; }
+          prog.done++;
+        } catch (e) { prog.errorCount++; prog.done++; }
+        if (prog.done % 25 === 0) store.setSetting('resectionProgress', Object.assign({}, prog));
+      }
+    };
+    const N = Math.min(8, ids.length || 1);
+    Promise.all(Array.from({ length: N }, worker))
+      .then(() => { prog.running = false; prog.finishedAt = Date.now(); store.setSetting('resectionProgress', Object.assign({}, prog)); })
+      .catch(() => { prog.running = false; store.setSetting('resectionProgress', Object.assign({}, prog)); });
+    return send(res, 200, { ok: true, started: true, total: ids.length });
+  }
+  if (action === 'resection-progress') { const dbm = require('./db'); return send(res, 200, { ok: true, progress: dbm.store.setting('resectionProgress') || null }); }
+
   // QA (protegido por secreto): utilidades puntuales para limpiar pruebas y verificar el volcado.
   if (action === 'qa') {
     const dbm = require('./db'); const store = dbm.store, users = dbm.users; const authm = require('./auth');
