@@ -182,6 +182,28 @@ const VEH_ABBR = { volkswagen: 'VW', vw: 'VW', ford: 'FRD', toyota: 'TYT', peuge
 const vehById = id => (S.meta.vehicles || []).find(v => String(v.id) === String(id));
 const vehAbbr = id => { const v = vehById(id); if (!v) return ''; const b = String(v.brand || '').trim().toLowerCase(); return VEH_ABBR[b] || (v.brand ? v.brand.replace(/[^A-Za-zÀ-ÿ]/g, '').slice(0, 3).toUpperCase() : ''); };
 const vehLabel = id => { const v = vehById(id); if (!v) return ''; return (((v.brand || '') + ' ' + (v.model || '')).trim() + (v.plate ? ' · ' + v.plate : '')) || ('Furgoneta ' + id); };
+// Icono de furgoneta SVG (Lucide "van") — más limpio que el emoji. Hereda el color (currentColor).
+const VEH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="veh-ic-svg" aria-hidden="true"><path d="M13 6v5a1 1 0 0 0 1 1h6.102a1 1 0 0 1 .712.298l.898.91a1 1 0 0 1 .288.702V17a1 1 0 0 1-1 1h-3"/><path d="M5 18H3a1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h12c1.1 0 2.1.8 2.4 1.8l1.176 4.2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>';
+const DECK_ICON = {
+  "headphones": "<path d=\"M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3\" />",
+  "martini": "<path d=\"M12 12 4.207 4.207A.707.707 0 0 1 4.707 3h14.586a.707.707 0 0 1 .5 1.207z\" /> <path d=\"M12 12v10\" /> <path d=\"M7 22h10\" />",
+  "wine": "<path d=\"M8 22h8\" /> <path d=\"M7 10h10\" /> <path d=\"M12 15v7\" /> <path d=\"M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z\" />",
+  "circle-check": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"m16 9-5.5 5.5L8 12\" />",
+  "gem": "<path d=\"M10.5 3 8 9l4 13 4-13-2.5-6\" /> <path d=\"M17 3a2 2 0 0 1 1.6.8l3 4a2 2 0 0 1 .013 2.382l-7.99 10.986a2 2 0 0 1-3.247 0l-7.99-10.986A2 2 0 0 1 2.4 7.8l2.998-3.997A2 2 0 0 1 7 3z\" /> <path d=\"M2 9h20\" />",
+  "user": "<path d=\"M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2\" /> <circle cx=\"12\" cy=\"7\" r=\"4\" />",
+  "clipboard-list": "<rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\" ry=\"1\" /> <path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\" /> <path d=\"M12 11h4\" /> <path d=\"M12 16h4\" /> <path d=\"M8 11h.01\" /> <path d=\"M8 16h.01\" />",
+  "shirt": "<path d=\"M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z\" />",
+  "handshake": "<path d=\"m11 17 2 2a1 1 0 1 0 3-3\" /> <path d=\"m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4\" /> <path d=\"m21 3 1 11h-2\" /> <path d=\"M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3\" /> <path d=\"M3 4h8\" />",
+  "package": "<path d=\"M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z\" /> <path d=\"M12 22V12\" /> <polyline points=\"3.29 7 12 12 20.71 7\" /> <path d=\"m7.5 4.27 9 5.15\" />",
+  "timer": "<line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\" /> <line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\" /> <circle cx=\"12\" cy=\"14\" r=\"8\" />",
+  "map": "<path d=\"M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z\" /> <path d=\"M15 5.764v15\" /> <path d=\"M9 3.236v15\" />",
+  "navigation": "<polygon points=\"3 11 22 2 13 21 11 13 3 11\" />",
+  "heart": "<path d=\"M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5\" />",
+  "map-pin": "<path d=\"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0\" /> <circle cx=\"12\" cy=\"10\" r=\"3\" />",
+  "wrench": "<path d=\"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z\" />",
+  "sparkles": "<path d=\"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z\" /> <path d=\"M20 2v4\" /> <path d=\"M22 4h-4\" /> <circle cx=\"4\" cy=\"20\" r=\"2\" />"
+};
+const di = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="dk-ic" aria-hidden="true">${DECK_ICON[n]||""}</svg>`;
 async function eventsList(done) {
   loading(['Eventos', done ? 'Realizadas' : 'Pendientes']);
   const data = await api('events' + (done ? '?status=done' : ''));
@@ -527,14 +549,14 @@ function paneRuta(ev) {
   return `${head}
     <p class="hint">Tiempos calculados automáticamente: desplazamiento desde Martorelles a <b>${esc(destName)}</b> (${travel} min${travelKm ? ' · ' + travelKm + ' km' : ''}) y montaje según el tipo de boda: <b>${esc(mt.regla)}</b> (${mt.min} min).</p>
     ${mt.note ? `<div class="alert alert--warn" style="margin-bottom:12px">⚠ ${esc(mt.note)}</div>` : ''}
-    ${ev.vehicleId ? `<div class="ruta-veh"><span class="ruta-veh-ic">🚐</span> Furgoneta asignada: <b>${esc(vehLabel(ev.vehicleId))}</b></div>` : ''}
+    ${ev.vehicleId ? `<div class="ruta-veh"><span class="ruta-veh-ic">${VEH_SVG}</span> Furgoneta asignada: <b>${esc(vehLabel(ev.vehicleId))}</b></div>` : ''}
     <div class="ruta">
-      ${row('🚗', 'Salida desde Martorelles', hhmm(salida), 'Desplazamiento ' + travel + ' min' + (travelKm ? ' · ' + travelKm + ' km' : ''))}
-      ${row('📍', 'Llegada a ' + esc(destName), hhmm(llegada), 'Inicio del montaje')}
-      ${row('🔧', 'Montaje de equipo', hhmm(inicioMontaje) + '–' + hhmm(listo), mt.regla + ' · ' + mt.min + ' min')}
-      ${row('✅', 'Todo listo', hhmm(listo), 'A la hora de ' + (ev.ceremoniaFuera ? 'inicio' : 'la ceremonia'))}
-      ${ev.ceremoniaFuera ? '' : row('💍', 'Ceremonia', _min2hm(_hm2min(ev.hora)), '')}
-      ${(() => { const ap = ev.ceremoniaFuera ? _hm2min(ev.celebrationHour) : (_hm2min(ev.hora) != null ? _hm2min(ev.hora) + 60 : null); return ap != null ? row('🥂', 'Aperitivo', _min2hm(ap), ev.ceremoniaFuera ? '' : '1 h después de la ceremonia') : ''; })()}
+      ${row(di('navigation'), 'Salida desde Martorelles', hhmm(salida), 'Desplazamiento ' + travel + ' min' + (travelKm ? ' · ' + travelKm + ' km' : ''))}
+      ${row(di('map-pin'), 'Llegada a ' + esc(destName), hhmm(llegada), 'Inicio del montaje')}
+      ${row(di('wrench'), 'Montaje de equipo', hhmm(inicioMontaje) + '–' + hhmm(listo), mt.regla + ' · ' + mt.min + ' min')}
+      ${row(di('circle-check'), 'Todo listo', hhmm(listo), 'A la hora de ' + (ev.ceremoniaFuera ? 'inicio' : 'la ceremonia'))}
+      ${ev.ceremoniaFuera ? '' : row(di('gem'), 'Ceremonia', _min2hm(_hm2min(ev.hora)), '')}
+      ${(() => { const ap = ev.ceremoniaFuera ? _hm2min(ev.celebrationHour) : (_hm2min(ev.hora) != null ? _hm2min(ev.hora) + 60 : null); return ap != null ? row(di('martini'), 'Aperitivo', _min2hm(ap), ev.ceremoniaFuera ? '' : '1 h después de la ceremonia') : ''; })()}
     </div>
     ${(ev.services || []).filter(s => s.servicio).length ? `<h4 class="form-sub" style="margin-top:18px">Servicios y técnicos</h4>
       <div class="table-wrap"><table class="dt"><thead><tr><th>Servicio</th><th>Responsable(s)</th></tr></thead><tbody>
@@ -1803,7 +1825,7 @@ const SVC_ICON_SVG = {
   const SVC_ICONS = [[/fotomat|photo ?booth|cabina/, "camera"], [/videomat|360/, "orbit"], [/photocall|photo ?call|photowall/, "image"], [/montaje/, "wrench"], [/fuego|chispa|pirotec|bengal|sparkular/, "flame"], [/aereo|humo vertical|vertical/, "smoke-up"], [/baja densidad|nube|humo|niebla|nebuliz/, "cloud"], [/pistola|co2/, "co2-gun"], [/criog|chorro/, "wind"], [/confet|serpentin/, "party-popper"], [/saxo/, "clef-treble"], [/viol/, "clef-treble"], [/trompet/, "clef-treble"], [/letra|love|neon/, "lightbulb"], [/ilumin|luz|luces|led|foco|uplight/, "lamp"], [/percus|tambor/, "drum"], [/cantant|voz|karaoke|coro/, "mic-vocal"], [/robot/, "bot"], [/proyec|pantalla|video/, "projector"], [/micro|discurso|parlament/, "mic"], [/ceremon/, "heart"], [/sonido|altavoz|sonoriz|equipo/, "speaker"], [/\bdj\b|disco/, "disc-3"], [/pista|baile|tarima/, "clef-treble"], [/candy|helad/, "ice-cream-cone"], [/carro|carrito/, "shopping-cart"], [/guitarr/, "guitar"], [/piano/, "piano"], [/flor|guirnald/, "flower-2"]];
   const svcIcon = nm => { const n = String(nm || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); const hit = SVC_ICONS.find(([re]) => re.test(n)); return svcSvg(hit ? hit[1] : "sparkles"); };
   const svcList = (ev.services || []).filter(s => s.servicio).map(s => ({ nm: extraName(s.servicio), resp: [s.resp, s.resp2].filter(Boolean).map(r => userName(r)).filter(Boolean).join(' · ') })).filter(x => x.nm);
-  const svcHtml = svcList.length ? `<div class="card"><h3>Servicios extra <span class="ic">✨</span></h3><div class="svc-chips">${svcList.map(x => `<div class="svc-chip"><span class="svc-ic">${svcIcon(x.nm)}</span><span class="svc-txt"><span class="svc-nm">${esc(x.nm)}</span><span class="svc-resp">${x.resp ? '👤 ' + esc(x.resp) : 'Sin asignar'}</span></span></div>`).join('')}</div></div>` : '';
+  const svcHtml = svcList.length ? `<div class="card"><h3>Servicios extra <span class="ic">${di('sparkles')}</span></h3><div class="svc-chips">${svcList.map(x => `<div class="svc-chip"><span class="svc-ic">${svcIcon(x.nm)}</span><span class="svc-txt"><span class="svc-nm">${esc(x.nm)}</span><span class="svc-resp">${x.resp ? di('user') + ' ' + esc(x.resp) : 'Sin asignar'}</span></span></div>`).join('')}</div></div>` : '';
   // Numeración de páginas del PDF (se evalúa en el orden del documento).
   let pageNo = 1;
   const pg = () => ('0' + (++pageNo)).slice(-2);
@@ -1819,18 +1841,18 @@ const SVC_ICON_SVG = {
           <h1>${esc(ev.conyuges || ('Boda #' + ev.id))}</h1>
           <div class="meta"><b>Boda #${ev.id}</b> · ${val(ev.tipo)}<br>${esc(fechaLarga(ev.fecha))}<br><b>${esc(destName)}</b></div>
           <div class="cover-facts">
-            <div class="cf"><span class="cf-k">🎧 DJ / Técnico</span><span class="cf-v">${val(djOf(ev))}</span></div>
-            <div class="cf"><span class="cf-k">${hasCer ? '💒 Ceremonia' : '🥂 Aperitivo'}</span><span class="cf-v">${val(hasCer ? ev.hora : (apMin != null ? _min2hm(apMin) : ''))}</span></div>
-            ${ev.vehicleId ? `<div class="cf"><span class="cf-k">🚐 Furgoneta</span><span class="cf-v">${val(vehLabel(ev.vehicleId))}</span></div>` : ''}
+            <div class="cf"><span class="cf-k">${di('headphones')} DJ / Técnico</span><span class="cf-v">${val(djOf(ev))}</span></div>
+            <div class="cf"><span class="cf-k">${hasCer ? di('heart') + ' Ceremonia' : di('martini') + ' Aperitivo'}</span><span class="cf-v">${val(hasCer ? ev.hora : (apMin != null ? _min2hm(apMin) : ''))}</span></div>
+            ${ev.vehicleId ? `<div class="cf"><span class="cf-k">${VEH_SVG} Furgoneta</span><span class="cf-v">${val(vehLabel(ev.vehicleId))}</span></div>` : ''}
           </div>
         </div>
-        <div class="card cover-norm"><h3>Normativa interna <span class="ic">📋</span></h3>
+        <div class="card cover-norm"><h3>Normativa interna <span class="ic">${di('clipboard-list')}</span></h3>
           <div class="norm-list">
-            <div class="nvc"><b>👕 Uniformidad técnico</b><span>Ropa negra + camiseta/sudadera Conecta So, calzado cerrado. Nada de corto, chándal ni roturas.</span></div>
-            <div class="nvc"><b>🎧 Uniformidad DJ</b><span>Polo o camisa con logo Conecta. Calzado cerrado, nada de corto ni roturas.</span></div>
-            <div class="nvc"><b>🔧 Montaje y seguridad</b><span>Todo montado y recogido antes de la llegada de invitados. Cableado fijado y tapado. Altura: solo autorizados.</span></div>
-            <div class="nvc"><b>🤝 Conducta</b><span>No compartir fotos ni datos. Trato discreto y respetuoso. Sin alcohol ni tabaco en zonas visibles.</span></div>
-            <div class="nvc"><b>📦 Material y cierre</b><span>Orden; cajas vacías ocultas. Averías: marcar "NO FUNCIONA". Revisar restos de cinta al cerrar.</span></div>
+            <div class="nvc"><b>${di('shirt')} Uniformidad técnico</b><span>Ropa negra + camiseta/sudadera Conecta So, calzado cerrado. Nada de corto, chándal ni roturas.</span></div>
+            <div class="nvc"><b>${di('headphones')} Uniformidad DJ</b><span>Polo o camisa con logo Conecta. Calzado cerrado, nada de corto ni roturas.</span></div>
+            <div class="nvc"><b>${di('wrench')} Montaje y seguridad</b><span>Todo montado y recogido antes de la llegada de invitados. Cableado fijado y tapado. Altura: solo autorizados.</span></div>
+            <div class="nvc"><b>${di('handshake')} Conducta</b><span>No compartir fotos ni datos. Trato discreto y respetuoso. Sin alcohol ni tabaco en zonas visibles.</span></div>
+            <div class="nvc"><b>${di('package')} Material y cierre</b><span>Orden; cajas vacías ocultas. Averías: marcar "NO FUNCIONA". Revisar restos de cinta al cerrar.</span></div>
           </div>
         </div>
         <img src="/assets/brand/el-vinilo.svg" class="vinilo" alt="">
@@ -1840,7 +1862,7 @@ const SVC_ICON_SVG = {
       <section class="slide dark page">
         <h2 style="margin-bottom:18px">Timing y servicios</h2>
         <div class="resumen-2col${svcHtml ? '' : ' resumen-2col--solo'}">
-          <div class="card"><h3>Timing del día <span class="ic">⏱️</span></h3><div class="tl tl--compact">${tlHtml}</div></div>
+          <div class="card"><h3>Timing del día <span class="ic">${di('timer')}</span></h3><div class="tl tl--compact">${tlHtml}</div></div>
           ${svcHtml}
         </div>
         ${obsAviso ? `<div class="obs-aviso">${obsAviso}</div>` : ''}
@@ -1851,12 +1873,12 @@ const SVC_ICON_SVG = {
         <h2>Ubicación y acceso</h2>
         <div class="grid2" style="height:460px">
           <div>
-            <div class="card" style="margin-bottom:20px"><h3>Dirección del evento <span class="ic">📍</span></h3>
+            <div class="card" style="margin-bottom:20px"><h3>Dirección del evento <span class="ic">${di('map-pin')}</span></h3>
               <div class="v" style="font-size:20px;line-height:1.3">${val(destName)}</div>
               <div style="color:#b4aeb9;margin-top:6px">${esc(ev.lugarCeremonia ? ('Ceremonia: ' + ev.lugarCeremonia) : 'Zona Barcelona')}${travelKm ? ' · a ' + travelKm + ' km (' + travel + ' min) desde Martorelles' : ''}</div>
               <a class="accent" style="display:inline-block;margin-top:12px;font-family:var(--disp);font-size:14px;text-decoration:none" href="${mapsUrl}" target="_blank" rel="noopener">▸ Ver ruta en Google Maps</a>
             </div>
-            <div class="card"><h3>Desplazamiento <span class="ic">🚐</span></h3>
+            <div class="card"><h3>Desplazamiento <span class="ic">${VEH_SVG}</span></h3>
               <div class="row"><div class="k">Tiempo estimado</div><div class="v">${travel != null ? travel + ' min' : '—'}</div></div>
               <div class="row"><div class="k">Distancia</div><div class="v sm">${travelKm ? travelKm + ' km desde base (Martorelles)' : '—'}</div></div>
               ${salidaTxt ? `<div class="note-tip">Salida recomendada con margen para montaje a las <b>${salidaTxt}</b>.</div>` : ''}
@@ -1864,7 +1886,7 @@ const SVC_ICON_SVG = {
             </div>
           </div>
           ${planoHtml
-            ? `<div class="card" style="display:flex;flex-direction:column"><h3>Plano de montaje <span class="ic">🗺️</span></h3><div class="deck-plano">${planoHtml}</div></div>`
+            ? `<div class="card" style="display:flex;flex-direction:column"><h3>Plano de montaje <span class="ic">${di('map')}</span></h3><div class="deck-plano">${planoHtml}</div></div>`
             : `<div class="mapbox"><div class="big">Vista satélite de la finca</div><div style="max-width:30ch">Sube la captura aérea de la finca en el plano de montaje y aparecerá aquí junto a los puntos de descarga y parking.</div></div>`}
         </div>
         <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
@@ -1873,7 +1895,7 @@ const SVC_ICON_SVG = {
       ${planoZones.length > 1 ? `<section class="slide dark page">
         <h2>Planos de montaje</h2>
         <div class="plano-zonas-grid">
-          ${planoZones.map(z => `<div class="card"><h3>${esc(z.label)} <span class="ic">🗺️</span></h3><div class="deck-plano">${z.html}</div></div>`).join('')}
+          ${planoZones.map(z => `<div class="card"><h3>${esc(z.label)} <span class="ic">${di('map')}</span></h3><div class="deck-plano">${z.html}</div></div>`).join('')}
         </div>
         <img src="/assets/brand/logo-reducido-blanco.svg" class="wm" alt=""><div class="pg">${pg()}</div>
       </section>` : ''}

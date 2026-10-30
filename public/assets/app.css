@@ -866,6 +866,13 @@ table.dt tbody tr.fact-t td,table.dt tbody tr.fact-t:hover td{background:#0B8043
 html.night-dim .veh-badge{background:#2c2417;border-color:#3a3020;color:var(--ink)}
 .ruta-veh{display:flex;align-items:center;gap:8px;background:var(--cream,#f6f2ea);border:1px solid var(--line,#e5e0d6);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:14px}
 .ruta-veh-ic{font-size:18px}
+/* Iconos SVG de línea (sustituyen a los emojis en la hoja de ruta y badges). Heredan el color
+   del texto de al lado (currentColor), por lo que se ven en fondo claro u oscuro igual que el texto. */
+.dk-ic,.veh-ic-svg{width:1em;height:1em;display:inline-block;vertical-align:-.14em}
+.veh-badge .veh-ic-svg{width:1.05em;height:1.05em;vertical-align:-.18em;margin-right:2px}
+.ruta-ic .dk-ic{width:19px;height:19px;color:var(--onyx,#130F17)}
+.ruta-veh-ic .veh-ic-svg{width:20px;height:20px}
+.ruta-deck .card .ic .dk-ic{width:1em;height:1em}
 html.night-dim .ruta-veh{background:#241d12;border-color:#3a3020}
 /* Gráficos de barras horizontales (Análisis) */
 .bars{display:flex;flex-direction:column;gap:7px}
