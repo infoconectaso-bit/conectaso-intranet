@@ -629,6 +629,9 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
   const ro = readonly ? { ro: true } : {};
   const roH = (readonly && !horariosEditable) ? { ro: true } : {}; // horarios editables para el wedding planner
   const roSel = readonly ? 'disabled' : '';
+  // El LUGAR de la celebración solo lo cambia administración: para novios (y resto) queda fijo en gris.
+  const roLoc = isAdmin() ? roSel : 'disabled';
+  const roLocInp = isAdmin() ? ro : { ro: true };
   const sp = ev.spouses || [{}, {}];
   const showSpouse = S.user.role === 'admin' || S.user.role === 'user';
   // Descarga de fotos del fotomatón para la pareja / planner (cuando administración ha subido el enlace).
@@ -648,7 +651,7 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
           <p class="hint">La fecha solo la puede cambiar administración. Si necesitáis moverla, avisadnos y lo gestionamos nosotros.</p>`)}
     ${fg('Hora de la ceremonia', inp('wedding_hour', ev.hora, { type: 'time', ...roH }))}
     ${fg('Hora inicio aperitivo', inp('celebration_hour', ev.celebrationHour, { type: 'time', ...roH }))}
-    ${fg('Lugar de la celebración', sel('celebration_location', locOpts, ev.lugar === 0 && ev.lugarOtro ? 'otro' : ev.lugar, roSel + ' data-search') + `<div id="otroWrap" style="margin-top:8px;display:${(!ev.lugar && ev.lugarOtro) ? 'block' : 'none'}">${inp('celebration_location_other', ev.lugarOtro, { ph: 'Indica el lugar', ...ro })}</div>` + travelInfo(ev))}
+    ${fg('Lugar de la celebración', sel('celebration_location', locOpts, ev.lugar === 0 && ev.lugarOtro ? 'otro' : ev.lugar, roLoc + ' data-search') + `<div id="otroWrap" style="margin-top:8px;display:${(!ev.lugar && ev.lugarOtro) ? 'block' : 'none'}">${inp('celebration_location_other', ev.lugarOtro, { ph: 'Indica el lugar', ...roLocInp })}</div>` + travelInfo(ev))}
     ${fg('Lugar de la ceremonia', inp('wedding_location', ev.lugarCeremonia, roH))}
     ${fg(tt('Ceremonia fuera del lugar de la celebración', 'Cerimònia fora del lloc de la celebració', 'Ceremony away from the venue', 'Cérémonie hors du lieu de réception'), `<label class="chk"><input type="checkbox" name="ceremony_outside" ${ev.ceremoniaFuera ? 'checked' : ''} ${(readonly && !horariosEditable) ? 'disabled' : ''}> <span>${tt('Marca si la ceremonia se celebra fuera de la finca (no realizamos la sonorización de ceremonia)', 'Marca si la cerimònia se celebra fora de la finca (no fem la sonorització de cerimònia)', 'Tick if the ceremony is held away from the venue (we do not provide ceremony sound)', 'Cochez si la cérémonie a lieu hors du lieu (nous ne sonorisons pas la cérémonie)')}</span></label>`)}
     ${fg('Nº de invitados', inp('guest_number', ev.guests, { type: 'number', ...roH }))}
