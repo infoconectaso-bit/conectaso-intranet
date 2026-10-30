@@ -610,12 +610,11 @@ function paneRuta(ev) {
       <div class="table-wrap"><table class="dt"><thead><tr><th>Servicio</th><th>Responsable(s)</th></tr></thead><tbody>
       ${(ev.services || []).filter(s => s.servicio).map(s => `<tr><td><b>${esc(extraName(s.servicio))}</b></td><td>${esc([s.resp, s.resp2].filter(Boolean).map(r => userName(r)).join(' · ') || 'Sin asignar')}</td></tr>`).join('')}
       </tbody></table></div>` : ''}
-    ${musicHtml}
-    <div class="btn-row" style="margin-top:14px">
+    <p class="hint" style="margin-top:16px">🎵 El <b>resumen musical</b> y el <b>plano de montaje</b> no se muestran aquí para no recargar la pantalla — están completos en el <b>PDF de la hoja de ruta</b>.</p>
+    <div class="btn-row" style="margin-top:10px">
       <a class="btn btn--sm btn--primary" href="#/eventos/${ev.id}/ruta-doc">📄 Ver / imprimir hoja de ruta</a>
     </div>
-  </div></div>
-  <div id="rutaPlano"></div>`;
+  </div></div>`;
 }
 /* --- paneles --- */
 function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } = {}) {
