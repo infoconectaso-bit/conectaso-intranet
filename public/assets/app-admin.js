@@ -838,12 +838,14 @@ on(/^#\/vacaciones$/, async () => {
   const vThead = `<thead><tr>${admin ? '<th>Usuario</th>' : ''}<th>Inicio</th><th>Fin</th><th>Estado</th><th></th></tr></thead>`;
   const vRow = v => `<tr>${admin ? `<td>${esc(userName(v.userId))}</td>` : ''}<td>${dmy(v.start)}</td><td>${dmy(v.end)}</td><td>${stTag(v.status)}</td><td class="row-actions">${admin ? `${v.status !== 'Aprobado' ? `<button class="btn btn--sm btn--blue" data-set="${v.id}" data-st="Aprobado">Aprobar</button>` : ''}${v.status !== 'Denegado' ? `<button class="btn btn--xs btn--red" data-set="${v.id}" data-st="Denegado">Denegar</button>` : ''}` : ''}<button class="btn btn--icon" data-del="${v.id}">🗑</button></td></tr>`;
   const vPend = rows.filter(v => v.status !== 'Aprobado'), vApr = rows.filter(v => v.status === 'Aprobado'), vCol = admin ? 5 : 4;
+  const vSol = rows.filter(v => v.status === 'Solicitado').length;
+  if (admin) CS.setBadgeCount('vacaciones', vSol);
   shell(`${pageHead('Vacaciones', admin ? 'Solicitudes de todo el equipo.' : 'Tus solicitudes de vacaciones.', `<button class="btn btn--primary" id="newVac">+ Solicitar</button>`)}
+    <div class="panel"><div class="panel__head"><h3>Calendario de vacaciones</h3></div><div class="panel__body" id="vacCal"></div></div>
     <div class="panel"><div class="panel__head"><h3>Solicitudes${vPend.length ? ` (${vPend.length})` : ''}</h3></div><div class="panel__body"><div class="table-wrap"><table class="dt">${vThead}<tbody>
       ${vPend.length ? vPend.map(vRow).join('') : `<tr><td class="td-empty" colspan="${vCol}">Sin solicitudes pendientes.</td></tr>`}
     </tbody></table></div></div></div>
-    ${vApr.length ? `<details class="vac-apr"><summary>✓ Aprobadas (${vApr.length})</summary><div class="panel" style="margin-top:8px"><div class="panel__body"><div class="table-wrap"><table class="dt">${vThead}<tbody>${vApr.map(vRow).join('')}</tbody></table></div></div></div></details>` : ''}
-    <div class="panel"><div class="panel__head"><h3>Calendario de vacaciones</h3></div><div class="panel__body" id="vacCal"></div></div>`, ['Vacaciones']);
+    ${vApr.length ? `<details class="vac-apr"><summary>✓ Aprobadas (${vApr.length})</summary><div class="panel" style="margin-top:8px"><div class="panel__body"><div class="table-wrap"><table class="dt">${vThead}<tbody>${vApr.map(vRow).join('')}</tbody></table></div></div></div></details>` : ''}`, ['Vacaciones']);
   const dayFn = k => items.filter(v => v.start && v.end && k >= v.start && k <= v.end).map(v => ({ t: admin ? userName(v.userId) : 'Vacaciones', c: stColor(v.status) }));
   const drawVacCal = () => {
     const box = el('vacCal'); if (!box) return;
