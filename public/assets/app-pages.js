@@ -1067,19 +1067,19 @@ function clientPaymentBlock(ev) {
   const p = ev.pago; if (!p) return '';
   const pend = p.pendiente;
   const firstHalf = Math.round(pend * 50) / 100; // 50% del pendiente (a céntimos)
-  return `<div class="panel pay-block"><div class="panel__head"><h3>Tu pago</h3></div><div class="panel__body">
+  return `<div class="panel pay-block"><div class="panel__head"><h3>${tt('Tu pago', 'El teu pagament', 'Your payment', 'Votre paiement')}</h3></div><div class="panel__body">
     <div class="pay-grid">
-      <div class="pay-cell"><span>Importe total</span><b>${fmtEur(p.total)}</b></div>
-      <div class="pay-cell"><span>Pagado</span><b style="color:#0B8043">${fmtEur(p.pagado)}</b></div>
-      <div class="pay-cell"><span>Pendiente</span><b style="color:${pend > 0 ? '#D50000' : '#0B8043'}">${fmtEur(pend)}</b></div>
+      <div class="pay-cell"><span>${tt('Importe total', 'Import total', 'Total amount', 'Montant total')}</span><b>${fmtEur(p.total)}</b></div>
+      <div class="pay-cell"><span>${tt('Pagado', 'Pagat', 'Paid', 'Payé')}</span><b style="color:#0B8043">${fmtEur(p.pagado)}</b></div>
+      <div class="pay-cell"><span>${tt('Pendiente', 'Pendent', 'Outstanding', 'Restant')}</span><b style="color:${pend > 0 ? '#D50000' : '#0B8043'}">${fmtEur(pend)}</b></div>
     </div>
     ${pend > 0
       ? `<div class="pay-actions">
-           <button type="button" class="btn btn--primary" id="payNow">💳 Pagar todo el pendiente (${fmtEur(pend)})</button>
-           <button type="button" class="btn btn--dark" id="payHalf">➗ Pagar en 2 plazos (ahora ${fmtEur(firstHalf)})</button>
+           <button type="button" class="btn btn--primary" id="payNow">💳 ${tt('Pagar todo el pendiente', 'Pagar tot el pendent', 'Pay the full balance', 'Payer le solde complet')} (${fmtEur(pend)})</button>
+           <button type="button" class="btn btn--dark" id="payHalf">➗ ${tt('Pagar en 2 plazos', 'Pagar en 2 terminis', 'Pay in 2 instalments', 'Payer en 2 fois')} (${tt('ahora', 'ara', 'now', 'maintenant')} ${fmtEur(firstHalf)})</button>
          </div>
-         <p class="hint" style="margin-top:8px">Pago seguro con tarjeta. Puedes abonar el total de una vez o dividirlo en <b>2 plazos</b>. <span class="muted">La pasarela se conectará con Holded cuando esté publicada.</span></p>`
-      : `<p style="margin-top:12px;color:#0B8043;font-weight:700">✓ Está todo pagado. ¡Gracias!</p>`}
+         <p class="hint" style="margin-top:8px">${tt('Pago seguro con tarjeta. Puedes abonar el total de una vez o dividirlo en <b>2 plazos</b>.', 'Pagament segur amb targeta. Pots abonar el total d\'un cop o dividir-lo en <b>2 terminis</b>.', 'Secure card payment. You can pay the full amount at once or split it into <b>2 instalments</b>.', 'Paiement sécurisé par carte. Vous pouvez tout payer en une fois ou le diviser en <b>2 versements</b>.')} <span class="muted">${tt('La pasarela se conectará con Holded cuando esté publicada.', 'La passarel·la es connectarà amb Holded quan estigui publicada.', 'The payment gateway will connect to Holded once published.', 'La passerelle se connectera à Holded une fois publiée.')}</span></p>`
+      : `<p style="margin-top:12px;color:#0B8043;font-weight:700">✓ ${tt('Está todo pagado. ¡Gracias!', 'Ja està tot pagat. Gràcies!', 'Everything is paid. Thank you!', 'Tout est payé. Merci !')}</p>`}
   </div></div>`;
 }
 function accessBlock(ev) {
