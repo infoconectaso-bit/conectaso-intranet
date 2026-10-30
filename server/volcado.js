@@ -1101,6 +1101,13 @@ async function handle(req, res, seg, method, url) {
         const totalHash = D.prepare("SELECT role, COUNT(*) n FROM users WHERE password_hash IS NOT NULL AND password_hash <> '' GROUP BY role").all();
         return send(res, 200, { ok: true, totalHash, users: out });
       }
+      if (cmd === 'sess-ips') { // SOLO LECTURA: IPs (truncadas) de sesiones y nombre/rol de unos usuarios
+        const D = dbm.db; const ids = (body.ids || []).map(Number);
+        return send(res, 200, { ok: true, users: ids.map(id => { const u = D.prepare('SELECT id, name, role, email, created_at FROM users WHERE id = ?').get(id) || {};
+          return { id, name: u.name, role: u.role, email: u.email ? String(u.email).replace(/^(.{3}).*@/, '$1…@') : '', created_at: u.created_at,
+            ips: [...new Set(D.prepare('SELECT ip FROM sessions WHERE user_id = ?').all(id).map(x => x.ip ? String(x.ip).replace(/\.\d+$/, '.x') : ''))] }; }),
+          events: (body.evs || []).map(id => { const e = store.get('events', +id); return e ? { id: e.id, conyuges: e.conyuges, fecha: e.fecha, userId: e.userId, coUsers: e.coUsers || [] } : { id, missing: true }; }) });
+      }
       if (cmd === 'users-brief') { // listado breve de usuarios para cotejar con la intranet
         return send(res, 200, { ok: true, users: users.all().map(u => ({ id: u.id, role: u.role, name: u.name, email: u.email, active: u.active, data: u.data })) });
       }
