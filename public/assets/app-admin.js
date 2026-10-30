@@ -781,7 +781,8 @@ function renderMonthMini(y, m, evsForDay) {
     const d = new Date(start); d.setDate(start.getDate() + i); const k = ymd(d);
     const evs = evsForDay(k);
     const tip = evs.map(e => String(e.t).replace(/"/g, '')).join(', ');
-    cells += `<div class="cell ${d.getMonth() !== m ? 'other' : ''} ${k === ymd(TODAY) ? 'today' : ''}"${tip ? ` title="${esc(tip)}"` : ''}><div class="n">${d.getDate()}</div>${evs.length ? `<div class="cal-dots">${evs.slice(0, 4).map(e => `<span class="cal-dot" style="background:${e.c}"></span>`).join('')}</div>` : ''}</div>`;
+    const chips = evs.slice(0, 3).map(e => `<span class="cal-mev" style="background:${e.c}">${esc(String(e.t).split(' ')[0])}</span>`).join('') + (evs.length > 3 ? `<span class="cal-mev cal-mev--more">+${evs.length - 3}</span>` : '');
+    cells += `<div class="cell ${d.getMonth() !== m ? 'other' : ''} ${k === ymd(TODAY) ? 'today' : ''}"${tip ? ` title="${esc(tip)}"` : ''}><div class="n">${d.getDate()}</div>${evs.length ? `<div class="cal-mevs">${chips}</div>` : ''}</div>`;
   }
   return `<div class="cal-mini"><h4>${MONTHS[m]} ${y}</h4><div class="cal-grid cal-grid--mini">${cells}</div></div>`;
 }
@@ -834,11 +835,14 @@ on(/^#\/vacaciones$/, async () => {
   const stTag = s => s === 'Aprobado' ? '<span class="tag tag--green">Aprobado</span>' : s === 'Denegado' ? '<span class="tag tag--red">Denegado</span>' : '<span class="tag tag--yellow">Solicitado</span>';
   const rows = items.slice().sort((a, b) => (b.start || '').localeCompare(a.start || ''));
   const stColor = s => s === 'Aprobado' ? '#2e7d32' : s === 'Denegado' ? '#d9534f' : '#f0ad4e';
+  const vThead = `<thead><tr>${admin ? '<th>Usuario</th>' : ''}<th>Inicio</th><th>Fin</th><th>Estado</th><th></th></tr></thead>`;
+  const vRow = v => `<tr>${admin ? `<td>${esc(userName(v.userId))}</td>` : ''}<td>${dmy(v.start)}</td><td>${dmy(v.end)}</td><td>${stTag(v.status)}</td><td class="row-actions">${admin ? `${v.status !== 'Aprobado' ? `<button class="btn btn--sm btn--blue" data-set="${v.id}" data-st="Aprobado">Aprobar</button>` : ''}${v.status !== 'Denegado' ? `<button class="btn btn--xs btn--red" data-set="${v.id}" data-st="Denegado">Denegar</button>` : ''}` : ''}<button class="btn btn--icon" data-del="${v.id}">🗑</button></td></tr>`;
+  const vPend = rows.filter(v => v.status !== 'Aprobado'), vApr = rows.filter(v => v.status === 'Aprobado'), vCol = admin ? 5 : 4;
   shell(`${pageHead('Vacaciones', admin ? 'Solicitudes de todo el equipo.' : 'Tus solicitudes de vacaciones.', `<button class="btn btn--primary" id="newVac">+ Solicitar</button>`)}
-    <div class="panel"><div class="panel__head"><h3>Solicitudes</h3></div><div class="panel__body"><div class="table-wrap"><table class="dt"><thead><tr>${admin ? '<th>Usuario</th>' : ''}<th>Inicio</th><th>Fin</th><th>Estado</th><th></th></tr></thead><tbody>
-      ${rows.length ? rows.map(v => `<tr>${admin ? `<td>${esc(userName(v.userId))}</td>` : ''}<td>${dmy(v.start)}</td><td>${dmy(v.end)}</td><td>${stTag(v.status)}</td>
-        <td class="row-actions">${admin ? `${v.status !== 'Aprobado' ? `<button class="btn btn--sm btn--blue" data-set="${v.id}" data-st="Aprobado">Aprobar</button>` : ''}${v.status !== 'Denegado' ? `<button class="btn btn--xs btn--red" data-set="${v.id}" data-st="Denegado">Denegar</button>` : ''}` : ''}<button class="btn btn--icon" data-del="${v.id}">🗑</button></td></tr>`).join('') : `<tr><td class="td-empty" colspan="${admin ? 5 : 4}">Sin solicitudes.</td></tr>`}
+    <div class="panel"><div class="panel__head"><h3>Solicitudes${vPend.length ? ` (${vPend.length})` : ''}</h3></div><div class="panel__body"><div class="table-wrap"><table class="dt">${vThead}<tbody>
+      ${vPend.length ? vPend.map(vRow).join('') : `<tr><td class="td-empty" colspan="${vCol}">Sin solicitudes pendientes.</td></tr>`}
     </tbody></table></div></div></div>
+    ${vApr.length ? `<details class="vac-apr"><summary>✓ Aprobadas (${vApr.length})</summary><div class="panel" style="margin-top:8px"><div class="panel__body"><div class="table-wrap"><table class="dt">${vThead}<tbody>${vApr.map(vRow).join('')}</tbody></table></div></div></div></details>` : ''}
     <div class="panel"><div class="panel__head"><h3>Calendario de vacaciones</h3></div><div class="panel__body" id="vacCal"></div></div>`, ['Vacaciones']);
   const dayFn = k => items.filter(v => v.start && v.end && k >= v.start && k <= v.end).map(v => ({ t: admin ? userName(v.userId) : 'Vacaciones', c: stColor(v.status) }));
   const drawVacCal = () => {
