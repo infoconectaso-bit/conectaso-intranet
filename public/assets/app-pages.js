@@ -452,7 +452,7 @@ function eventViewRole(ev) {
     ? `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button><button data-tab="archivos">Archivos</button></div>`
     : `<div class="tabs" id="evTabs"><button data-tab="datos" class="on">Datos</button><button data-tab="musica">Música</button><button data-tab="extras">Extras</button>${role === 'dj' ? '<button data-tab="servicios">Servicios</button><button data-tab="ruta">Ruta</button>' : ''}</div>`);
   const panes = `
-    <div data-pane="datos">${role === 'dj' ? `<div class="dj-estado-row" style="display:flex;align-items:center;gap:8px;margin:0 0 12px;flex-wrap:wrap"><label style="font-size:13px;font-weight:600;white-space:nowrap;margin:0">Estado de contacto</label><div style="min-width:160px;max-width:220px">${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div></div>` : ''}${paneDatos(ev, locOpts, { readonly: !(role === 'user' && ev.canEdit), horariosEditable: isPlanner && ev.canEdit })}${role === 'user' ? clientPaymentBlock(ev) + `<div id="holdedFacturas" style="margin-top:16px"></div>` + accessBlock(ev) : (isPlanner ? `<div id="holdedFacturas" style="margin-top:16px"></div>` : '')}</div>
+    <div data-pane="datos">${role === 'dj' ? `<div class="dj-estado-row" style="display:flex;align-items:center;gap:8px;margin:0 0 12px;flex-wrap:wrap"><label style="font-size:13px;font-weight:600;white-space:nowrap;margin:0">Estado de contacto</label><div style="min-width:160px;max-width:220px">${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div></div>` : ''}${paneDatos(ev, locOpts, { readonly: !(role === 'user' && ev.canEdit), horariosEditable: isPlanner && ev.canEdit })}${role === 'user' ? clientPaymentBlock(ev) + (isPayMarker(ev) ? '' : `<div id="holdedFacturas" style="margin-top:16px"></div>`) + accessBlock(ev) : (isPlanner ? `<div id="holdedFacturas" style="margin-top:16px"></div>` : '')}</div>
     ${simple ? '' : `<div data-pane="musica" style="display:none">${paneMusica(ev, canEditMusic)}</div>
     <div data-pane="extras" style="display:none">${paneExtras(ev, { readonly: !canEditExtras })}</div>`}
     ${role === 'dj' ? `<div data-pane="servicios" style="display:none">${paneServicios(ev, null, null, { readonly: true })}${(role === 'dj' && !simple) ? (eventFinished(ev)
@@ -1063,9 +1063,12 @@ async function loadHoldedFacturas(ev) {
 /* --- interacción del formulario de evento --- */
 // bloque "Acceso a la boda": titular + invitados (novio/novia con su propio email)
 // bloque de pago del cliente: total, pagado, pendiente y botón de pasarela (Holded)
+function isPayMarker(ev) { const p = ev && ev.pago; return !!p && Math.abs(Number(p.pagado) - 1) < 0.005 && Math.abs(Number(p.pendiente) - 1) < 0.005; }
 function clientPaymentBlock(ev) {
   const p = ev.pago; if (!p) return '';
   const pend = p.pendiente;
+  // "1 € pagado / 1 € pendiente" es una marca interna (sin extras ni nada raro): no se enseña nunca a los novios.
+  if (isPayMarker(ev)) return '';
   const firstHalf = Math.round(pend * 50) / 100; // 50% del pendiente (a céntimos)
   return `<div class="panel pay-block"><div class="panel__head"><h3>${tt('Tu pago', 'El teu pagament', 'Your payment', 'Votre paiement')}</h3></div><div class="panel__body">
     <div class="pay-grid">
