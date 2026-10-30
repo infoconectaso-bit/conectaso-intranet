@@ -672,11 +672,11 @@ function applyCliTheme(u) {
   document.body.classList.toggle('cli-modern', modern);
   if (modern && !el('cliModernFont')) {
     const l = document.createElement('link'); l.id = 'cliModernFont'; l.rel = 'stylesheet';
-    l.href = 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap';
+    l.href = 'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;500;600;700;800&display=swap';
     document.head.appendChild(l);
   }
   const bar = el('cliBetaBar');
-  if (modern) { if (!bar) { const b = document.createElement('div'); b.id = 'cliBetaBar'; b.innerHTML = '✨ Diseño nuevo (beta) · <a href="?np=0' + (location.hash || '#/') + '">volver al clásico</a>'; document.body.appendChild(b); } }
+  if (modern) { if (!bar) { const b = document.createElement('div'); b.id = 'cliBetaBar'; b.innerHTML = 'Diseño elegante (beta) · <a href="?np=0' + (location.hash || '#/') + '">volver al clásico</a>'; document.body.appendChild(b); } }
   else if (bar) bar.remove();
 }
 const roleLabel = r => ({ admin: 'Administración', dj: 'DJ / Técnico', planner: 'Wedding planner', user: 'Cliente' }[r] || r);
