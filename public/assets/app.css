@@ -366,6 +366,9 @@ table.dt tbody tr:hover td{background:#fdf0f7}
 .svc-row{display:grid;grid-template-columns:1.3fr 1fr 1fr auto;gap:10px;align-items:center;margin-bottom:10px}
 .svc-head{display:grid;grid-template-columns:1.3fr 1fr 1fr auto;gap:10px;font-size:10.5px;font-weight:700;color:#8a8494;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
 @media(max-width:720px){.svc-row{grid-template-columns:1fr}.svc-head{display:none}}
+/* El SERVICIO (1ª celda) en negrita para identificarlo rápido, sobre todo en móvil */
+.svc-serv .ssel__input,.svc-serv > .control,.svc-serv select{font-weight:800}
+@media(max-width:720px){.svc-serv .ssel__input,.svc-serv > .control,.svc-serv select{background:#FBF7EC}.svc-row{margin-bottom:16px}}
 .extra-item{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line);align-items:flex-start}
 .extra-item input{margin-top:3px}
 .extra-item p{margin:4px 0 0;color:var(--muted);font-size:13px}
