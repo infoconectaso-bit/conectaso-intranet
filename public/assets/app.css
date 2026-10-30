@@ -52,45 +52,45 @@ input,select,textarea,button{font-family:inherit;font-size:14px}
 textarea.control{min-height:92px;resize:vertical}
 .control--sm{padding:7px 10px;border-radius:8px}
 /* Modo noche: tema OSCURO y CÁLIDO (tipo Night Shift de iPhone) para no deslumbrar.
-   Se consigue redefiniendo los tokens de color a tonos oscuros cálidos (marrón), así
+   Se consigue redefiniendo los tokens de color a tonos azul noche, así
    cambian todos los fondos (paneles, tarjetas, tablas, inputs…) a oscuro. */
 html.night-dim{
-  --cream:#181410;      /* fondo general, casi negro cálido */
-  --white:#221c15;      /* paneles, inputs, tarjetas, tablas */
-  --ink:#efe9df;        /* texto claro cálido */
-  --muted:#a9a090;
-  --line:#3a3328;       /* bordes suaves */
-  --onyx:#2e2819;       /* bordes/botones oscuros (visibles sobre el fondo) */
-  --onyx-soft:#3a3222;
+  --cream:#0C1322;      /* fondo general, azul noche casi negro */
+  --white:#131C30;      /* paneles, inputs, tarjetas, tablas */
+  --ink:#ECEFF6;        /* texto claro frío */
+  --muted:#9AA6BF;
+  --line:#243352;       /* bordes suaves */
+  --onyx:#2B3A5C;       /* bordes/botones oscuros (visibles sobre el fondo) */
+  --onyx-soft:#344668;
   --shadow-sticker:3px 3px 0 #000;
 }
 html.night-dim body{background:var(--cream);color:var(--ink)}
 /* tintes claros puntuales → variantes oscuras */
-html.night-dim .control[readonly],html.night-dim .readbox{background:#2b2417}
+html.night-dim .control[readonly],html.night-dim .readbox{background:#182340}
 /* Modo noche: los momentos DESACTIVADOS no deben deslumbrar en blanco. Tono rojo apagado que
    deja claro que está desactivado sin cegar. */
-html.night-dim .moment--off{background:#2a1a1a}
-html.night-dim .moment--off .control{background:#3a2222;color:#d7b3b3;border-color:#5a3030}
-html.night-dim .moment--off [data-mtitle]{color:#c99a9a}
-html.night-dim table.dt tbody tr:nth-child(even) td{background:#1e1811}
-html.night-dim table.dt tbody tr:hover td{background:#2c2417}
-html.night-dim .fact-w td{background:#241d12}
-html.night-dim .tyc-body,html.night-dim .msg-preview{background:#1e1811}
-html.night-dim .ssel__opt.on{background:#2c2417}
-html.night-dim .empty,html.night-dim .cli-hint{background:#221c15}
+html.night-dim .moment--off{background:#261A2E}
+html.night-dim .moment--off .control{background:#33243D;color:#CDB6D6;border-color:#4E3A5C}
+html.night-dim .moment--off [data-mtitle]{color:#B49DBE}
+html.night-dim table.dt tbody tr:nth-child(even) td{background:#111A2D}
+html.night-dim table.dt tbody tr:hover td{background:#182340}
+html.night-dim .fact-w td{background:#16203A}
+html.night-dim .tyc-body,html.night-dim .msg-preview{background:#111A2D}
+html.night-dim .ssel__opt.on{background:#182340}
+html.night-dim .empty,html.night-dim .cli-hint{background:#131C30}
 /* textos que en claro eran oscuros sobre fondo claro: aclararlos sobre el fondo oscuro */
 html.night-dim .form-sub,html.night-dim .btn,html.night-dim .mtab,html.night-dim .yrchip,html.night-dim .cmt.open > .cmt-btn,html.night-dim .edituser-lbl,html.night-dim .tyc-body strong{color:var(--ink)}
 /* elementos con fondo de COLOR claro (azul/amarillo/pastel): mantienen texto oscuro */
-html.night-dim .btn--blue,html.night-dim .btn--yellow,html.night-dim .nav a.active,html.night-dim .yrchip.on,html.night-dim .progress > div,html.night-dim .tag,html.night-dim .ex-badge,html.night-dim .pay-circle{color:#1a140a}
+html.night-dim .btn--blue,html.night-dim .btn--yellow,html.night-dim .nav a.active,html.night-dim .yrchip.on,html.night-dim .progress > div,html.night-dim .tag,html.night-dim .ex-badge,html.night-dim .pay-circle{color:#0C1322}
 /* Tarjetas de estadística con fondo de COLOR claro (azul/amarillo): mantienen su fondo pastel,
    así que el texto debe ser OSCURO también en modo noche (si no, queda claro sobre claro = ilegible). */
-html.night-dim .stat--blue,html.night-dim .stat--yellow,html.night-dim .stat--blue .v,html.night-dim .stat--yellow .v{color:#1a140a}
-html.night-dim .stat--blue .k,html.night-dim .stat--yellow .k{color:#1a140acc}
+html.night-dim .stat--blue,html.night-dim .stat--yellow,html.night-dim .stat--blue .v,html.night-dim .stat--yellow .v{color:#0C1322}
+html.night-dim .stat--blue .k,html.night-dim .stat--yellow .k{color:#0C1322cc}
 /* avisos con fondo pastel claro fijo: texto oscuro también en modo noche para que se lean */
-html.night-dim .alert,html.night-dim .alert b,html.night-dim .alert strong,html.night-dim .pdf-notice,html.night-dim .pdf-notice b,html.night-dim .pdf-notice strong{color:#1a140a}
-html.night-dim .btn--dark{color:#efe9df}
-/* capa cálida extra (reduce aún más el azul), muy sutil sobre el tema oscuro */
-.night-overlay{position:fixed;inset:0;background:rgba(255,150,40,.06);pointer-events:none;z-index:99998;display:none}
+html.night-dim .alert,html.night-dim .alert b,html.night-dim .alert strong,html.night-dim .pdf-notice,html.night-dim .pdf-notice b,html.night-dim .pdf-notice strong{color:#0C1322}
+html.night-dim .btn--dark{color:#ECEFF6}
+/* capa extra desactivada (antes tinte cálido) */
+.night-overlay{position:fixed;inset:0;background:transparent;pointer-events:none;z-index:99998;display:none}
 html.night-dim .night-overlay{display:block}
 .nav__foot a{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;color:#d8d2c3;font-weight:600;text-decoration:none;margin-bottom:2px}
 .nav__foot a:hover{background:#ffffff14;color:#fff;text-decoration:none}
@@ -930,7 +930,7 @@ table.dt tbody tr.fact-t td,table.dt tbody tr.fact-t:hover td{background:#0B8043
 .ruta-music .ruta-mrow:last-child{border-bottom:0}
 .ruta-msec{margin:14px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#8a8390)}
 .veh-badge{display:inline-block;font-size:11px;font-weight:800;background:var(--cream,#f1ede4);border:1px solid var(--line,#e5e0d6);border-radius:6px;padding:0 6px;margin-left:4px;white-space:nowrap;vertical-align:middle}
-html.night-dim .veh-badge{background:#2c2417;border-color:#3a3020;color:var(--ink)}
+html.night-dim .veh-badge{background:#182340;border-color:#2B3A5C;color:var(--ink)}
 .ruta-veh{display:flex;align-items:center;gap:8px;background:var(--cream,#f6f2ea);border:1px solid var(--line,#e5e0d6);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:14px}
 .ruta-veh-ic{font-size:18px}
 /* Iconos SVG de línea (sustituyen a los emojis en la hoja de ruta y badges). Heredan el color
@@ -940,7 +940,7 @@ html.night-dim .veh-badge{background:#2c2417;border-color:#3a3020;color:var(--in
 .ruta-ic .dk-ic{width:19px;height:19px;color:var(--onyx,#130F17)}
 .ruta-veh-ic .veh-ic-svg{width:20px;height:20px}
 .ruta-deck .card .ic .dk-ic{width:1em;height:1em}
-html.night-dim .ruta-veh{background:#241d12;border-color:#3a3020}
+html.night-dim .ruta-veh{background:#16203A;border-color:#2B3A5C}
 /* Gráficos de barras horizontales (Análisis) */
 .bars{display:flex;flex-direction:column;gap:7px}
 .bar-row{display:grid;grid-template-columns:160px 1fr auto;align-items:center;gap:10px;font-size:13px}
@@ -948,7 +948,7 @@ html.night-dim .ruta-veh{background:#241d12;border-color:#3a3020}
 .bar-track{background:var(--cream,#f1ede4);border-radius:999px;height:16px;overflow:hidden}
 .bar-fill{height:100%;background:var(--pink,#E82C88);border-radius:999px;min-width:2px}
 .bar-val{white-space:nowrap;font-variant-numeric:tabular-nums}
-html.night-dim .bar-track{background:#2a2217}
+html.night-dim .bar-track{background:#182340}
 @media(max-width:640px){.bar-row{grid-template-columns:110px 1fr auto;font-size:12px}.bar-lbl{font-size:12px}}
 /* Quesito (donut) */
 .pie-wrap{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
@@ -958,7 +958,7 @@ html.night-dim .bar-track{background:#2a2217}
 .pie-leg-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pie-dot{width:12px;height:12px;border-radius:3px;flex:none}
 .pie-hole{fill:var(--white,#fff)}
-html.night-dim .pie-hole{fill:#1a140a}
+html.night-dim .pie-hole{fill:#0C1322}
 /* Gráfico de líneas (evolución por año) */
 .line-svg{font-family:var(--body)}
 .ln-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:12.5px}
@@ -1209,7 +1209,7 @@ button.nom-tile--empty:hover .nom-tile__m{color:var(--pink)}
 .nom-plus{font-family:var(--display);font-size:30px;line-height:1;align-self:center}
 .nom-tile__hint{font-size:11.5px}
 .nom-tile--future{opacity:.45}
-html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok{background:#221c15}
+html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok{background:#131C30}
 
 /* Hoja de ruta v3: portada con normativa, servicios con icono, enlaces de la escaleta clicables */
 .ruta-deck .cover.cover--norm{flex-direction:row;align-items:center;gap:48px;padding:0 64px 0 80px}
@@ -1317,8 +1317,8 @@ html.night-dim .nom-person,html.night-dim .nom-hero,html.night-dim .nom-tile--ok
 .mh-li:last-child{border-bottom:0}
 .mh-li__v{white-space:nowrap;color:var(--muted)}
 .mh-li__v b{color:var(--ink)}
-html.night-dim .parte-alert{background:#2a2312}
-html.night-dim .parte-row,html.night-dim .dj-hx-strip{background:#221c15}
+html.night-dim .parte-alert{background:#2A3048}
+html.night-dim .parte-row,html.night-dim .dj-hx-strip{background:#131C30}
 
 /* --- Inventario Hora Loca --- */
 .hl-stock{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
