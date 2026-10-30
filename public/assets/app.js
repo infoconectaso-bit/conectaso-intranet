@@ -939,8 +939,11 @@ function pagoChip(ev) {
   if (ev.pagoCliente === undefined) return '—'; // perfil sin acceso a importes
   const pend = (+ev.pagoCliente || 0) - (+ev.pagado || 0);
   if (!ev.pagoCliente) return dot('#F6BF26', 'Importe no indicado');
-  if (pend <= 0) return ev.metodo === 'Efectivo' ? `<span class="dot dot--e" style="background:#0B8043" title="Abonado (efectivo)">E</span>` : dot('#0B8043', 'Abonado');
-  return dot('#D50000', 'Pendiente: ' + pend + ' €');
+  // Letra del método de pago dentro de la bola: E = efectivo, T = transferencia.
+  const L = ev.metodo === 'Efectivo' ? 'E' : (ev.metodo === 'Transferencia' ? 'T' : '');
+  const m = L ? ' (' + ev.metodo.toLowerCase() + ')' : '';
+  const ball = (c, t) => L ? `<span class="dot dot--e" style="background:${c}" title="${esc(t)}">${L}</span>` : dot(c, t);
+  return pend <= 0 ? ball('#0B8043', 'Abonado' + m) : ball('#D50000', 'Pendiente: ' + pend + ' €' + m);
 }
 
 /* =========================================================================
