@@ -587,7 +587,7 @@ function navFor(role) {
     { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' },
     { s: 'Negocio' }, { t: 'Económicos', i: 'euro', h: '#/cobros', alt: ['#/impagos', '#/descuadres'], badge: 'descuadres' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
     { t: 'Copias de seguridad', i: 'doc', h: '#/backups', dot: 'backups' },
-    { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
+    { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento', badge: 'mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
     // Papelera y Beneficios se han movido a "Mi cuenta → Configuración avanzada" (protegidos con contraseña).
   ];
   if (role === 'dj') {
@@ -763,6 +763,7 @@ const _badgeFetch = {
   descuadres: () => api('holded-descuadres').then(r => (!r || r.enabled === false) ? 0
     : ((r.sinVincularN || (r.sinVincular || []).length || 0) + ((r.payMismatches || []).length) + ((r.serviceWarnings || []).length))),
   impagos: () => api('holded-unpaid').then(r => (!r || r.enabled === false) ? 0 : ((r.invoices || []).length)),
+  mantenimiento: () => api('collections/maintenance').then(r => ((r && r.items) || []).filter(m => (m.status || 'pendiente') !== 'completado').length),
 };
 function paintBadge(key, n) {
   $$('[data-badge="' + key + '"]').forEach(b => {

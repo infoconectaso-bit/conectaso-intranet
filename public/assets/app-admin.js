@@ -1902,6 +1902,7 @@ async function mantenimientoPage() {
   const urgRank = { alta: 0, media: 1, baja: 2 };
   const pend = items.filter(m => m.status !== 'completado').sort((a, b) => (urgRank[a.urgency] - urgRank[b.urgency]) || (b.date || '').localeCompare(a.date || ''));
   const done = items.filter(m => m.status === 'completado').sort((a, b) => (b.fixedAt || '').localeCompare(a.fixedAt || ''));
+  if (admin) CS.setBadgeCount('mantenimiento', pend.length);
   const thumbs = m => (imgs[m.id] || []).length ? `<div class="mant-imgs">${imgs[m.id].map(f => `<img class="mant-thumb" src="/api/files/${f.id}" data-zoom="/api/files/${f.id}" alt="foto" title="Clic para ampliar" loading="lazy">`).join('')}</div>` : '';
   const card = (m, isDone) => `<div class="panel mant-card mant-card--${m.urgency || 'media'}"><div class="panel__body">
       <div class="mant-top"><div><b class="mant-subj">${esc(m.subject || 'Parte de mantenimiento')}</b>

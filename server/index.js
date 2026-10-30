@@ -2488,6 +2488,36 @@ const extraLabel = key => EXTRA_LABELS[key] || String(key).replace(/^extra_/, ''
 const slashDate = f => { const p = String(f || '').slice(0, 10).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (f || '—'); };
 // Compara el estado anterior y el nuevo del evento; si hay extras recién puestos en "solicitado"
 // (por un novio o wedding planner), avisa por email a facturación. Si el SMTP está apagado no envía nada.
+// Dirección del superadmin / administración a la que llegan los avisos internos.
+const SUPERADMIN_EMAIL = 'infoconectaso@gmail.com';
+const _escMail = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Aviso a administración cuando un trabajador abre un PARTE DE MANTENIMIENTO.
+function notifyMaintenanceCreated(user, rec) {
+  if (!mail.enabled()) return;
+  const worker = (users.get(user.id) || {}).name || (user && user.email) || ('#' + (user && user.id));
+  const fecha = rec.date || bizToday();
+  const subject = `🔧 Nuevo parte de mantenimiento — ${worker}`;
+  const text = `${worker} ha abierto un parte de mantenimiento (${fecha}).\n\nQué falla: ${rec.subject || '—'}\n${rec.desc ? 'Detalle: ' + rec.desc + '\n' : ''}\nVer en la intranet: ${APP_URL()}/#/mantenimiento`;
+  let html; try {
+    html = emails.shell({ title: 'Nuevo parte de mantenimiento', lead: `${worker} ha abierto un parte (${fecha})`,
+      bodyHtml: `<p><b>${_escMail(worker)}</b> ha abierto un parte de mantenimiento el ${_escMail(fecha)}.</p><p><b>Qué falla:</b> ${_escMail(rec.subject || '—')}</p>${rec.desc ? `<p><b>Detalle:</b> ${_escMail(rec.desc)}</p>` : ''}`,
+      cta: 'Ver mantenimiento', link: APP_URL() + '/#/mantenimiento', foot: 'Aviso automático de la intranet.' });
+  } catch (e) {}
+  mail.sendMail({ to: SUPERADMIN_EMAIL, subject, text, html }).catch(e => console.error('[aviso mantenimiento] email:', e.message));
+}
+// Aviso al superadmin cuando un trabajador SOLICITA VACACIONES.
+function notifyVacationRequest(user, rec) {
+  if (!mail.enabled()) return;
+  const worker = (users.get(user.id) || {}).name || (user && user.email) || ('#' + (user && user.id));
+  const subject = `🏖️ Solicitud de vacaciones — ${worker}`;
+  const text = `${worker} ha solicitado vacaciones del ${rec.start} al ${rec.end}.\n\nRevísalo en la intranet: ${APP_URL()}/#/vacaciones`;
+  let html; try {
+    html = emails.shell({ title: 'Solicitud de vacaciones', lead: `${worker} ha solicitado vacaciones`,
+      bodyHtml: `<p><b>${_escMail(worker)}</b> ha solicitado vacaciones:</p><p><b>Desde:</b> ${_escMail(rec.start)}<br><b>Hasta:</b> ${_escMail(rec.end)}</p>`,
+      cta: 'Ver vacaciones', link: APP_URL() + '/#/vacaciones', foot: 'Aviso automático de la intranet.' });
+  } catch (e) {}
+  mail.sendMail({ to: SUPERADMIN_EMAIL, subject, text, html }).catch(e => console.error('[aviso vacaciones] email:', e.message));
+}
 function notifyNewExtraRequests(user, oldEv, newEv) {
   if (user.role !== 'user' && user.role !== 'planner') return;
   const before = oldEv.extraStatus || {}, after = newEv.extraStatus || {};
@@ -3406,6 +3436,11 @@ async function collection(req, res, user, seg, method) {
     }
     const saved = store.put(col, rec);
     store.audit(user.id, col + '-save', col, saved.id);
+    // Avisos por email SOLO al CREAR (POST), nunca al editar. No deben bloquear el guardado.
+    if (method === 'POST') {
+      if (col === 'maintenance') { try { notifyMaintenanceCreated(user, saved); } catch (e) { console.error('[aviso mantenimiento]', e.message); } }
+      else if (col === 'vacations' && saved.status === 'Solicitado') { try { notifyVacationRequest(user, saved); } catch (e) { console.error('[aviso vacaciones]', e.message); } }
+    }
     return ok(res, { item: saved });
   }
   if (method === 'DELETE' && canWrite) {
