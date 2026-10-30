@@ -586,7 +586,7 @@ function navFor(role) {
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
     { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' },
     { s: 'Negocio' }, { t: 'Económicos', i: 'euro', h: '#/cobros', alt: ['#/impagos', '#/descuadres'], badge: 'descuadres' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
-    { t: 'Copias de seguridad', i: 'doc', h: '#/backups' },
+    { t: 'Copias de seguridad', i: 'doc', h: '#/backups', dot: 'backups' },
     { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
     // Papelera y Beneficios se han movido a "Mi cuenta → Configuración avanzada" (protegidos con contraseña).
   ];
@@ -616,7 +616,7 @@ function shell(bodyHtml, crumbs) {
   const u = S.user;
   const nav = navFor(u.role).map(n => n.s
     ? `<div class="nav__section">${esc(n.s)}</div>`
-    : `<a href="${n.h}" data-nav="${n.h}"${n.alt ? ` data-alt="${n.alt.join('|')}"` : ''}>${svg(n.i)}<span>${esc(n.t)}</span>${n.badge ? `<span class="nav-badge" data-badge="${esc(n.badge)}" hidden></span>` : ''}</a>`).join('');
+    : `<a href="${n.h}" data-nav="${n.h}"${n.alt ? ` data-alt="${n.alt.join('|')}"` : ''}>${svg(n.i)}<span>${esc(n.t)}</span>${n.badge ? `<span class="nav-badge" data-badge="${esc(n.badge)}" hidden></span>` : ''}${n.dot ? `<span class="nav-dot" data-dot="${esc(n.dot)}" hidden></span>` : ''}</a>`).join('');
   app.innerHTML = `<div class="app">
     <aside class="sidebar">
       <div class="sidebar__logo"><img src="/assets/brand/logo-reducido-azul.svg" alt="">
@@ -757,27 +757,54 @@ function markActive() {
     a.classList.toggle('active', on);
   });
 }
-// --- Badge tipo "notificación" (p.ej. nº de descuadres) en el menú y en las pestañas ---
-let _descCache = { t: 0, n: null, p: null };
-function paintDescBadges(n) {
-  $$('[data-badge="descuadres"]').forEach(b => {
+// --- Badges tipo "notificación" (nº de descuadres / impagos) en el menú y en las pestañas ---
+const _badgeCache = { descuadres: { t: 0, n: null, p: null }, impagos: { t: 0, n: null, p: null } };
+const _badgeFetch = {
+  descuadres: () => api('holded-descuadres').then(r => (!r || r.enabled === false) ? 0
+    : ((r.sinVincularN || (r.sinVincular || []).length || 0) + ((r.payMismatches || []).length) + ((r.serviceWarnings || []).length))),
+  impagos: () => api('holded-unpaid').then(r => (!r || r.enabled === false) ? 0 : ((r.invoices || []).length)),
+};
+function paintBadge(key, n) {
+  $$('[data-badge="' + key + '"]').forEach(b => {
     if (n > 0) { b.textContent = n > 99 ? '99+' : String(n); b.hidden = false; }
     else { b.hidden = true; b.textContent = ''; }
   });
 }
-function descuadresCount() {
+function badgeCount(key) {
+  const c = _badgeCache[key]; if (!c) return Promise.resolve(0);
   const now = Date.now();
-  if (_descCache.n != null && now - _descCache.t < 120000) return Promise.resolve(_descCache.n);
-  if (_descCache.p) return _descCache.p;
-  _descCache.p = api('holded-descuadres').then(r => {
-    const n = (!r || r.enabled === false) ? 0
-      : ((r.sinVincularN || (r.sinVincular || []).length || 0) + ((r.payMismatches || []).length) + ((r.serviceWarnings || []).length));
-    _descCache = { t: Date.now(), n, p: null }; return n;
-  }).catch(() => { _descCache = { t: 0, n: null, p: null }; return 0; });
-  return _descCache.p;
+  if (c.n != null && now - c.t < 120000) return Promise.resolve(c.n);
+  if (c.p) return c.p;
+  c.p = _badgeFetch[key]().then(n => { _badgeCache[key] = { t: Date.now(), n, p: null }; return n; })
+    .catch(() => { _badgeCache[key] = { t: 0, n: null, p: null }; return 0; });
+  return c.p;
 }
-function setDescuadresCount(n) { _descCache = { t: Date.now(), n: n | 0, p: null }; paintDescBadges(n | 0); }
-function fillNavBadges() { if ($('[data-badge="descuadres"]')) descuadresCount().then(paintDescBadges).catch(() => {}); }
+function setBadgeCount(key, n) { _badgeCache[key] = { t: Date.now(), n: n | 0, p: null }; paintBadge(key, n | 0); }
+// Puntitos de estado (p.ej. salud de las copias de seguridad) junto a una entrada del menú.
+const _dotCache = { backups: { t: 0, v: null, p: null } };
+const _dotFetch = {
+  backups: () => api('backups').then(r => { const st = (r && r.status) || {}; if (st.lastError && !st.healthy) return 'err'; if (st.stale) return 'warn'; return 'ok'; }),
+};
+const _DOT_TITLE = { ok: 'Copias de seguridad al día', warn: 'Hace rato que no se hace una copia', err: 'La última copia de seguridad falló' };
+function paintDot(key, state) {
+  $$('[data-dot="' + key + '"]').forEach(d => {
+    if (!state) { d.hidden = true; return; }
+    d.hidden = false; d.className = 'nav-dot nav-dot--' + state; d.title = _DOT_TITLE[state] || '';
+  });
+}
+function dotState(key) {
+  const c = _dotCache[key]; if (!c) return Promise.resolve(null);
+  const now = Date.now();
+  if (c.v != null && now - c.t < 120000) return Promise.resolve(c.v);
+  if (c.p) return c.p;
+  c.p = _dotFetch[key]().then(v => { _dotCache[key] = { t: Date.now(), v, p: null }; return v; })
+    .catch(() => { _dotCache[key] = { t: 0, v: null, p: null }; return null; });
+  return c.p;
+}
+function fillNavBadges() {
+  Object.keys(_badgeFetch).forEach(key => { if ($('[data-badge="' + key + '"]')) badgeCount(key).then(n => paintBadge(key, n)).catch(() => {}); });
+  Object.keys(_dotFetch).forEach(key => { if ($('[data-dot="' + key + '"]')) dotState(key).then(v => paintDot(key, v)).catch(() => {}); });
+}
 function pageHead(title, lead, right) {
   return `<div class="page-head"><div><h1>${esc(title)}</h1>${lead ? `<div class="lead">${esc(lead)}</div>` : ''}<div class="page-head__accent"></div></div>${right || ''}</div>`;
 }
@@ -1087,7 +1114,7 @@ function eventMiniList(list) {
 /* El resto de páginas se cargan desde módulos añadidos abajo */
 window.__CS = { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
   estado, locName, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, tycTitleYear, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$,
-  waSupported, passkeyRegister, passkeyLogin, maintenanceMarkup, setDescuadresCount };
+  waSupported, passkeyRegister, passkeyLogin, maintenanceMarkup, setBadgeCount };
 
 // Descarga un PDF generado en el servidor (Chromium headless). Con blob para manejar bien los
 // errores en vez de navegar a una respuesta de error.

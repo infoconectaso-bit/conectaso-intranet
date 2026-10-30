@@ -831,7 +831,7 @@ on(/^#\/impagos$/, async () => {
   async function draw() {
     loading(['Impagos']);
     const r = await api('holded-unpaid').catch(() => ({ invoices: [] }));
-    if (r.enabled === false) { shell(`${pageHead('Impagos', 'Facturas pendientes de cobro.')}${economicosTabs('impagos')}<div class="empty">La integración de Holded no está activada.</div>`, ['Impagos']); return; }
+    if (r.enabled === false) { shell(`${pageHead('Impagos', 'Facturas pendientes de cobro.')}${economicosTabs('impagos')}<div class="empty">La integración de Holded no está activada.</div>`, ['Impagos']); CS.setBadgeCount('impagos', 0); return; }
     const invs = r.invoices || [];
     const totalPend = invs.reduce((s, i) => s + (+i.pending || 0), 0);
     const overdueN = invs.filter(i => i.overdue).length;
@@ -855,6 +855,7 @@ on(/^#\/impagos$/, async () => {
     shell(`${pageHead('Impagos', `${invs.length} factura(s) pendiente(s)${overdueN ? ` · ${overdueN} vencida(s)` : ''} · ${eur(totalPend)} por cobrar`)}${economicosTabs('impagos')}
       <div class="panel"><div class="panel__body">${table('dtImpagos', { rows: invs, order: [0, 'asc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas pendientes. 🎉' })}</div></div>
       ${igPanel}`, ['Impagos']);
+    CS.setBadgeCount('impagos', invs.length);
     bindTable('dtImpagos', () => { $$('[data-ignore-imp]').forEach(b => b.onclick = () => ignoreImp(b.dataset.ignoreImp, true, b.closest('tr'))); });
     bindTable('dtImpIgn', () => { $$('[data-restore-imp]').forEach(b => b.onclick = () => ignoreImp(b.dataset.restoreImp, false, b.closest('tr'))); });
   }
@@ -866,7 +867,7 @@ on(/^#\/descuadres$/, async () => {
   async function draw(refresh) {
     loading(['Descuadres']);
     const r = await api('holded-descuadres' + (refresh ? '?refresh=1' : '')).catch(() => ({ sinVincular: [] }));
-    if (r.enabled === false) { shell(`${pageHead('Descuadre facturas', 'Facturas de Holded sin vincular a un evento.')}${economicosTabs('descuadres')}<div class="empty">La integración de Holded no está activada.</div>`, ['Descuadres']); CS.setDescuadresCount(0); return; }
+    if (r.enabled === false) { shell(`${pageHead('Descuadre facturas', 'Facturas de Holded sin vincular a un evento.')}${economicosTabs('descuadres')}<div class="empty">La integración de Holded no está activada.</div>`, ['Descuadres']); CS.setBadgeCount('descuadres', 0); return; }
     const sv = r.sinVincular || [];
     const cols = [
       { t: 'Fecha', get: i => i.date || '', html: i => esc(slash(i.date) || '—') },
@@ -941,7 +942,7 @@ on(/^#\/descuadres$/, async () => {
       ${pmPanel}
       ${pmiPanel}
       ${igPanel}`, ['Descuadres']);
-    CS.setDescuadresCount((r.sinVincularN || sv.length || 0) + pm.length + sw.length);
+    CS.setBadgeCount('descuadres', (r.sinVincularN || sv.length || 0) + pm.length + sw.length);
     // --- Descuadre pagado: obviar / restaurar / enlazar factura por número ---
     const pmIgnore = async (eventId, ignore, diff) => { try { await api('holded-descuadres/pay-ignore', { method: 'POST', body: { eventId, ignore, diff } }); toast(ignore ? 'Descuadre obviado' : 'Descuadre restaurado', 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };
     const pmLinkNumber = (eventId) => {
@@ -1324,7 +1325,7 @@ function facturacionTabs(active) {
 function economicosTabs(active) {
   return `<div class="mtabs" style="margin:-2px 0 16px">
     <a class="mtab${active === 'cobros' ? ' on' : ''}" href="#/cobros">Cobros de la semana</a>
-    <a class="mtab${active === 'impagos' ? ' on' : ''}" href="#/impagos">Impagos</a>
+    <a class="mtab${active === 'impagos' ? ' on' : ''}" href="#/impagos">Impagos <span class="nav-badge nav-badge--tab" data-badge="impagos" hidden></span></a>
     <a class="mtab${active === 'descuadres' ? ' on' : ''}" href="#/descuadres">Descuadres <span class="nav-badge nav-badge--tab" data-badge="descuadres" hidden></span></a>
   </div>`;
 }
