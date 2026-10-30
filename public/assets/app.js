@@ -329,6 +329,18 @@ const ICON = {
   phone: 'M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z',
 };
 const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON[k]}"/></svg>`;
+// Iconos SVG de linea (Lucide) multi-trazo para avisos del Inicio (svg() solo admite un path).
+const ICN2_SET = {
+  "circle-alert": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <line x1=\"12\" x2=\"12\" y1=\"8\" y2=\"12\" /> <line x1=\"12\" x2=\"12.01\" y1=\"16\" y2=\"16\" />",
+  "triangle-alert": "<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\" /> <path d=\"M12 9v4\" /> <path d=\"M12 17h.01\" />",
+  "umbrella": "<path d=\"M12 13v7a2 2 0 0 0 4 0\" /> <path d=\"M12 2v2\" /> <path d=\"M20.992 13a1 1 0 0 0 .97-1.274 10.284 10.284 0 0 0-19.923 0A1 1 0 0 0 3 13z\" />",
+  "car": "<path d=\"M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2\" /> <circle cx=\"7\" cy=\"17\" r=\"2\" /> <path d=\"M9 17h6\" /> <circle cx=\"17\" cy=\"17\" r=\"2\" />",
+  "notebook-pen": "<path d=\"M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4\" /> <path d=\"M2 6h4\" /> <path d=\"M2 10h4\" /> <path d=\"M2 14h4\" /> <path d=\"M2 18h4\" /> <path d=\"M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z\" />",
+  "timer": "<line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\" /> <line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\" /> <circle cx=\"12\" cy=\"14\" r=\"8\" />",
+  "gem": "<path d=\"M10.5 3 8 9l4 13 4-13-2.5-6\" /> <path d=\"M17 3a2 2 0 0 1 1.6.8l3 4a2 2 0 0 1 .013 2.382l-7.99 10.986a2 2 0 0 1-3.247 0l-7.99-10.986A2 2 0 0 1 2.4 7.8l2.998-3.997A2 2 0 0 1 7 3z\" /> <path d=\"M2 9h20\" />",
+  "chart-column": "<path d=\"M3 3v16a2 2 0 0 0 2 2h16\" /> <path d=\"M18 17V9\" /> <path d=\"M13 17V5\" /> <path d=\"M8 17v-3\" />"
+};
+const icn2 = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="dk-ic" aria-hidden="true">${ICN2_SET[n]||""}</svg>`;
 
 /* =========================================================================
    ARRANQUE
@@ -903,7 +915,7 @@ async function dashboardAdmin() {
 /* Aviso: solicitudes de extras pendientes de aceptar/declinar (lo piden los novios). */
 function extraReqPanel(x) {
   if (!x || !x.pending) return '';
-  return `<a class="panel va-panel va-panel--alert extra-req-panel" href="#/extras"><div class="panel__head"><h2>❗ Solicitudes de extras por revisar</h2><span class="pa-sum">${x.pending} pendiente${x.pending > 1 ? 's' : ''}</span></div>
+  return `<a class="panel va-panel va-panel--alert extra-req-panel" href="#/extras"><div class="panel__head"><h2>${icn2('circle-alert')} Solicitudes de extras por revisar</h2><span class="pa-sum">${x.pending} pendiente${x.pending > 1 ? 's' : ''}</span></div>
     <div class="panel__body"><p class="hint" style="margin:0">Los novios han solicitado <b>${x.pending}</b> servicio${x.pending > 1 ? 's' : ''} extra. Acéptalo o decláralo según disponibilidad. <b>Ir a Servicios extras →</b></p></div></a>`;
 }
 /* Aviso: DJ/técnico asignado a 2+ bodas el mismo día (excepto quienes sí pueden). */
@@ -913,7 +925,7 @@ function dupPanel(d) {
       <span><b>${esc(c.workerName)}</b> en ${c.events.length} bodas el mismo día</span>
       <span class="va-when">· ${dmy(c.date)} · ${c.events.map(e => `<a href="#/eventos/${e.id}">#${e.id}${e.conyuges ? ' (' + esc(e.conyuges) + ')' : ''}</a>`).join(' · ')}</span>
       <button class="btn btn--sm" data-dupack data-w="${c.workerId}" data-d="${c.date}" title="Ocultar este aviso (ya está avisado)">Marcar como avisado</button></div>`).join('');
-  return `<div class="panel va-panel va-panel--alert"><div class="panel__head"><h2>🚨 DJ/técnico duplicado el mismo día</h2><span class="pa-sum">${d.total} aviso${d.total > 1 ? 's' : ''}</span></div>
+  return `<div class="panel va-panel va-panel--alert"><div class="panel__head"><h2>${icn2('triangle-alert')} DJ/técnico duplicado el mismo día</h2><span class="pa-sum">${d.total} aviso${d.total > 1 ? 's' : ''}</span></div>
     <div class="panel__body"><p class="hint" style="margin-bottom:10px">Un mismo DJ o técnico está asignado a <b>más de una boda el mismo día</b>. Revisa las asignaciones. Si ese caso ya está avisado y es correcto, pulsa <b>Marcar como avisado</b> para ocultarlo.</p>${rows}</div></div>`;
 }
 function wireDupAck() {
@@ -930,7 +942,7 @@ function vacationPanel(v) {
       <span><b>${esc(c.workerName)}</b> está de vacaciones</span>
       <span class="va-when">· boda #${c.evId}${c.conyuges ? ' · ' + esc(c.conyuges) : ''} el ${dmy(c.fecha)}</span>
       <a class="va-badge" href="#/eventos/${c.evId}">Ver boda</a></div>`).join('');
-  return `<div class="panel va-panel"><div class="panel__head"><h2>🏖️ DJ/técnico asignado de vacaciones</h2><span class="pa-sum">${v.total} aviso${v.total > 1 ? 's' : ''}</span></div>
+  return `<div class="panel va-panel"><div class="panel__head"><h2>${icn2('umbrella')} DJ/técnico asignado de vacaciones</h2><span class="pa-sum">${v.total} aviso${v.total > 1 ? 's' : ''}</span></div>
     <div class="panel__body"><p class="hint" style="margin-bottom:10px">Estas bodas tienen asignado a alguien que está de vacaciones ese día. Revisa la asignación.</p>${rows}</div></div>`;
 }
 /* Aviso: vehículos con ITV caducada o a punto de caducar (15 días o menos). */
@@ -941,7 +953,7 @@ function itvPanel(v) {
     const estado = cad ? `<span class="tag tag--red">ITV caducada hace ${-x.days} día${x.days === -1 ? '' : 's'}</span>` : `<span class="tag tag--yellow">Caduca en ${x.days} día${x.days === 1 ? '' : 's'}</span>`;
     return `<div class="va-row"><span><b>${esc(x.plate)}</b> · ${esc(x.brand)} ${esc(x.model)}</span><span class="va-when">· ITV ${dmy(x.itvDate)}</span>${estado}</div>`;
   }).join('');
-  return `<div class="panel va-panel"><div class="panel__head"><h2>🚗 ITV por caducar</h2><span class="pa-sum">${v.total} vehículo${v.total > 1 ? 's' : ''}</span></div>
+  return `<div class="panel va-panel"><div class="panel__head"><h2>${icn2('car')} ITV por caducar</h2><span class="pa-sum">${v.total} vehículo${v.total > 1 ? 's' : ''}</span></div>
     <div class="panel__body"><p class="hint" style="margin-bottom:10px">Estos vehículos tienen la ITV caducada o a punto de caducar (15 días o menos). <a href="#/vehiculos">Ver vehículos</a></p>${rows}</div></div>`;
 }
 /* Aviso: técnicos/DJs con servicios asignados sin precio configurado. */
@@ -982,7 +994,7 @@ async function dashboardDj() {
   const next = ev.events.sort((a, b) => a.fecha.localeCompare(b.fecha)).slice(0, 8);
   // Aviso de PARTE PENDIENTE: bodas ya celebradas sin horas extra o sin "pedir opinión".
   const partes = (st && st.partes) || [];
-  const parteBox = partes.length ? `<div class="parte-alert"><div class="parte-alert__head">📝 Tienes <b>${partes.length}</b> ${partes.length === 1 ? 'parte pendiente' : 'partes pendientes'} de rellenar</div>
+  const parteBox = partes.length ? `<div class="parte-alert"><div class="parte-alert__head">${icn2('notebook-pen')} Tienes <b>${partes.length}</b> ${partes.length === 1 ? 'parte pendiente' : 'partes pendientes'} de rellenar</div>
       ${partes.map(p => `<a class="parte-row" href="#/parte/${p.id}"><span class="parte-date">${dmy(p.fecha)}</span><span class="parte-where">${esc(p.lugar || ('Boda #' + p.id))}</span><span class="parte-miss">Falta: ${esc(p.falta.join(' y '))}</span><span class="parte-go">Rellenar →</span></a>`).join('')}</div>` : '';
   const yNow = String(new Date().getFullYear()); const yst = (st && st.byYear && st.byYear[yNow]) || null;
   shell(`${pageHead('Hola, ' + (S.user.name || '').split(' ')[0], 'Tus próximos eventos y tu actividad.')}
@@ -992,7 +1004,7 @@ async function dashboardDj() {
       <div class="stat stat--blue"><div class="k">Pendiente de cobro</div><div class="v">${bal.history ? fmtEur(bal.history.rest - (bal.payments || []).reduce((t, p) => t + (+p.amount || 0), 0)) : '—'}</div></div>
       ${tt ? `<div class="stat stat--yellow"><div class="k">Horas este mes</div><div class="v" id="hMes">—</div></div>` : ''}
     </div>
-    ${yst ? `<a class="dj-hx-strip" href="#/mis-horas"><span>⏱ <b>${String(yst.horas).replace('.', ',')} h</b> extra en ${yNow}</span><span>💍 <b>${yst.bodas}</b> bodas</span><span>📊 media <b>${String(yst.media).replace('.', ',')} h</b>/boda</span><span class="go">Ver mis horas →</span></a>` : ''}
+    ${yst ? `<a class="dj-hx-strip" href="#/mis-horas"><span>${icn2('timer')} <b>${String(yst.horas).replace('.', ',')} h</b> extra en ${yNow}</span><span>${icn2('gem')} <b>${yst.bodas}</b> bodas</span><span>${icn2('chart-column')} media <b>${String(yst.media).replace('.', ',')} h</b>/boda</span><span class="go">Ver mis horas →</span></a>` : ''}
     <div class="panel"><div class="panel__head"><h2>Tus próximos eventos</h2></div><div class="panel__body" style="padding:0">${eventMiniList(next)}</div></div>`, ['Inicio']);
   if (tt) api('attendance-summary').then(s => { const r = (s.rows || [])[0]; if (r && el('hMes')) el('hMes').textContent = hm(r.m0) + ' h'; }).catch(() => {});
 }
