@@ -573,6 +573,13 @@ function paneRuta(ev) {
   }
   const listo = target, inicioMontaje = target - mt.min, llegada = inicioMontaje, salida = llegada - travel;
   const hhmm = m => m < 0 ? _min2hm(m) + ' (día anterior)' : _min2hm(m);
+  // Horas EDITABLES de los momentos (se guardan en ev.rutaTimes como "HH:MM" y mandan sobre el cálculo).
+  // La ceremonia NO se edita: la marca el evento.
+  const RT = ev.rutaTimes || {};
+  const clk = m => _min2hm(((Math.round(m) % 1440) + 1440) % 1440);
+  const rtv = (key, m) => RT[key] || (m != null ? clk(m) : '');
+  const eff = (key, m) => { const o = RT[key]; if (o) { const p = _hm2min(o); if (p != null) return p; } return m; };
+  const rowEd = (ic, t, key, m, sub) => { const dayB = (m != null && m < 0 && !RT[key]) ? ' (día anterior)' : ''; return `<div class="ruta-row"><div class="ruta-ic">${ic}</div><div class="ruta-main"><div class="ruta-t">${t}</div>${(sub || dayB) ? `<div class="ruta-sub muted">${sub || ''}${dayB}</div>` : ''}</div><div class="ruta-time"><input type="time" class="ruta-time-input" data-rt="${key}" value="${rtv(key, m)}"></div></div>`; };
   const row = (ic, t, time, sub) => `<div class="ruta-row"><div class="ruta-ic">${ic}</div><div class="ruta-main"><div class="ruta-t">${t}</div>${sub ? `<div class="ruta-sub muted">${sub}</div>` : ''}</div><div class="ruta-time">${time}</div></div>`;
   // Escaleta musical: mismos momentos y orden que el resumen musical (fijos activos + personalizados por sección).
   const musicHtml = (() => {
@@ -598,13 +605,14 @@ function paneRuta(ev) {
     <p class="hint">Tiempos calculados automáticamente: desplazamiento desde Martorelles a <b>${esc(destName)}</b> (${travel} min${travelKm ? ' · ' + travelKm + ' km' : ''}) y montaje según el tipo de boda: <b>${esc(mt.regla)}</b> (${mt.min} min).</p>
     ${mt.note ? `<div class="alert alert--warn" style="margin-bottom:12px">⚠ ${esc(mt.note)}</div>` : ''}
     ${ev.vehicleId ? `<div class="ruta-veh"><span class="ruta-veh-ic">${VEH_SVG}</span> Furgoneta asignada: <b>${esc(vehLabel(ev.vehicleId))}</b></div>` : ''}
+    <p class="hint" style="margin:-4px 0 8px">Puedes <b>ajustar a mano</b> cualquier hora (salida, montaje, todo listo, aperitivo); se guarda sola y sale así en el PDF. La <b>ceremonia</b> la marca el evento.</p>
     <div class="ruta">
-      ${row(di('navigation'), 'Salida desde Martorelles', hhmm(salida), 'Desplazamiento ' + travel + ' min' + (travelKm ? ' · ' + travelKm + ' km' : ''))}
-      ${row(di('map-pin'), 'Llegada a ' + esc(destName), hhmm(llegada), 'Inicio del montaje')}
-      ${row(di('wrench'), 'Montaje de equipo', hhmm(inicioMontaje) + '–' + hhmm(listo), mt.regla + ' · ' + mt.min + ' min')}
-      ${row(di('circle-check'), 'Todo listo', hhmm(listo), 'A la hora de ' + (ev.ceremoniaFuera ? 'inicio' : 'la ceremonia'))}
-      ${ev.ceremoniaFuera ? '' : row(di('gem'), 'Ceremonia', _min2hm(_hm2min(ev.hora)), '')}
-      ${(() => { const ap = ev.ceremoniaFuera ? _hm2min(ev.celebrationHour) : (_hm2min(ev.hora) != null ? _hm2min(ev.hora) + 60 : null); return ap != null ? row(di('martini'), 'Aperitivo', _min2hm(ap), ev.ceremoniaFuera ? '' : '1 h después de la ceremonia') : ''; })()}
+      ${rowEd(di('navigation'), 'Salida desde Martorelles', 'salida', salida, 'Desplazamiento ' + travel + ' min' + (travelKm ? ' · ' + travelKm + ' km' : ''))}
+      ${rowEd(di('map-pin'), 'Llegada a ' + esc(destName), 'llegada', llegada, 'Inicio del montaje')}
+      ${row(di('wrench'), 'Montaje de equipo', clk(eff('llegada', inicioMontaje)) + '–' + clk(eff('listo', listo)), mt.regla + ' · ' + mt.min + ' min')}
+      ${rowEd(di('circle-check'), 'Todo listo', 'listo', listo, 'A la hora de ' + (ev.ceremoniaFuera ? 'inicio' : 'la ceremonia'))}
+      ${ev.ceremoniaFuera ? '' : row(di('gem'), 'Ceremonia', _min2hm(_hm2min(ev.hora)), 'La marca el evento')}
+      ${(() => { const ap = ev.ceremoniaFuera ? _hm2min(ev.celebrationHour) : (_hm2min(ev.hora) != null ? _hm2min(ev.hora) + 60 : null); return ap != null ? rowEd(di('martini'), 'Aperitivo', 'aperitivo', ap, ev.ceremoniaFuera ? '' : '1 h después de la ceremonia') : ''; })()}
     </div>
     ${(ev.services || []).filter(s => s.servicio).length ? `<h4 class="form-sub" style="margin-top:18px">Servicios y técnicos</h4>
       <div class="table-wrap"><table class="dt"><thead><tr><th>Servicio</th><th>Responsable(s)</th></tr></thead><tbody>
@@ -1332,6 +1340,13 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
     if (v) toast('⚠ ' + (userName(wid) || 'Ese trabajador') + ' está de vacaciones el día de la boda (' + dmy(v.start) + '–' + dmy(v.end) + ')', 'err');
   };
   form.addEventListener('change', e => { const t = e.target; if (t && t.tagName === 'SELECT' && (t.name === 'dj_vinculated' || (t.matches && t.matches('[data-s="resp"],[data-s="resp2"]')))) checkVac(t.value); });
+  // Autoguardado de las horas editables de la hoja de ruta (ev.rutaTimes).
+  form.addEventListener('change', async e => {
+    const t = e.target; if (!t || !t.matches || !t.matches('[data-rt]')) return;
+    const times = {}; $$('[data-rt]', form).forEach(i => { if (i.value) times[i.dataset.rt] = i.value; });
+    try { await api('events/' + ev.id, { method: 'PUT', body: { event: { rutaTimes: times } } }); ev.rutaTimes = times; toast('Hora actualizada ✓', 'ok'); }
+    catch (err) { toast(err.message || 'No se pudo guardar la hora', 'err'); }
+  });
   // sub-pestañas de música (Ceremonia · Aperitivo · Banquete · Fiesta · Entregas · Extras)
   const mtabs = form.querySelector('[data-mtabs]');
   if (mtabs) mtabs.addEventListener('click', e => { const b = e.target.closest('[data-mtab]'); if (!b) return; const wrap = b.closest('.music-wrap'); $$('[data-mtab]', mtabs).forEach(x => x.classList.toggle('on', x === b)); $$('[data-mpane]', wrap).forEach(p => { const on = p.dataset.mpane === b.dataset.mtab; p.style.display = on ? '' : 'none'; p.classList.toggle('on', on); }); });
@@ -1796,14 +1811,16 @@ on(/^#\/eventos\/(\d+)\/ruta-doc$/, async m => {
   const fechaLarga = f => { if (!f) return '—'; const d = new Date(f + 'T00:00:00'); const dd = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']; const mm = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']; return `${dd[d.getDay()]}, ${d.getDate()} de ${mm[d.getMonth()]} de ${d.getFullYear()}`; };
   let tlHtml = '<p style="color:#b4aeb9">Faltan datos para calcular los tiempos (hora y/o desplazamiento).</p>', salidaTxt = '';
   if (target != null && travel != null) {
+    const RT = ev.rutaTimes || {};
     const listo = target, inicioMontaje = target - mt.min, llegada = inicioMontaje, salida = llegada - travel;
     const hhmm = x => _min2hm(x) + (x < 0 ? ' (día anterior)' : '');
+    const disp = (key, m) => RT[key] || hhmm(m);   // hora ajustada a mano si la hay
     const t = (time, lbl, sub) => `<div class="t"><span class="dot"></span><div class="hh">${time}</div><div><div class="lbl">${lbl}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div></div>`;
-    salidaTxt = hhmm(salida);
-    tlHtml = t(hhmm(salida), 'Salida', 'Martorelles · ' + fmtTravel)
-      + t(hhmm(llegada), 'Montaje', esc(mt.regla) + ' · ' + mt.min + ' min')
-      + t(hhmm(listo), 'Todo listo', hasCer ? 'A la hora de la ceremonia' : 'A la hora del aperitivo')
-      + (hasCer ? t(_min2hm(_hm2min(ev.hora)), 'Ceremonia', 'En la finca') : t(_min2hm(apMin), 'Aperitivo', ev.ceremoniaFuera ? 'Ceremonia fuera de la finca' : ''));
+    salidaTxt = disp('salida', salida);
+    tlHtml = t(disp('salida', salida), 'Salida', 'Martorelles · ' + fmtTravel)
+      + t(disp('llegada', llegada), 'Montaje', esc(mt.regla) + ' · ' + mt.min + ' min')
+      + t(disp('listo', listo), 'Todo listo', hasCer ? 'A la hora de la ceremonia' : 'A la hora del aperitivo')
+      + (hasCer ? t(_min2hm(_hm2min(ev.hora)), 'Ceremonia', 'En la finca') : t(RT.aperitivo || _min2hm(apMin), 'Aperitivo', ev.ceremoniaFuera ? 'Ceremonia fuera de la finca' : ''));
   }
   // plano(s) de montaje por zonas (si está disponible el módulo). Protegido: si falla, se omite.
   let planoZones = [];

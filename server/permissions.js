@@ -80,7 +80,7 @@ function mergeEventUpdate(user, current, incoming) {
     const realized = evRealized(current);
     if (!realized && ['obsDj', 'djOvertime', 'opinion', 'djCeremony'].some(k => incoming[k] !== undefined))
       throw httpError(403, 'Podrás rellenar el parte de trabajo cuando se haya celebrado la boda.');
-    allowed = ['estado', 'music', 'optionals', 'disco', 'labels'].concat(realized ? ['obsDj', 'djOvertime', 'opinion', 'djCeremony'] : []);
+    allowed = ['estado', 'music', 'optionals', 'disco', 'labels', 'rutaTimes'].concat(realized ? ['obsDj', 'djOvertime', 'opinion', 'djCeremony'] : []);
   }
   else throw httpError(403, 'Tu perfil solo puede consultar este evento.');
   const next = Object.assign({}, current);

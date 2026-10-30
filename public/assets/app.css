@@ -925,6 +925,7 @@ table.dt tbody tr.fact-t td,table.dt tbody tr.fact-t:hover td{background:#0B8043
 .ruta-t{font-weight:700}
 .ruta-sub{font-size:12px}
 .ruta-time{font-weight:800;font-size:17px;white-space:nowrap}
+.ruta-time-input{width:auto;padding:5px 8px;font-size:16px;font-weight:800;border:2px solid var(--onyx);border-radius:9px;background:var(--white);color:var(--ink);text-align:center;font-family:inherit}
 .ruta-music .ruta-mrow{padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
 .ruta-music .ruta-mrow:last-child{border-bottom:0}
 .ruta-msec{margin:14px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#8a8390)}
