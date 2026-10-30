@@ -762,6 +762,20 @@ function renderCalendar(evsForDay) {
     cells += `<div class="cell ${d.getMonth() !== m ? 'other' : ''} ${k === ymd(TODAY) ? 'today' : ''}"><div class="n">${d.getDate()}</div>${evsForDay(k).map(e => `<div class="cal-ev" style="background:${e.c}">${esc(e.t)}</div>`).join('')}</div>`; }
   return `<div class="cal-head"><h3>${MONTHS[m]} ${y}</h3><div class="btn-row"><button class="btn btn--sm" data-cal="-1">‹</button><button class="btn btn--sm" data-cal="0">Hoy</button><button class="btn btn--sm" data-cal="1">›</button></div></div><div class="cal-grid">${cells}</div>`;
 }
+// Mes compacto (para la vista de 3 meses de vacaciones): celdas pequeñas y, en vez de etiquetas,
+// puntitos de color por persona/estado (el nombre va en el tooltip del día). Un vistazo rápido.
+function renderMonthMini(y, m, evsForDay) {
+  const first = new Date(y, m, 1), offset = (first.getDay() + 6) % 7, start = new Date(y, m, 1 - offset);
+  const dows = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+  let cells = dows.map(d => `<div class="dow">${d}</div>`).join('');
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i); const k = ymd(d);
+    const evs = evsForDay(k);
+    const tip = evs.map(e => String(e.t).replace(/"/g, '')).join(', ');
+    cells += `<div class="cell ${d.getMonth() !== m ? 'other' : ''} ${k === ymd(TODAY) ? 'today' : ''}"${tip ? ` title="${esc(tip)}"` : ''}><div class="n">${d.getDate()}</div>${evs.length ? `<div class="cal-dots">${evs.slice(0, 4).map(e => `<span class="cal-dot" style="background:${e.c}"></span>`).join('')}</div>` : ''}</div>`;
+  }
+  return `<div class="cal-mini"><h4>${MONTHS[m]} ${y}</h4><div class="cal-grid cal-grid--mini">${cells}</div></div>`;
+}
 on(/^#\/horario\/calendario$/, async () => {
   if (!requireAdmin()) return; loading(['Control horario', 'Calendario']);
   const items = await coll.list('attendances');
@@ -820,7 +834,10 @@ on(/^#\/vacaciones$/, async () => {
   const dayFn = k => items.filter(v => v.start && v.end && k >= v.start && k <= v.end).map(v => ({ t: admin ? userName(v.userId) : 'Vacaciones', c: stColor(v.status) }));
   const drawVacCal = () => {
     const box = el('vacCal'); if (!box) return;
-    box.innerHTML = renderCalendar(dayFn) + `<div class="legend"><div style="background:#2e7d32">Aprobadas</div><div style="background:#f0ad4e">Solicitadas</div><div style="background:#d9534f">Denegadas</div></div>`;
+    const mths = [0, 1, 2].map(n => { const d = new Date(calCursor.getFullYear(), calCursor.getMonth() + n, 1); return renderMonthMini(d.getFullYear(), d.getMonth(), dayFn); });
+    box.innerHTML = `<div class="cal-head" style="margin-bottom:10px"><div class="btn-row"><button class="btn btn--sm" data-cal="-1">‹ Mes anterior</button><button class="btn btn--sm" data-cal="0">Hoy</button><button class="btn btn--sm" data-cal="1">Mes siguiente ›</button></div></div>
+      <div class="cal3">${mths.join('')}</div>
+      <div class="legend"><div style="background:#2e7d32">Aprobadas</div><div style="background:#f0ad4e">Solicitadas</div><div style="background:#d9534f">Denegadas</div></div>`;
     $$('[data-cal]', box).forEach(b => b.onclick = () => { const n = +b.dataset.cal; calCursor = n === 0 ? new Date(TODAY.getFullYear(), TODAY.getMonth(), 1) : new Date(calCursor.getFullYear(), calCursor.getMonth() + n, 1); drawVacCal(); });
   };
   drawVacCal();
