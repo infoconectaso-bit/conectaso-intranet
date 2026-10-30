@@ -39,6 +39,15 @@ function run(seed, db) {
     for (const ev of seed.events) {
       const prev = store.get('events', ev.id);
       const merged = mergeRecord(prev, ev, EVENT_OURS);
+      // Conservar la SECCIÓN ya recolocada de cada momento (sec/area/order). El volcado trae todos
+      // los opcionales como 'ceremony' (el nombre del campo no lleva la sección real), así que sin
+      // esto un re-volcado vuelve a meterlos todos en ceremonia. Se empareja por id de momento;
+      // los momentos nuevos (que no existían en la réplica) quedan en ceremony hasta la próxima
+      // recolocación (resection-bg).
+      if (prev && Array.isArray(prev.optionals) && Array.isArray(merged.optionals)) {
+        const pb = {}; prev.optionals.forEach(o => { if (o && o.id != null) pb[o.id] = o; });
+        merged.optionals.forEach(o => { const p = pb[o.id]; if (p && p.sec) { o.area = p.area; o.sec = p.sec; o.order = p.order; } });
+      }
       if (prev) { counts.events.actualizados++; if (EVENT_OURS.some(k => prev[k] !== undefined)) counts.preservados.ourEventFields++; }
       else counts.events.nuevos++;
       store.put('events', merged);
