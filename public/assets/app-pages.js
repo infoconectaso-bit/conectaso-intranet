@@ -379,7 +379,7 @@ function eventEditorAdmin(ev) {
   const headLabel = (simple ? `${esc(ev.tipo)} #${ev.id}` : `Boda #${ev.id}`) + (lugarName ? ` · ${esc(lugarName)}` : '');
   const body = `<form id="evForm" data-id="${ev.id}">
     <div class="page-head ev-head"><div><h1 style="font-size:24px">${headLabel}</h1><div class="lead">${esc(ev.conyuges || 'Sin cónyuges')} · ${dmy(ev.fecha)}</div><div class="page-head__accent"></div></div>
-      <div class="btn-row" style="align-items:center;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button> <a class="btn btn--sm" href="#/eventos/${ev.id}/pdf">Resumen PDF</a><div class="ev-estado-head" title="Estado de contacto">${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div><div id="evInfoBox" style="display:flex;flex-wrap:wrap;gap:6px"></div></div></div>
+      <div class="btn-row" style="align-items:center;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button> <a class="btn btn--sm" href="#/eventos/${ev.id}/pdf">Resumen PDF</a><div class="ev-estado-head" title="Estado de contacto">${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div>${simple ? '' : `<label class="switch switch--onoff edituser-toggle" title="La edición del cliente se cierra sola 7 días antes de la boda. Dentro de esos 7 días, actívala aquí para reabrirla puntualmente."><span class="edituser-lbl">Edición cliente</span><input type="checkbox" name="habilitar_edicion_para_usuario" ${(ev.editUser || ev.editUnlock) ? 'checked' : ''}><span class="track"></span><span class="switch-state">${(typeof ev.daysToEvent === 'number' && ev.daysToEvent > 7) ? 'Abierta (auto)' : ((ev.editUser || ev.editUnlock) ? 'Reabierta' : 'Cerrada')}</span></label>`}<div id="evInfoBox" style="display:flex;flex-wrap:wrap;gap:6px"></div></div></div>
     <div class="panel evtop"><div class="panel__body">
       <div class="evtop-top">
         <div style="display:flex;gap:12px;flex-wrap:nowrap;align-items:flex-start">
@@ -400,7 +400,6 @@ function eventEditorAdmin(ev) {
     </div></div>
     <div class="tabs-row">
       ${adminTabs}
-      ${simple ? '' : `<label class="switch switch--onoff edituser-toggle" title="La edición del cliente se cierra sola 7 días antes de la boda. Dentro de esos 7 días, actívala aquí para reabrirla puntualmente."><span class="edituser-lbl">Edición cliente</span><input type="checkbox" name="habilitar_edicion_para_usuario" ${(ev.editUser || ev.editUnlock) ? 'checked' : ''}><span class="track"></span><span class="switch-state">${(typeof ev.daysToEvent === 'number' && ev.daysToEvent > 7) ? 'Abierta (auto)' : ((ev.editUser || ev.editUnlock) ? 'Reabierta' : 'Cerrada')}</span></label>`}
     </div>
     
     <div data-pane="datos">${paneDatos(ev, locOpts)}${simple ? '' : accessBlock(ev)}</div>
