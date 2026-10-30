@@ -794,10 +794,9 @@ function paneMusica(ev, canEdit) {
   if (S.user.role === 'admin' || S.user.role === 'dj') sections.push({ key: 'spotify', label: '🎵 Spotify', body: `<div class="inner" id="spotifyPaneHost"></div>` });
   const nav = `<div class="mtabs" data-mtabs role="tablist">${sections.map((s, i) => `<button type="button" class="mtab${i === 0 ? ' on' : ''}" data-mtab="${s.key}">${esc(s.label)}</button>`).join('')}</div>`;
   const panes = sections.map((s, i) => `<section class="mblock mpane${i === 0 ? ' on' : ''}" data-mpane="${s.key}"${i === 0 ? '' : ' style="display:none"'}><h4>${esc(s.label)}${(s.key === 'extras' || s.key === 'recomendaciones' || s.key === 'spotify') ? '' : reorderHint}</h4>${s.body}</section>`).join('');
-  // si todos los momentos tienen enlace de Spotify, se ofrece abrir/crear la playlist
-  // El botón de abrir/montar la playlist solo lo ven el DJ y administración, no los novios.
+  // El antiguo botón "Abre tu playlist de Spotify" ya no se muestra: la playlist se gestiona desde la pestaña Spotify.
   const spoti = (allSpotify(ev) && (S.user.role === 'admin' || S.user.role === 'dj')) ? `<div class="spoti-bar"><button type="button" class="btn btn--spoti" id="openSpoti">🎵 Abre tu playlist de Spotify</button><span class="hint">Todos los momentos tienen enlace de Spotify, así que podemos montar la playlist automáticamente.</span></div>` : '';
-  return `<div class="music-wrap">${spoti}${nav}${panes}</div>`;
+  return `<div class="music-wrap">${nav}${panes}</div>`;
 }
 // precio de reserva por servicio extra: 50€ + 21% IVA
 const RESERVA_BASE = 50, RESERVA_IVA = 0.21, RESERVA_TOTAL = RESERVA_BASE * (1 + RESERVA_IVA); // 60,50 €
