@@ -347,7 +347,7 @@ const WMO = { 0: [icn('sun'), 'Despejado'], 1: [icn('cloud-sun'), 'Poco nuboso']
 async function loadEventInfo(id) {
   const box = document.getElementById('evInfoBox'); if (!box) return;
   let d; try { d = await api('event-weather/' + id); } catch (e) { return; }
-  const chip = (html, muted) => `<span style="display:inline-flex;align-items:center;gap:6px;background:${muted ? 'rgba(0,0,0,.04)' : 'rgba(232,44,136,.10)'};color:${muted ? '#7a8392' : 'inherit'};padding:6px 11px;border-radius:999px;font-size:13px;margin:0 8px 8px 0">${html}</span>`;
+  const chip = (html, muted) => `<span style="display:inline-flex;align-items:center;gap:6px;background:${muted ? 'rgba(0,0,0,.04)' : 'rgba(232,44,136,.10)'};color:${muted ? '#7a8392' : 'inherit'};padding:5px 10px;border-radius:999px;font-size:12.5px;margin:0">${html}</span>`;
   const parts = [];
   // La distancia/desplazamiento ya se muestra en la sección "Lugar de la celebración"
   // (con enlace a Google Maps), así que no se repite aquí arriba.
@@ -378,8 +378,8 @@ function eventEditorAdmin(ev) {
   const lugarName = (ev.lugar && (S.meta.locations || []).find(l => +l.id === +ev.lugar)) ? (S.meta.locations.find(l => +l.id === +ev.lugar).name) : (ev.lugarOtro || '');
   const headLabel = (simple ? `${esc(ev.tipo)} #${ev.id}` : `Boda #${ev.id}`) + (lugarName ? ` · ${esc(lugarName)}` : '');
   const body = `<form id="evForm" data-id="${ev.id}">
-    <div class="page-head"><div><h1 style="font-size:24px">${headLabel}</h1><div class="lead">${esc(ev.conyuges || 'Sin cónyuges')} · ${dmy(ev.fecha)}</div><div class="page-head__accent"></div></div>
-      <div class="btn-row" style="align-items:center;flex-wrap:wrap;gap:8px"><button type="button" class="btn" onclick="history.back()">← Atrás</button> <a class="btn" href="#/eventos/${ev.id}/pdf">Resumen PDF</a><div id="evInfoBox" style="display:flex;flex-wrap:wrap;gap:6px"></div></div></div>
+    <div class="page-head ev-head"><div><h1 style="font-size:24px">${headLabel}</h1><div class="lead">${esc(ev.conyuges || 'Sin cónyuges')} · ${dmy(ev.fecha)}</div><div class="page-head__accent"></div></div>
+      <div class="btn-row" style="align-items:center;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button> <a class="btn btn--sm" href="#/eventos/${ev.id}/pdf">Resumen PDF</a><div id="evInfoBox" style="display:flex;flex-wrap:wrap;gap:6px"></div></div></div>
     <div class="panel evtop"><div class="panel__body">
       <div class="evtop-top">
         <div style="display:flex;gap:12px;flex-wrap:nowrap;align-items:flex-start">
@@ -393,8 +393,8 @@ function eventEditorAdmin(ev) {
         <div class="field evtop-prog"><label>Progreso</label><div class="progress progress--green"><div id="progBar" style="width:${prog}%">${prog}%</div></div></div>
       </div>
       <div class="evtop-pay">
-        <div class="field"><label>Pago finca (€)</label>${inp('event_restaurant_import', ev.pagoRestaurante)}</div>
-        <div class="field"><label>Pago cliente / novios (€)</label>${inp('event_total_import', ev.pagoCliente)}</div>
+        <div class="field"><label><span class="m-hide">Pago </span>finca (€)</label>${inp('event_restaurant_import', ev.pagoRestaurante)}</div>
+        <div class="field"><label><span class="m-hide">Pago </span>cliente<span class="m-hide"> / novios</span> (€)</label>${inp('event_total_import', ev.pagoCliente)}</div>
         <div class="field"><label>Pagado (€)</label>${inp('event_payed_import', ev.pagado)}</div>
         <div class="field"><label>Pendiente</label><input class="control" readonly value="${pend} €" id="pendField"></div>
       </div>
@@ -1063,7 +1063,7 @@ async function loadHoldedFacturas(ev) {
 /* --- interacción del formulario de evento --- */
 // bloque "Acceso a la boda": titular + invitados (novio/novia con su propio email)
 // bloque de pago del cliente: total, pagado, pendiente y botón de pasarela (Holded)
-function isPayMarker(ev) { const p = ev && ev.pago; return !!p && Math.abs(Number(p.pagado) - 1) < 0.005 && Math.abs(Number(p.pendiente) - 1) < 0.005; }
+function isPayMarker(ev) { const p = ev && ev.pago; const one = v => Math.abs(Number(v) - 1) < 0.005; return !!p && one(p.pagado) && (one(p.total) || one(p.pendiente)); }
 function clientPaymentBlock(ev) {
   const p = ev.pago; if (!p) return '';
   const pend = p.pendiente;

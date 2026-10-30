@@ -1483,3 +1483,23 @@ html{--radius:0px}
 html *:not(.btn-spin):not(.nav-dot):not(.nav-badge):not(.avatar):not(.dot):not(.pay-circle):not(.xmodal__x):not(.cmt-plus):not(.track):not(.ind):not(.no-dj):not(.color-dot):not(.pm-h):not(.pm-mic):not(.pm-artist):not(.pm-power):not(.lightbox__x):not(.foto-stat-dot):not(.nom-av):not(.nom-hero__av):not(.estado-leg i):not(.mnt__kick b):not(input[type=radio]):not(input[type=checkbox]),
 html *::before{border-radius:0!important}
 html .switch .track::after{border-radius:50%!important}
+
+/* Ficha del evento: cabecera y bloque de pago más compactos (menos scroll, sobre todo en móvil) */
+.ev-head{margin-bottom:14px}
+.ev-head .page-head__accent{margin-top:8px;height:4px}
+@media(max-width:720px){
+  .ev-head{gap:8px;margin-bottom:10px}
+  .ev-head h1{font-size:19px!important;line-height:1.15}
+  .ev-head .lead{font-size:12.5px;margin-top:3px}
+  .ev-head .page-head__accent{margin-top:6px;height:3px;width:44px}
+  .ev-head .btn-row{gap:6px!important}
+  .evtop{margin-bottom:12px}
+  .evtop .panel__body{padding:9px 11px}
+  .evtop-top{gap:8px 12px}
+  .evtop .control{padding:5px 8px;font-size:13px}
+  .evtop .progress{height:18px}
+  .evtop .progress > div{font-size:11px;line-height:18px}
+  .evtop-pay{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px;margin-top:8px}
+  .evtop-pay .field > label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px;text-transform:capitalize}
+  .evtop-pay .m-hide{display:none}
+}
