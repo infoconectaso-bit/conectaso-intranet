@@ -88,7 +88,15 @@ async function s3(method, key, { query = {}, body = null, contentType } = {}) {
 
 async function uploadFile(localPath, objectKey) {
   const body = fs.readFileSync(localPath);
-  await s3('PUT', objectKey, { body, contentType: 'application/octet-stream' });
+  // Backblaze a veces responde 500/503 ("internal incident") de forma puntual: reintentar hasta 3 veces.
+  for (let attempt = 1; ; attempt++) {
+    try { await s3('PUT', objectKey, { body, contentType: 'application/octet-stream' }); break; }
+    catch (e) {
+      const transient = /B2 5\d\d|fetch failed|ECONNRESET|ETIMEDOUT|socket/i.test(String(e && e.message));
+      if (!transient || attempt >= 3) throw e;
+      await new Promise(r => setTimeout(r, attempt * 20000));
+    }
+  }
   lastOk = { key: objectKey, date: new Date().toISOString() };
   return true;
 }

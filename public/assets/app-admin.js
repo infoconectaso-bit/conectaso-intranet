@@ -1097,7 +1097,9 @@ on(/^#\/fotomaton$/, async () => {
     ];
     const colsProx = [
       colFecha, colBoda, colLugar, colDj,
-      { t: '', nosort: true, nofilter: true, html: i => '<span class="tag tag--blue">Próxima</span>' },
+      { t: 'Logo', get: i => i.hasLogo ? 1 : 0, html: i => i.hasLogo
+        ? '<span class="tag tag--green" title="Los novios ya han subido el logo del fotomatón">✓ Logo subido</span>'
+        : '<span class="tag tag--red" title="Todavía no han subido el logo del fotomatón">✗ Sin logo</span>' },
     ];
     const tabs = `<div class="tabs" style="margin-bottom:16px">
       <button type="button" data-ftab="real" class="${tab === 'real' ? 'on' : ''}">Realizadas (${real.length})</button>
@@ -1113,7 +1115,7 @@ on(/^#\/fotomaton$/, async () => {
     const proxHtml = `
       <p class="hint" style="margin-bottom:12px">Bodas con fotomatón <b>aún sin celebrar</b>. Cuando pase la fecha, pasarán a <b>Realizadas</b> para subir sus fotos.</p>
       <div class="panel"><div class="panel__body">${table('dtFotoProx', { rows: prox, order: [0, 'asc'], filters: true, dense: true, len: 50, cols: colsProx, empty: 'No hay próximas bodas con fotomatón.' })}</div></div>`;
-    shell(`${pageHead('Fotomatón', 'Bodas con el servicio de fotomatón creado (pestaña Servicios) y estado de sus fotos.')}
+    shell(`${pageHead('Fotomatón')}
       ${tabs}
       <div id="ftReal" style="display:${tab === 'real' ? 'block' : 'none'}">${realHtml}</div>
       <div id="ftProx" style="display:${tab === 'prox' ? 'block' : 'none'}">${proxHtml}</div>`, ['Fotomatón']);

@@ -410,7 +410,7 @@ function eventEditorAdmin(ev) {
     ${simple ? '' : `<div data-pane="ruta" style="display:none">${paneRuta(ev)}</div>`}
     <div data-pane="facturacion" style="display:none">${paneFacturacion(ev)}</div>
     <div data-pane="archivos" style="display:none"><div class="panel"><div class="panel__body" id="filesBox">Cargando archivos…</div></div></div>
-    <div class="floatbar">${simple ? '' : '<button type="button" class="btn" id="genPlaylist">Generar playlist</button>'}<button type="submit" class="btn btn--primary">${simple ? 'Guardar evento' : 'Guardar boda'}</button></div>
+    <div class="floatbar"><button type="submit" class="btn btn--primary">${simple ? 'Guardar evento' : 'Guardar boda'}</button></div>
   </form>`;
   shell(body, ['Eventos', '#' + ev.id]);
   wireEventForm(ev, { full: true });

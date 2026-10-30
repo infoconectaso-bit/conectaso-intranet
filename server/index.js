@@ -2417,6 +2417,7 @@ function fotomatonList() {
       djName: (users.get(e.djId) || {}).name || '',
       realized: evRealized(e), hasLink, legacy, externo, uploaded: hasLink || legacy || externo,
       fotosLink: e.fotosLink || '', fotosSentAt: e.fotosSentAt || '', emails,
+      hasLogo: !!(e.disco && typeof e.disco.fotoLogo === 'string' && e.disco.fotoLogo.trim()),
     };
   }).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
   const real = rows.filter(r => r.realized);
