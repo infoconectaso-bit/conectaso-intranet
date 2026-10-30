@@ -746,21 +746,23 @@ function initSpotlight() {
 // --- Modo noche automático: atenúa la intranet a partir de las 21:00 (hasta las 7:00).
 // Se guarda en el dispositivo (localStorage), así queda activado cada vez que entran. ---
 const NIGHT_START = 21, NIGHT_END = 7;
-function nightEnabled() { try { return localStorage.getItem('conecta_night') === '1'; } catch (e) { return false; } }
+// Modo noche con 3 estados (guardado en este dispositivo): 'off' (desactivado), 'on' (siempre activo)
+// y 'auto' (solo de 21:00 a 7:00). El antiguo valor '1' equivale a automático.
+function nightMode() { try { const v = localStorage.getItem('conecta_night'); return v === 'on' ? 'on' : (v === 'auto' || v === '1') ? 'auto' : 'off'; } catch (e) { return 'off'; } }
+function nightEnabled() { return nightMode() !== 'off'; }
+const NIGHT_LABEL = { off: 'Desactivado', on: 'Activado', auto: 'Automático' };
 function applyNight() {
-  const h = new Date().getHours();
-  const on = nightEnabled() && (h >= NIGHT_START || h < NIGHT_END);
+  const h = new Date().getHours(), m = nightMode();
+  const on = m === 'on' || (m === 'auto' && (h >= NIGHT_START || h < NIGHT_END));
   document.documentElement.classList.toggle('night-dim', on);
-  const st = document.getElementById('nightState'); if (st) st.textContent = nightEnabled() ? 'Activado' : 'Desactivado';
-  const tg = document.getElementById('nightToggle'); if (tg) tg.classList.toggle('on', nightEnabled());
+  const st = document.getElementById('nightState'); if (st) st.textContent = NIGHT_LABEL[m];
+  const tg = document.getElementById('nightToggle'); if (tg) { tg.classList.toggle('on', m !== 'off'); tg.title = 'Modo noche: ' + NIGHT_LABEL[m] + '. Toca para cambiar (Desactivado → Activado → Automático de 21:00 a 7:00). Se guarda en este dispositivo.'; }
 }
 function toggleNight() {
-  const willEnable = !nightEnabled();
-  try { localStorage.setItem('conecta_night', willEnable ? '1' : '0'); } catch (e) {}
+  const next = { off: 'on', on: 'auto', auto: 'off' }[nightMode()];
+  try { localStorage.setItem('conecta_night', next); } catch (e) {}
   applyNight();
-  if (typeof toast === 'function') toast(willEnable
-    ? 'Modo noche activado: la intranet se atenúa sola de noche (de 21:00 a 7:00) para reducir el impacto visual y no deslumbrar. Queda guardado en este dispositivo.'
-    : 'Modo noche desactivado.', 'ok');
+  if (typeof toast === 'function') toast({ on: 'Modo noche activado (siempre).', auto: 'Modo noche automático: se activa solo de 21:00 a 7:00.', off: 'Modo noche desactivado.' }[next], 'ok');
 }
 if (!window.__nightInt) window.__nightInt = setInterval(applyNight, 60000); // revisa cada minuto para que entre solo a las 21:00
 // Título del contrato con el AÑO DE LA BODA (se actualiza según la fecha del evento).
