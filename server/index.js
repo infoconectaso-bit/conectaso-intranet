@@ -3319,7 +3319,7 @@ async function filesApi(req, res, user, seg, method, url) {
     if (col === 'events') {
       const ev = store.get('events', rid);
       if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 404, 'Evento no encontrado');
-      if (user.role === 'user' && !ev.editUser) return fail(res, 403, 'La edición no está habilitada.');
+      if (user.role === 'user' && !perm.clientEditOpen(ev)) return fail(res, 403, 'La edición no está habilitada.');
     } else if (col === 'maintenance') {
       const m = store.get('maintenance', rid);
       if (!m) return fail(res, 404, 'Parte no encontrado');

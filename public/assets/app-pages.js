@@ -1660,7 +1660,7 @@ async function loadFiles(ev) {
   }
   try {
     const r = await api('files/list/' + ev.id);
-    const canUpload = isAdmin() || S.user.role === 'dj' || (S.user.role === 'user' && ev.editUser);
+    const canUpload = isAdmin() || S.user.role === 'dj' || ((S.user.role === 'user' || S.user.role === 'planner') && ev.canEdit);
     const isAudio = f => /^audio\//.test(f.mime || '') || /\.(mp3|wav|ogg|m4a|aac)$/i.test(f.name || '');
     const fsize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round((n || 0) / 1024)) + ' KB';
     const cards = (r.files || []).map(f => `<div class="file-card">
