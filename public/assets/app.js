@@ -1067,6 +1067,10 @@ async function dashboardDj() {
       } else if (evVeh) {
         const v = vById[evVeh.vehicleId] || {};
         vehBox = `<div class="veh-prompt"><div class="veh-prompt__txt">🚐 Hoy llevas la furgoneta <b>${esc(v.license_plate || '')}</b>${v.brand ? ' (' + esc(v.brand) + ')' : ''} para <b>${esc(evVeh.conyuges || ('boda #' + evVeh.id))}</b>. ¿La has cogido?</div><button class="btn btn--primary" id="vehTake" data-v="${evVeh.vehicleId}">Sí, la he cogido</button></div>`;
+      } else {
+        // Siempre un botón a mano en su panel (aunque no tenga furgoneta asignada hoy): va a la
+        // pantalla de vehículos donde coge/devuelve de un toque. Complementa al QR.
+        vehBox = `<div class="veh-prompt veh-prompt--idle"><div class="veh-prompt__txt">🚐 ¿Vas a usar una furgoneta?</div><a class="btn btn--primary" href="#/vehiculos">Coger / devolver</a></div>`;
       }
     } catch (e) {}
   }
