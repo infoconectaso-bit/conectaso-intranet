@@ -54,10 +54,19 @@ async function papeleraEventos() {
     $$('[data-purge]').forEach(b => b.onclick = () => modal('Eliminar definitivamente', `¿Eliminar para siempre el evento #${b.dataset.purge}? Esta acción <b>no se puede deshacer</b>.`, { okText: 'Eliminar definitivamente', danger: true, onOk: async () => { await api('events/trash/' + b.dataset.purge, { method: 'DELETE' }); toast('Eliminado definitivamente', 'ok'); papeleraEventos(); } }));
   });
 }
+// Barra de pestañas de "Servicios extras": Solicitudes + Catálogo + Inventario Hora Loca,
+// para agrupar en una sola entrada del menú (el QR del inventario no cambia: la ruta sigue siendo #/hora-loca).
+function extrasTabs(active) {
+  return `<div class="mtabs" style="margin:-2px 0 16px">
+    <a class="mtab${active === 'sol' ? ' on' : ''}" href="#/extras">Solicitudes</a>
+    <a class="mtab${active === 'cat' ? ' on' : ''}" href="#/extras-catalogo">Catálogo</a>
+    <a class="mtab${active === 'inv' ? ' on' : ''}" href="#/hora-loca">Inventario Hora Loca</a>
+  </div>`;
+}
 async function solicitudesExtras() {
   if (!requireAdmin()) return; loading(['Solicitud de extras']);
   const { requests, pending } = await api('extra-requests');
-  shell(`${pageHead('Solicitud de extras', 'Servicios que los novios quieren reservar. Confírmalos y copia el WhatsApp para enviarlo a la pareja, o declínalos.', `<button class="btn" id="catBtn">Ver catálogo de servicios</button>`)}
+  shell(`${pageHead('Solicitud de extras', 'Servicios que los novios quieren reservar. Confírmalos y copia el WhatsApp para enviarlo a la pareja, o declínalos.')}${extrasTabs('sol')}
     <div class="panel"><div class="panel__body">
       <p class="hint" style="margin-bottom:12px">${pending} pendiente${pending === 1 ? '' : 's'} de confirmar. Al <b>aceptar</b> podrás <b>copiar el texto de WhatsApp</b> (con el total de la reserva) para pegarlo en el grupo de la pareja.</p>
       ${table('dtReq', { rows: requests.map((r, i) => Object.assign({ _i: i }, r)), order: [2, 'asc'], filters: true, cols: [
@@ -73,7 +82,6 @@ async function solicitudesExtras() {
         } },
       ] })}
     </div></div>`, ['Solicitud de extras']);
-  el('catBtn').onclick = () => location.hash = '#/extras-catalogo';
   const splitD = v => { const i = v.indexOf(':'); return [v.slice(0, i), v.slice(i + 1)]; };
   bindTable('dtReq', () => {
     $$('[data-acc]').forEach(b => b.onclick = async () => { const [ev, k] = splitD(b.dataset.acc);
@@ -92,7 +100,7 @@ async function solicitudesExtras() {
 async function extrasCatalogo() {
   if (!requireAdmin()) return; loading(['Catálogo de servicios']);
   const items = await coll.list('extras');
-  shell(`${pageHead('Catálogo de servicios', 'Servicios extra que se asignan a los eventos.', `<button class="btn btn--primary" id="newExtra">+ Crear servicio</button> <button class="btn" id="reqBtn">Ver solicitudes</button>`)}
+  shell(`${pageHead('Catálogo de servicios', 'Servicios extra que se asignan a los eventos.', `<button class="btn btn--primary" id="newExtra">+ Crear servicio</button>`)}${extrasTabs('cat')}
     <div class="panel"><div class="panel__body">${table('dtExtras', { rows: items, order: [1, 'asc'], cols: [
       { t: 'Id', get: x => x.id },
       { t: 'Nombre', get: x => x.name },
@@ -100,7 +108,6 @@ async function extrasCatalogo() {
       { t: '', nosort: true, html: x => `<div class="row-actions"><button class="btn btn--sm" data-edit="${x.id}">Editar</button><button class="btn btn--icon" data-del="${x.id}">🗑</button></div>` },
     ] })}</div></div>`, ['Catálogo de servicios']);
   el('newExtra').onclick = () => extraForm({});
-  el('reqBtn').onclick = () => location.hash = '#/extras';
   bindTable('dtExtras', () => {
     $$('[data-edit]').forEach(b => b.onclick = () => extraForm(items.find(x => x.id == b.dataset.edit)));
     $$('[data-del]').forEach(b => b.onclick = () => modal('Borrar', '¿Eliminar este servicio extra?', { okText: 'Eliminar', danger: true, onOk: async () => { await coll.del('extras', b.dataset.del); toast('Eliminado', 'ok'); location.reload(); } }));
@@ -824,7 +831,7 @@ on(/^#\/impagos$/, async () => {
   async function draw() {
     loading(['Impagos']);
     const r = await api('holded-unpaid').catch(() => ({ invoices: [] }));
-    if (r.enabled === false) { shell(`${pageHead('Impagos', 'Facturas pendientes de cobro.')}<div class="empty">La integración de Holded no está activada.</div>`, ['Impagos']); return; }
+    if (r.enabled === false) { shell(`${pageHead('Impagos', 'Facturas pendientes de cobro.')}${economicosTabs('impagos')}<div class="empty">La integración de Holded no está activada.</div>`, ['Impagos']); return; }
     const invs = r.invoices || [];
     const totalPend = invs.reduce((s, i) => s + (+i.pending || 0), 0);
     const overdueN = invs.filter(i => i.overdue).length;
@@ -845,7 +852,7 @@ on(/^#\/impagos$/, async () => {
       { t: 'Pendiente', get: i => i.pending || 0, num: true, html: i => eur(i.pending) },
       { t: '', nosort: true, nofilter: true, html: i => `<button class="btn btn--xs" data-restore-imp="${esc(i.id)}">↩ Restaurar</button>` },
     ] })}</div></div></details>` : '';
-    shell(`${pageHead('Impagos', `${invs.length} factura(s) pendiente(s)${overdueN ? ` · ${overdueN} vencida(s)` : ''} · ${eur(totalPend)} por cobrar`)}
+    shell(`${pageHead('Impagos', `${invs.length} factura(s) pendiente(s)${overdueN ? ` · ${overdueN} vencida(s)` : ''} · ${eur(totalPend)} por cobrar`)}${economicosTabs('impagos')}
       <div class="panel"><div class="panel__body">${table('dtImpagos', { rows: invs, order: [0, 'asc'], filters: true, dense: true, len: 50, cols, empty: 'No hay facturas pendientes. 🎉' })}</div></div>
       ${igPanel}`, ['Impagos']);
     bindTable('dtImpagos', () => { $$('[data-ignore-imp]').forEach(b => b.onclick = () => ignoreImp(b.dataset.ignoreImp, true, b.closest('tr'))); });
@@ -859,7 +866,7 @@ on(/^#\/descuadres$/, async () => {
   async function draw(refresh) {
     loading(['Descuadres']);
     const r = await api('holded-descuadres' + (refresh ? '?refresh=1' : '')).catch(() => ({ sinVincular: [] }));
-    if (r.enabled === false) { shell(`${pageHead('Descuadre facturas', 'Facturas de Holded sin vincular a un evento.')}<div class="empty">La integración de Holded no está activada.</div>`, ['Descuadres']); return; }
+    if (r.enabled === false) { shell(`${pageHead('Descuadre facturas', 'Facturas de Holded sin vincular a un evento.')}${economicosTabs('descuadres')}<div class="empty">La integración de Holded no está activada.</div>`, ['Descuadres']); CS.setDescuadresCount(0); return; }
     const sv = r.sinVincular || [];
     const cols = [
       { t: 'Fecha', get: i => i.date || '', html: i => esc(slash(i.date) || '—') },
@@ -919,7 +926,7 @@ on(/^#\/descuadres$/, async () => {
       { t: '', nosort: true, nofilter: true, html: i => `<button class="btn btn--xs" data-restore-inv="${esc(i.invId)}">↩ Restaurar</button> <a class="btn btn--icon" href="/api/holded-pdf?inv=${encodeURIComponent(i.invId)}" target="_blank" rel="noopener" title="Ver factura">📄</a>` },
     ] })}</div></div></details>` : '';
     const sugList = sv.filter(i => i.suggestedEventId && !i.catWarn);
-    shell(`${pageHead('Descuadre facturas / eventos', 'Facturas de Holded que NO están vinculadas a ningún evento (posible falta de vinculación).')}
+    shell(`${pageHead('Descuadre facturas / eventos', 'Facturas de Holded que NO están vinculadas a ningún evento (posible falta de vinculación).')}${economicosTabs('descuadres')}
       <div class="btn-row" style="margin-bottom:12px"><button class="btn btn--sm" id="descRefresh" title="Vuelve a leer contactos y facturas de Holded (gasta llamadas de la API; úsalo solo cuando hayas cambiado algo en Holded)">↻ Actualizar desde Holded</button> <span class="hint">Los datos se guardan 1 hora para no gastar llamadas; pulsa aquí si acabas de cambiar algo en Holded.</span></div>
       <div class="grid-3" style="margin-bottom:14px">
         <div class="stat stat--pink"><div class="k">Facturas sin vincular</div><div class="v">${r.sinVincularN || 0}</div></div>
@@ -934,6 +941,7 @@ on(/^#\/descuadres$/, async () => {
       ${pmPanel}
       ${pmiPanel}
       ${igPanel}`, ['Descuadres']);
+    CS.setDescuadresCount((r.sinVincularN || sv.length || 0) + pm.length + sw.length);
     // --- Descuadre pagado: obviar / restaurar / enlazar factura por número ---
     const pmIgnore = async (eventId, ignore, diff) => { try { await api('holded-descuadres/pay-ignore', { method: 'POST', body: { eventId, ignore, diff } }); toast(ignore ? 'Descuadre obviado' : 'Descuadre restaurado', 'ok'); draw(); } catch (e) { toast(e.message || 'Error', 'err'); } };
     const pmLinkNumber = (eventId) => {
@@ -1167,8 +1175,8 @@ on(/^#\/hora-loca$/, async () => {
       <div class="panel__body"><p class="hint" style="margin-bottom:12px">Imprime estos QR y pégalos en las cajas / hojas de montaje. Al escanearlos con el móvil se <b>descuenta ese pack del stock</b>, sin tener que entrar en la intranet y sin dar acceso a nada más.</p>
       <div class="hl-packs">${packs.map(packCard).join('')}</div></div></div>`;
 
-    shell(`${pageHead('Inventario Hora Loca', 'Material de Hora Loca: stock con +/− y packs por nº de invitados con su QR.')}
-      ${invHtml}${packsHtml}`, ['Inventario Hora Loca']);
+    shell(`${pageHead('Inventario Hora Loca', 'Material de Hora Loca: stock con +/− y packs por nº de invitados con su QR.')}${extrasTabs('inv')}
+      ${invHtml}${packsHtml}`, ['Servicios extras', 'Inventario Hora Loca']);
 
     // Render de los QR (librería local qrcode.min.js)
     $$('[data-qr]').forEach(box => {
@@ -1290,7 +1298,7 @@ on(/^#\/cobros$/, async () => {
     .map(e => Object.assign({}, e, { pend: (+e.pagoCliente || 0) - (+e.pagado || 0) }))
     .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
   const totalPend = rows.reduce((t, r) => t + r.pend, 0);
-  shell(`${pageHead('Cobros de la semana', `Bodas de esta semana (${dmy(from)} – ${dmy(to)}) con importe pendiente de cobro.`)}
+  shell(`${pageHead('Cobros de la semana', `Bodas de esta semana (${dmy(from)} – ${dmy(to)}) con importe pendiente de cobro.`)}${economicosTabs('cobros')}
     <div class="grid-2" style="margin-bottom:14px">
       <div class="stat stat--pink"><div class="k">Pendiente de cobro esta semana</div><div class="v">${fmtEur(totalPend)}</div></div>
       <div class="stat"><div class="k">Bodas con cobro pendiente</div><div class="v">${rows.length}</div></div></div>
@@ -1309,6 +1317,15 @@ function facturacionTabs(active) {
   return `<div class="mtabs" style="margin:-2px 0 16px">
     <a class="mtab${active === 'fact' ? ' on' : ''}" href="#/facturacion">💶 Facturación</a>
     <a class="mtab${active === 'nom' ? ' on' : ''}" href="#/nominas">📄 Nóminas</a>
+  </div>`;
+}
+// Barra de pestañas "Económicos": agrupa Cobros de la semana + Impagos + Descuadres en una sola
+// entrada del menú. La pestaña de Descuadres lleva el "numerito" de notificación (data-badge).
+function economicosTabs(active) {
+  return `<div class="mtabs" style="margin:-2px 0 16px">
+    <a class="mtab${active === 'cobros' ? ' on' : ''}" href="#/cobros">Cobros de la semana</a>
+    <a class="mtab${active === 'impagos' ? ' on' : ''}" href="#/impagos">Impagos</a>
+    <a class="mtab${active === 'descuadres' ? ' on' : ''}" href="#/descuadres">Descuadres <span class="nav-badge nav-badge--tab" data-badge="descuadres" hidden></span></a>
   </div>`;
 }
 on(/^#\/facturacion$/, async () => {

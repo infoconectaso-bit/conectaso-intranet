@@ -585,9 +585,9 @@ function navFor(role) {
     { t: 'Fotomatón', i: 'camera', h: '#/fotomaton' },
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
     { t: 'Control horario', i: 'clock', h: '#/horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones' },
-    { s: 'Negocio' }, { t: 'Cobros de la semana', i: 'euro', h: '#/cobros' }, { t: 'Impagos', i: 'euro', h: '#/impagos' }, { t: 'Descuadre facturas', i: 'euro', h: '#/descuadres' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
+    { s: 'Negocio' }, { t: 'Económicos', i: 'euro', h: '#/cobros', alt: ['#/impagos', '#/descuadres'], badge: 'descuadres' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
     { t: 'Copias de seguridad', i: 'doc', h: '#/backups' },
-    { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Inventario Hora Loca', i: 'extras', h: '#/hora-loca' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
+    { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
     // Papelera y Beneficios se han movido a "Mi cuenta → Configuración avanzada" (protegidos con contraseña).
   ];
   if (role === 'dj') {
@@ -616,7 +616,7 @@ function shell(bodyHtml, crumbs) {
   const u = S.user;
   const nav = navFor(u.role).map(n => n.s
     ? `<div class="nav__section">${esc(n.s)}</div>`
-    : `<a href="${n.h}" data-nav="${n.h}">${svg(n.i)}<span>${esc(n.t)}</span></a>`).join('');
+    : `<a href="${n.h}" data-nav="${n.h}"${n.alt ? ` data-alt="${n.alt.join('|')}"` : ''}>${svg(n.i)}<span>${esc(n.t)}</span>${n.badge ? `<span class="nav-badge" data-badge="${esc(n.badge)}" hidden></span>` : ''}</a>`).join('');
   app.innerHTML = `<div class="app">
     <aside class="sidebar">
       <div class="sidebar__logo"><img src="/assets/brand/logo-reducido-azul.svg" alt="">
@@ -637,6 +637,7 @@ function shell(bodyHtml, crumbs) {
       <div class="content">${bodyHtml}</div>
     </div></div>`;
   markActive();
+  fillNavBadges();
   applyNight();
   const nt = el('nightToggle'); if (nt) nt.onclick = e => { e.preventDefault(); toggleNight(); };
   el('burger').onclick = () => document.body.classList.toggle('nav-open');
@@ -751,9 +752,32 @@ function markActive() {
     let on = matches(t);
     // Si otro destino del menú coincide de forma MÁS específica (prefijo más largo), este no se marca.
     if (on) on = !targets.some(o => o !== t && o.length > t.length && matches(o));
+    // Rutas "hermanas" agrupadas en una sola entrada (p.ej. Económicos → cobros/impagos/descuadres).
+    if (!on) { const alts = (a.getAttribute('data-alt') || '').split('|').filter(Boolean); if (alts.some(x => matches(x))) on = true; }
     a.classList.toggle('active', on);
   });
 }
+// --- Badge tipo "notificación" (p.ej. nº de descuadres) en el menú y en las pestañas ---
+let _descCache = { t: 0, n: null, p: null };
+function paintDescBadges(n) {
+  $$('[data-badge="descuadres"]').forEach(b => {
+    if (n > 0) { b.textContent = n > 99 ? '99+' : String(n); b.hidden = false; }
+    else { b.hidden = true; b.textContent = ''; }
+  });
+}
+function descuadresCount() {
+  const now = Date.now();
+  if (_descCache.n != null && now - _descCache.t < 120000) return Promise.resolve(_descCache.n);
+  if (_descCache.p) return _descCache.p;
+  _descCache.p = api('holded-descuadres').then(r => {
+    const n = (!r || r.enabled === false) ? 0
+      : ((r.sinVincularN || (r.sinVincular || []).length || 0) + ((r.payMismatches || []).length) + ((r.serviceWarnings || []).length));
+    _descCache = { t: Date.now(), n, p: null }; return n;
+  }).catch(() => { _descCache = { t: 0, n: null, p: null }; return 0; });
+  return _descCache.p;
+}
+function setDescuadresCount(n) { _descCache = { t: Date.now(), n: n | 0, p: null }; paintDescBadges(n | 0); }
+function fillNavBadges() { if ($('[data-badge="descuadres"]')) descuadresCount().then(paintDescBadges).catch(() => {}); }
 function pageHead(title, lead, right) {
   return `<div class="page-head"><div><h1>${esc(title)}</h1>${lead ? `<div class="lead">${esc(lead)}</div>` : ''}<div class="page-head__accent"></div></div>${right || ''}</div>`;
 }
@@ -1063,7 +1087,7 @@ function eventMiniList(list) {
 /* El resto de páginas se cargan desde módulos añadidos abajo */
 window.__CS = { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
   estado, locName, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, tycTitleYear, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$,
-  waSupported, passkeyRegister, passkeyLogin, maintenanceMarkup };
+  waSupported, passkeyRegister, passkeyLogin, maintenanceMarkup, setDescuadresCount };
 
 // Descarga un PDF generado en el servidor (Chromium headless). Con blob para manejar bien los
 // errores en vez de navegar a una respuesta de error.
