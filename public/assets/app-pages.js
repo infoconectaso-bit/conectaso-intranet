@@ -218,7 +218,7 @@ async function eventsList(done) {
     { t: 'Cónyuges', get: e => e.conyuges, html: e => `<a href="#/eventos/${e.id}">${esc(e.conyuges || 'No indicado')}</a>` },
     { t: 'Fecha', get: e => e.fecha || '', html: e => slash(e.fecha) },
     { t: 'Hora', get: e => e.hora || '' },
-    { t: 'Lugar', get: e => CS.locName(e), html: e => locBadge(e) + (e.vehicleId ? ` <span class="veh-badge" title="${esc(vehLabel(e.vehicleId))}">🚐 ${esc(vehAbbr(e.vehicleId))}</span>` : '') },
+    { t: 'Lugar', get: e => CS.locName(e), html: e => locBadge(e) + (e.vehicleId ? ` <span class="veh-badge" title="${esc(vehLabel(e.vehicleId))}">${VEH_SVG} ${esc(vehAbbr(e.vehicleId))}</span>` : '') },
     { t: 'DJ', get: e => djOf(e), html: e => djOf(e) ? esc(djOf(e)) : (admin ? '<span class="no-dj" title="Sin DJ asignado" aria-label="Sin DJ asignado">🚨</span>' : '<span class="muted">—</span>') },
     { t: 'Extras', get: e => svcList(e).map(s => extraName(s.servicio)).join(' '), nofilter: true, html: svcHtml },
   ];
@@ -481,7 +481,7 @@ function travelInfo(ev) {
   const tMin = loc ? loc.travelMin : (isOtro ? ev.otroTravelMin : null);
   const tKm = loc ? loc.travelKm : (isOtro ? ev.otroTravelKm : null);
   const tApx = loc ? loc.travelApprox : (isOtro ? ev.otroApprox : false);
-  const mins = tMin ? `<b>🚗 ${tApx ? '~' : ''}${tMin} min</b>${tKm ? ' · ' + tKm + ' km' : ''} <span class="muted">desde Martorelles${tApx ? ' (aprox.)' : ''}</span>` : `<span class="muted">Tiempo de desplazamiento: pendiente de calcular</span>`;
+  const mins = tMin ? `<b>${di('navigation')} ${tApx ? '~' : ''}${tMin} min</b>${tKm ? ' · ' + tKm + ' km' : ''} <span class="muted">desde Martorelles${tApx ? ' (aprox.)' : ''}</span>` : `<span class="muted">Tiempo de desplazamiento: pendiente de calcular</span>`;
   // para "Otro", el admin puede pegar el enlace de Google Maps y calcular
   const otroCalc = (isOtro && role === 'admin') ? `<div class="otro-travel" style="margin-top:8px"><input class="control" id="otroTravelLink" placeholder="Pega el enlace de Google Maps del lugar (o: lat,long)" value="${esc(ev.otroLink || '')}"><button type="button" class="btn btn--sm btn--primary" id="otroTravelCalc">Calcular</button></div>` : '';
   return `<div class="travel-box"><div><span id="travelMins">${mins}</span> <a class="travel-link" id="travelMaps" href="${maps}" target="_blank" rel="noopener">Ver ruta en Google Maps ↗</a></div>${otroCalc}</div>`;
@@ -1243,7 +1243,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
     try {
       await api('events/' + ev.id, { method: 'PUT', body: { event: { otroLat: ll[0], otroLng: ll[1], otroTravelMin: min, otroTravelKm: km, otroApprox: approx, otroLink: link } } });
       Object.assign(ev, { otroLat: ll[0], otroLng: ll[1], otroTravelMin: min, otroTravelKm: km, otroApprox: approx, otroLink: link });
-      const sp = form.querySelector('#travelMins'); if (sp) sp.innerHTML = `<b>🚗 ${approx ? '~' : ''}${min} min</b> · ${km} km <span class="muted">desde Martorelles${approx ? ' (aprox.)' : ''}</span>`;
+      const sp = form.querySelector('#travelMins'); if (sp) sp.innerHTML = `<b>${di('navigation')} ${approx ? '~' : ''}${min} min</b> · ${km} km <span class="muted">desde Martorelles${approx ? ' (aprox.)' : ''}</span>`;
       const mp = form.querySelector('#travelMaps'); if (mp) mp.href = 'https://www.google.com/maps/dir/?api=1&origin=' + encodeURIComponent(BASE_ADDR) + '&destination=' + ll[0] + ',' + ll[1] + '&travelmode=driving';
       toast(`${approx ? '≈ ' : ''}${min} min · ${km} km`, 'ok');
     } catch (e) { toast('No se pudo guardar', 'err'); } finally { otroBtn.disabled = false; otroBtn.textContent = 'Calcular'; }
