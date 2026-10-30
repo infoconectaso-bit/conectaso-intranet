@@ -1050,7 +1050,28 @@ async function dashboardDj() {
   const parteBox = partes.length ? `<div class="parte-alert"><div class="parte-alert__head">${icn2('notebook-pen')} Tienes <b>${partes.length}</b> ${partes.length === 1 ? 'parte pendiente' : 'partes pendientes'} de rellenar</div>
       ${partes.map(p => `<a class="parte-row" href="#/parte/${p.id}"><span class="parte-date">${dmy(p.fecha)}</span><span class="parte-where">${esc(p.lugar || ('Boda #' + p.id))}</span><span class="parte-miss">Falta: ${esc(p.falta.join(' y '))}</span><span class="parte-go">Rellenar →</span></a>`).join('')}</div>` : '';
   const yNow = String(new Date().getFullYear()); const yst = (st && st.byYear && st.byYear[yNow]) || null;
+  // Aviso de FURGONETA: si lleva una asignada hoy, un botón de un toque para registrar que la coge;
+  // si ya la tiene cogida, para devolverla. Te identifica solo (estás dentro con tu cuenta).
+  let vehBox = '', vehMyOpen = null;
+  if (S.user && S.user.vehicle_allowed) {
+    try {
+      const [vs, us] = await Promise.all([api('collections/vehicles'), api('collections/usages')]);
+      const vehicles = vs.items || vs || [], usages = us.items || us || [];
+      const vById = {}; vehicles.forEach(v => vById[v.id] = v);
+      vehMyOpen = usages.find(u => !u.end && u.userId == S.user.id) || null;
+      const today = ymd(TODAY);
+      const evVeh = (ev.events || []).filter(e => e.vehicleId && e.fecha === today).sort((a, b) => (a.hora || '').localeCompare(b.hora || ''))[0];
+      if (vehMyOpen) {
+        const v = vById[vehMyOpen.vehicleId] || {};
+        vehBox = `<div class="veh-prompt veh-prompt--busy"><div class="veh-prompt__txt">🚐 Tienes cogida la furgoneta <b>${esc(v.license_plate || '')}</b>${v.brand ? ' (' + esc(v.brand) + ')' : ''}.</div><button class="btn btn--primary" id="vehReturn">Devolver furgoneta</button></div>`;
+      } else if (evVeh) {
+        const v = vById[evVeh.vehicleId] || {};
+        vehBox = `<div class="veh-prompt"><div class="veh-prompt__txt">🚐 Hoy llevas la furgoneta <b>${esc(v.license_plate || '')}</b>${v.brand ? ' (' + esc(v.brand) + ')' : ''} para <b>${esc(evVeh.conyuges || ('boda #' + evVeh.id))}</b>. ¿La has cogido?</div><button class="btn btn--primary" id="vehTake" data-v="${evVeh.vehicleId}">Sí, la he cogido</button></div>`;
+      }
+    } catch (e) {}
+  }
   shell(`${pageHead('Hola, ' + (S.user.name || '').split(' ')[0], 'Tus próximos eventos y tu actividad.')}
+    ${vehBox}
     ${parteBox}
     <div class="grid-3">
       <div class="stat stat--pink"><div class="k">Eventos próximos</div><div class="v">${ev.events.length}</div></div>
@@ -1060,6 +1081,8 @@ async function dashboardDj() {
     ${yst ? `<a class="dj-hx-strip" href="#/mis-horas"><span>${icn2('timer')} <b>${String(yst.horas).replace('.', ',')} h</b> extra en ${yNow}</span><span>${icn2('gem')} <b>${yst.bodas}</b> bodas</span><span>${icn2('chart-column')} media <b>${String(yst.media).replace('.', ',')} h</b>/boda</span><span class="go">Ver mis horas →</span></a>` : ''}
     <div class="panel"><div class="panel__head"><h2>Tus próximos eventos</h2></div><div class="panel__body" style="padding:0">${eventMiniList(next)}</div></div>`, ['Inicio']);
   if (tt) api('attendance-summary').then(s => { const r = (s.rows || [])[0]; if (r && el('hMes')) el('hMes').textContent = hm(r.m0) + ' h'; }).catch(() => {});
+  const vt = el('vehTake'); if (vt) vt.onclick = async () => { vt.disabled = true; try { await api('collections/usages', { method: 'POST', body: { vehicleId: +vt.dataset.v, userId: S.user.id, start: new Date().toISOString(), end: null } }); toast('✅ Has cogido la furgoneta', 'ok'); location.reload(); } catch (e) { vt.disabled = false; toast('No se pudo registrar', 'err'); } };
+  const vr = el('vehReturn'); if (vr) vr.onclick = async () => { vr.disabled = true; try { await api('collections/usages/' + vehMyOpen.id, { method: 'PUT', body: { end: new Date().toISOString() } }); toast('✅ Furgoneta devuelta', 'ok'); location.reload(); } catch (e) { vr.disabled = false; toast('No se pudo registrar', 'err'); } };
 }
 // Datos de contacto de Conecta So (visibles para el cliente en su Inicio).
 const CS_CONTACT = { phone: '674 758 989', wa: '34674758989', email: 'comercial@conectaso.es', web: 'https://www.conectaso.es', ig: 'https://www.instagram.com/conecta.so/' };
