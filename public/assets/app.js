@@ -587,7 +587,6 @@ function navFor(role) {
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
     { t: 'Control horario', i: 'clock', h: '#/horario', badge: 'horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones', badge: 'vacaciones' },
     { s: 'Negocio' }, { t: 'Económicos', i: 'euro', h: '#/cobros', alt: ['#/impagos', '#/descuadres'], badge: 'descuadres' }, { t: 'Facturación equipo', i: 'euro', h: '#/facturacion' },
-    { t: 'Copias de seguridad', i: 'doc', h: '#/backups', dot: 'backups' },
     { t: 'Vehículos', i: 'car', h: '#/vehiculos' }, { t: 'Mantenimiento', i: 'wrench', h: '#/mantenimiento', badge: 'mantenimiento' }, { t: 'Términos (TYC)', i: 'doc', h: '#/tyc' },
     // Papelera y Beneficios se han movido a "Mi cuenta → Configuración avanzada" (protegidos con contraseña).
   ];
@@ -625,6 +624,7 @@ function shell(bodyHtml, crumbs) {
       ${(u.role === 'user' || u.role === 'planner') ? `<div class="langsel langsel--top" id="langsel">${LANGS.map(l => `<button type="button" data-lang="${l[0]}" class="${S.lang === l[0] ? 'on' : ''}" title="${l[1]}"><span class="flag">${l[2]}</span><span class="code">${l[1]}</span></button>`).join('')}</div>` : ''}
       <nav class="nav">${nav}</nav>
       <div class="nav__foot"><a href="#/cuenta" data-nav="#/cuenta">${svg('key')}<span>Mi cuenta</span></a>
+        ${u.role === 'admin' ? `<a href="#/backups" data-nav="#/backups">${svg('doc')}<span>Copias de seguridad</span><span class="nav-dot" data-dot="backups" hidden></span></a>` : ''}
         <a href="#" id="nightToggle" class="night-toggle" title="Modo noche: atenúa la intranet sola de noche (de 21:00 a 7:00) para reducir el impacto visual y no deslumbrar. Se guarda en este dispositivo.">${svg('moon')}<span>Modo noche</span><b id="nightState" class="night-state"></b></a>
         <a href="#" id="logoutLink">${svg('logout')}<span>Cerrar sesión</span></a></div>
     </aside>
