@@ -1473,3 +1473,16 @@ body.cli-modern ::-webkit-scrollbar-thumb{background:#2B3A5C;border-radius:0}
 body.cli-modern ::-webkit-scrollbar-track{background:#0A101D}
 
 @media(max-width:720px){body.cli-modern .content{padding:16px 16px 100px}body.cli-modern .ev-cli-head{padding:26px 22px}body.cli-modern .ev-cli-head h1{font-size:32px}}
+
+/* ================================================================
+   PREVISUALIZACIÓN "esquinas rectas" (html.sq-preview) — solo se
+   activa con ?sq=1 en el dispositivo que lo pida (?sq=0 lo quita).
+   Mismos colores; solo quita el redondeo. Círculos (avatares,
+   puntos, interruptores, spinners…) se mantienen redondos.
+   ================================================================ */
+html.sq-preview{--radius:0px}
+html.sq-preview *:not(.btn-spin):not(.nav-dot):not(.nav-badge):not(.avatar):not(.dot):not(.pay-circle):not(.xmodal__x):not(.cmt-plus):not(.track):not(.ind):not(.no-dj):not(.color-dot):not(.pm-h):not(.pm-mic):not(.pm-artist):not(.pm-power):not(.lightbox__x):not(.foto-stat-dot):not(.nom-av):not(.nom-hero__av):not(.estado-leg i):not(.mnt__kick b):not(input[type=radio]):not(input[type=checkbox]),
+html.sq-preview *::before{border-radius:0!important}
+html.sq-preview .switch .track::after{border-radius:50%!important}
+#sqPreviewBar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:9999;background:#130F17;color:#F9F5E1;font-size:12.5px;padding:8px 16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+#sqPreviewBar a{color:#31B9CB;font-weight:700;text-decoration:none}

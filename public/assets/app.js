@@ -658,6 +658,7 @@ function shell(bodyHtml, crumbs) {
   applyLang(app);
   initSpotlight();
   applyCliTheme(u);
+  applySquarePreview();
 }
 // Vista NOVIOS — diseño alternativo "beta" en paralelo (NO toca la vista actual ni la de admin).
 // Se activa abriendo cualquier URL con ?np=1 y se guarda en el dispositivo; ?np=0 lo quita.
@@ -677,6 +678,18 @@ function applyCliTheme(u) {
   }
   const bar = el('cliBetaBar');
   if (modern) { if (!bar) { const b = document.createElement('div'); b.id = 'cliBetaBar'; b.innerHTML = 'Diseño elegante (beta) · <a href="?np=0' + (location.hash || '#/') + '">volver al clásico</a>'; document.body.appendChild(b); } }
+  else if (bar) bar.remove();
+}
+function applySquarePreview() {
+  try {
+    const qs = (location.search || '') + '&' + (location.hash.split('?')[1] || '');
+    if (/[?&]sq=1\b/.test(qs)) localStorage.setItem('sqPreview', '1');
+    if (/[?&]sq=0\b/.test(qs)) localStorage.removeItem('sqPreview');
+  } catch (e) {}
+  let on = false; try { on = localStorage.getItem('sqPreview') === '1'; } catch (e) {}
+  document.documentElement.classList.toggle('sq-preview', on);
+  const bar = el('sqPreviewBar');
+  if (on) { if (!bar) { const b = document.createElement('div'); b.id = 'sqPreviewBar'; b.innerHTML = 'Vista previa · esquinas rectas · <a href="?sq=0' + (location.hash || '#/') + '">quitar</a>'; document.body.appendChild(b); } }
   else if (bar) bar.remove();
 }
 const roleLabel = r => ({ admin: 'Administración', dj: 'DJ / Técnico', planner: 'Wedding planner', user: 'Cliente' }[r] || r);
