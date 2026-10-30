@@ -657,6 +657,27 @@ function shell(bodyHtml, crumbs) {
   startLangObserver();
   applyLang(app);
   initSpotlight();
+  applyCliTheme(u);
+}
+// Vista NOVIOS — diseño alternativo "beta" en paralelo (NO toca la vista actual ni la de admin).
+// Se activa abriendo cualquier URL con ?np=1 y se guarda en el dispositivo; ?np=0 lo quita.
+function applyCliTheme(u) {
+  try {
+    const qs = (location.search || '') + '&' + (location.hash.split('?')[1] || '');
+    if (/[?&]np=1\b/.test(qs)) localStorage.setItem('cliTheme', 'modern');
+    if (/[?&]np=0\b/.test(qs)) localStorage.removeItem('cliTheme');
+  } catch (e) {}
+  let modern = false; try { modern = localStorage.getItem('cliTheme') === 'modern'; } catch (e) {}
+  modern = modern && u && u.role === 'user';
+  document.body.classList.toggle('cli-modern', modern);
+  if (modern && !el('cliModernFont')) {
+    const l = document.createElement('link'); l.id = 'cliModernFont'; l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap';
+    document.head.appendChild(l);
+  }
+  const bar = el('cliBetaBar');
+  if (modern) { if (!bar) { const b = document.createElement('div'); b.id = 'cliBetaBar'; b.innerHTML = '✨ Diseño nuevo (beta) · <a href="?np=0' + (location.hash || '#/') + '">volver al clásico</a>'; document.body.appendChild(b); } }
+  else if (bar) bar.remove();
 }
 const roleLabel = r => ({ admin: 'Administración', dj: 'DJ / Técnico', planner: 'Wedding planner', user: 'Cliente' }[r] || r);
 

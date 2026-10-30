@@ -1332,3 +1332,84 @@ html.night-dim .parte-row,html.night-dim .dj-hx-strip{background:#221c15}
 .hl-pack__info h4{margin:0 0 6px;font-size:15px;font-family:var(--display,inherit)}
 .hl-pack__info .hint{font-size:12px;line-height:1.5}
 @media print{.hl-pack{break-inside:avoid}.hl-pack__info .hint{color:#333}}
+
+/* ================================================================
+   VISTA NOVIOS · DISEÑO ALTERNATIVO "beta" (body.cli-modern)
+   Totalmente aparte: NO afecta a admin/DJ/planner ni a la vista
+   clásica del cliente. Se activa con ?np=1 (y ?np=0 lo quita).
+   ================================================================ */
+body.cli-modern{
+  --m-bg:#F3F1FB;--m-surface:#fff;--m-ink:#231C3B;--m-muted:#847D9C;
+  --m-primary:#6C5CE7;--m-primary2:#9A77FF;--m-accent:#FF6F91;--m-ok:#12B886;
+  --m-line:#EBE7F7;--m-rad:22px;--m-rad-sm:14px;
+  --m-shadow:0 14px 38px rgba(40,28,80,.10);--m-shadow-sm:0 5px 16px rgba(40,28,80,.08);
+  background:var(--m-bg);color:var(--m-ink);font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif
+}
+body.cli-modern .app{background:var(--m-bg)}
+body.cli-modern h1,body.cli-modern h2,body.cli-modern h3,body.cli-modern h4,body.cli-modern .wm{font-family:'Fraunces','Georgia',serif;letter-spacing:-.01em}
+#cliBetaBar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:9999;background:#231C3B;color:#fff;font-family:'Inter',system-ui,sans-serif;font-size:12.5px;padding:8px 16px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+#cliBetaBar a{color:#9A77FF;font-weight:700;text-decoration:none}
+/* Sidebar */
+body.cli-modern .sidebar{background:linear-gradient(165deg,#2B2250,#1C1636);border:0;box-shadow:none}
+body.cli-modern .sidebar__logo{border-bottom:1px solid #ffffff1a}
+body.cli-modern .wm{color:#fff}
+body.cli-modern .wm small{color:#b9b0e0}
+body.cli-modern .nav a{color:#d8d2ee;border-radius:14px;font-family:'Inter',sans-serif;font-weight:600}
+body.cli-modern .nav a:hover{background:#ffffff14;color:#fff}
+body.cli-modern .nav a.active{background:linear-gradient(135deg,var(--m-primary),var(--m-primary2));color:#fff}
+body.cli-modern .nav a.active::before{display:none}
+body.cli-modern .nav__section{color:#8e86b8}
+body.cli-modern .nav__foot a{color:#cfc8ea;border-radius:12px}
+/* Topbar */
+body.cli-modern .topbar{background:transparent;border-bottom:0;padding-top:16px}
+body.cli-modern .crumbs,body.cli-modern .crumbs b,body.cli-modern .crumbs span{color:var(--m-muted);font-weight:600}
+body.cli-modern .userchip{background:var(--m-surface);border:1px solid var(--m-line);border-radius:999px;box-shadow:var(--m-shadow-sm)}
+body.cli-modern .userchip .avatar{background:linear-gradient(135deg,var(--m-primary),var(--m-accent));color:#fff}
+body.cli-modern .userchip .who{color:var(--m-ink)} body.cli-modern .userchip .who small{color:var(--m-muted)}
+body.cli-modern .content{padding:22px 30px 96px}
+/* Hero */
+body.cli-modern .ev-cli-head{background:linear-gradient(135deg,#6C5CE7,#9A77FF 55%,#FF6F91 135%);color:#fff;border-radius:26px;padding:34px 32px;box-shadow:var(--m-shadow);margin-bottom:20px;border:0}
+body.cli-modern .ev-cli-head h1{color:#fff;font-size:34px;line-height:1.08;margin:0}
+body.cli-modern .ev-cli-sub{color:#ffffffe0;font-size:15px;margin-top:6px;font-weight:500}
+/* Progreso */
+body.cli-modern .cli-prog{background:var(--m-surface);border:1px solid var(--m-line);border-radius:var(--m-rad);box-shadow:var(--m-shadow-sm);padding:16px 18px}
+body.cli-modern .progress{background:#ECE8FA;border:0;border-radius:999px;height:16px}
+body.cli-modern .progress>div{background:linear-gradient(90deg,var(--m-primary),var(--m-accent));color:#fff;font-weight:700}
+/* Tabs segmentadas */
+body.cli-modern .tabs{background:var(--m-surface);border:1px solid var(--m-line);border-radius:999px;padding:5px;gap:4px;box-shadow:var(--m-shadow-sm);display:flex;flex-wrap:wrap}
+body.cli-modern .tabs button{border:0;background:transparent;border-radius:999px;color:var(--m-muted);font-weight:600;font-family:'Inter',sans-serif;padding:9px 16px}
+body.cli-modern .tabs button.on{background:linear-gradient(135deg,var(--m-primary),var(--m-primary2));color:#fff;box-shadow:0 6px 16px rgba(108,92,231,.35)}
+/* Paneles → tarjetas */
+body.cli-modern .panel{background:var(--m-surface);border:1px solid var(--m-line);border-radius:var(--m-rad);box-shadow:var(--m-shadow-sm)}
+body.cli-modern .panel__head{border-bottom:1px solid var(--m-line)}
+body.cli-modern .panel__head h3{font-size:18px;color:var(--m-ink)}
+/* Inputs */
+body.cli-modern .control{border:1.5px solid var(--m-line);border-radius:var(--m-rad-sm);background:#FAF9FE;color:var(--m-ink);font-family:'Inter',sans-serif;padding:11px 13px}
+body.cli-modern .control:focus{border-color:var(--m-primary);box-shadow:0 0 0 4px rgba(108,92,231,.14);outline:0;background:#fff}
+body.cli-modern .field>label,body.cli-modern .mlab{color:var(--m-muted);font-weight:600}
+body.cli-modern .readbox{background:#F4F2FD;border:1px solid var(--m-line);border-radius:var(--m-rad-sm)}
+/* Botones */
+body.cli-modern .btn{border:1.5px solid var(--m-line);border-radius:999px;background:var(--m-surface);color:var(--m-ink);font-family:'Inter',sans-serif;font-weight:600;box-shadow:none}
+body.cli-modern .btn:hover{border-color:var(--m-primary);color:var(--m-primary)}
+body.cli-modern .btn--primary,body.cli-modern .btn--blue{background:linear-gradient(135deg,var(--m-primary),var(--m-primary2));border:0;color:#fff;box-shadow:0 10px 24px rgba(108,92,231,.34)}
+body.cli-modern .btn--primary:hover{filter:brightness(1.06);color:#fff}
+body.cli-modern .btn--dark{background:var(--m-ink);border:0;color:#fff}
+body.cli-modern .floatbar{background:#ffffffee;backdrop-filter:blur(8px);border:1px solid var(--m-line);border-radius:999px;box-shadow:var(--m-shadow)}
+/* Pago */
+body.cli-modern .pay-cell{background:#F6F4FE;border:1px solid var(--m-line);border-radius:var(--m-rad-sm);padding:14px 16px}
+body.cli-modern .pay-cell span{color:var(--m-muted)}
+/* Extras */
+body.cli-modern .extra-tile{border:1px solid var(--m-line);border-radius:var(--m-rad);box-shadow:var(--m-shadow-sm);transition:transform .12s,box-shadow .12s}
+body.cli-modern .extra-tile:hover{transform:translateY(-3px);box-shadow:var(--m-shadow)}
+body.cli-modern .extra-tile.on{border-color:var(--m-primary);box-shadow:0 0 0 2px rgba(108,92,231,.25),var(--m-shadow-sm)}
+/* Música */
+body.cli-modern .moment{border:1px solid var(--m-line);border-radius:var(--m-rad-sm);background:var(--m-surface)}
+body.cli-modern .mblock{background:#FAF9FE;border-radius:var(--m-rad-sm)}
+/* Archivos */
+body.cli-modern .file-card{border:1px solid var(--m-line);border-radius:var(--m-rad-sm);box-shadow:var(--m-shadow-sm)}
+/* Idioma, tags, alerts */
+body.cli-modern .langsel button{border-radius:999px}
+body.cli-modern .langsel button.on{background:linear-gradient(135deg,var(--m-primary),var(--m-primary2));color:#fff;border-color:transparent}
+body.cli-modern .tag{border-radius:999px}
+body.cli-modern .alert{border-radius:var(--m-rad-sm)}
+@media(max-width:720px){body.cli-modern .content{padding:16px 16px 96px}body.cli-modern .ev-cli-head{padding:26px 22px}body.cli-modern .ev-cli-head h1{font-size:27px}}
