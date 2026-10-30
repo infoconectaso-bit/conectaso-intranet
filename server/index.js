@@ -2290,7 +2290,7 @@ function meta(user) {
       : { id: l.id, name: l.name, colorHex: l.colorHex }).sort(byName),
     extras: store.all('extras').slice().sort(byName),
     // Furgonetas disponibles (para asignarlas a eventos fiesta/bodorrio/tinglado/extras).
-    vehicles: store.all('vehicles').map(v => ({ id: v.id, brand: v.brand || '', model: v.model || '', plate: v.license_plate || '' })),
+    vehicles: !staffView ? [] : store.all('vehicles').map(v => ({ id: v.id, brand: v.brand || '', model: v.model || '', plate: v.license_plate || '' })),
   };
   if (staffView) {
     m.staff = staffList().slice().sort(byName);

@@ -43,6 +43,11 @@ function canSeeEvent(user, ev) {
   return false;
 }
 
+function isStaffOfEvent(user, ev) {
+  const uid = String(user.id);
+  if (ev.djId != null && String(ev.djId) === uid) return true;
+  return (ev.services || []).some(x => x && (String(x.resp) === uid || String(x.resp2) === uid));
+}
 function sanitizeEvent(user, ev) {
   if (!ev || user.role === 'admin') return ev;
   const out = JSON.parse(JSON.stringify(ev));
@@ -50,6 +55,8 @@ function sanitizeEvent(user, ev) {
   hide.forEach(k => delete out[k]);
   // El wedding planner NO ve los servicios ni quién los lleva (solo admin y DJ).
   if (user.role === 'planner') delete out.services;
+  // La FURGONETA solo la ven administración y los DJ/técnicos asociados a ese evento (solo lectura).
+  if (user.role !== 'dj' || !isStaffOfEvent(user, ev)) delete out.vehicleId;
   if (user.role !== 'user' && Array.isArray(out.spouses)) out.spouses.forEach(s => { delete s.dni; delete s.address; });
   return out;
 }

@@ -4,6 +4,7 @@
    ============================================================================ */
 (function () {
 const CS = window.__CS;
+const deac = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 const { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
   estado, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$ } = CS;
 // Iconos SVG de linea (Lucide) para momentos musicales, catalogo de extras y clima.
@@ -660,7 +661,8 @@ function paneDatos(ev, locOpts, { readonly = false, horariosEditable = false } =
   ${isAdmin() ? `<div class="mblock mblock--of"><h4>Asignaciones</h4><div class="inner"><div class="form-grid">
     ${fg('DJ asignado', sel('dj_vinculated', [['', 'Selecciona un DJ']].concat((S.meta.djs || []).map(u => [u.id, u.name])), ev.djId, 'data-search'))}
     ${fg('Wedding planner', sel('wp_vinculated', [['', 'Selecciona un planner']].concat((S.meta.planners || []).map(u => [u.id, u.name])), ev.wpId, 'data-search'))}
-    ${fg('Furgoneta', sel('vehicle_id', [['', 'Sin furgoneta']].concat((S.meta.vehicles || []).map(v => [v.id, ((v.brand || '') + ' ' + (v.model || '')).trim() + (v.plate ? ' · ' + v.plate : '')])), ev.vehicleId) + '<p class="hint" id="vehHint" style="margin-top:4px"></p>')}
+    ${isAdmin() ? fg('Furgoneta', sel('vehicle_id', [['', 'Sin furgoneta']].concat((S.meta.vehicles || []).map(v => [v.id, ((v.brand || '') + ' ' + (v.model || '')).trim() + (v.plate ? ' · ' + v.plate : '')])), ev.vehicleId) + '<p class="hint" id="vehHint" style="margin-top:4px"></p>')
+      : (S.user.role === 'dj' && ev.vehicleId ? fg('Furgoneta', `<div class="readbox">${esc(vehLabel(ev.vehicleId))}</div>`) : '')}
   </div></div></div>` : ''}
   ${showSpouse ? `<div class="mblock"><h4>Datos de los cónyuges</h4><div class="inner"><div class="grid-2">
     ${sp.slice(0, 2).map((s, i) => { const p = i === 0 ? 'first' : 'second'; return `<div><h5 style="margin-bottom:10px">${i === 0 ? 'Primer' : 'Segundo'} cónyuge</h5><div class="form-grid">
