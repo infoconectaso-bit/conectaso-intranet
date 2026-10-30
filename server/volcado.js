@@ -830,7 +830,16 @@ async function handle(req, res, seg, method, url) {
       const byName = {}, byNameAny = {}; users.all().forEach(u => { const k = nn(u.name); (byNameAny[k] = byNameAny[k] || []).push(u.id); if (u.role !== 'user') (byName[k] = byName[k] || []).push(u.id); });
       // Además, el trabajador que ya tenía fichajes en la réplica con ese mismo id de fichaje manda.
       const attById = {}; store.all('attendances').forEach(a => { if (a.id) attById[a.id] = a.userId; });
-      const toISO = f => { let m = String(f || '').match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if (m) { let y = +m[3]; if (y < 100) y += 2000; return y + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); } m = String(f || '').match(/(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ''; };
+      // OJO: primero ISO (YYYY-MM-DD). La intranet real da las fechas en ISO; si se probaba antes el
+      // patrón DD/MM/AA, "2026-10-29" casaba como 26-10-29 y se guardaba 2029-10-26 (los "años locos").
+      const toISO = f => {
+        const s = String(f || '').trim();
+        let m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);                         // ISO primero
+        if (m) return m[1] + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[3]).padStart(2, '0');
+        m = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);               // fallback DD/MM/AAAA
+        if (m) { let y = +m[3]; if (y < 100) y += 2000; return y + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0'); }
+        return '';
+      };
       const hm = x => { const m = String(x).match(/(\d{1,2})[:.h](\d{2})/); return m ? String(+m[1]).padStart(2, '0') + ':' + m[2] : ''; };
       const slotsOf = t => { const out = []; const re = /(\d{1,2}[:.h]\d{2})\s*(?:-|–|a|hasta|→)\s*(\d{1,2}[:.h]\d{2})/gi; let m; while ((m = re.exec(String(t || '')))) out.push({ in: hm(m[1]), out: hm(m[2]) }); return out; };
       const recs = [], sinUsuario = new Set(), sinFecha = [], sinFranja = [];
