@@ -132,7 +132,7 @@ input[type=date]::-webkit-datetime-edit,input[type=time]::-webkit-datetime-edit{
 /* ---------- botones "pegatina" ---------- */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px;border:2px solid var(--onyx);
   border-radius:var(--radius);background:var(--white);color:var(--onyx);font-weight:700;cursor:pointer;text-decoration:none;
-  box-shadow:var(--shadow-sticker);transition:transform .08s,box-shadow .08s;white-space:nowrap}
+  box-shadow:var(--shadow-sticker);transition:transform .08s,box-shadow .08s;white-space:nowrap;line-height:1.25;font-size:14px;font-family:inherit;box-sizing:border-box}
 .btn:hover{text-decoration:none;transform:translate(1px,1px);box-shadow:2px 2px 0 var(--onyx)}
 .btn:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--onyx)}
 .btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:var(--shadow-sticker);transform:none}
