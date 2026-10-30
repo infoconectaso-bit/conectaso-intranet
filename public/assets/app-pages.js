@@ -6,6 +6,54 @@
 const CS = window.__CS;
 const { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
   estado, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$ } = CS;
+// Iconos SVG de linea (Lucide) para momentos musicales, catalogo de extras y clima.
+const ICN_SET = {
+  "pen-line": "<path d=\"M13 21h8\" /> <path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" />",
+  "door-open": "<path d=\"M10 21H2\" /> <path d=\"M10 3H7a2 2 0 00-2 2v16\" /> <path d=\"M14 12h.01\" /> <path d=\"M19 21V5a2 2 0 00-1.675-1.974l-6.163-1.013A1 1 0 0010 3v18a1 1 0 001.124.992z\" /> <path d=\"M22 21h-3\" />",
+  "book-open": "<path d=\"M12 5v16\" /> <path d=\"M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z\" />",
+  "users": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\" /> <path d=\"M16 3.128a4 4 0 0 1 0 7.744\" /> <path d=\"M22 21v-2a4 4 0 0 0-3-3.87\" /> <circle cx=\"9\" cy=\"7\" r=\"4\" />",
+  "utensils": "<path d=\"M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2\" /> <path d=\"M7 2v20\" /> <path d=\"M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7\" />",
+  "ice-cream-cone": "<path d=\"m7 11 4.08 10.35a1 1 0 0 0 1.84 0L17 11\" /> <path d=\"M17 7A5 5 0 0 0 7 7\" /> <path d=\"M17 7a2 2 0 0 1 0 4H7a2 2 0 0 1 0-4\" />",
+  "cake": "<path d=\"M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8\" /> <path d=\"M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1\" /> <path d=\"M2 21h20\" /> <path d=\"M7 8v3\" /> <path d=\"M12 8v3\" /> <path d=\"M17 8v3\" /> <path d=\"M7 4h.01\" /> <path d=\"M12 4h.01\" /> <path d=\"M17 4h.01\" />",
+  "disc-3": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"M6 12c0-1.7.7-3.2 1.8-4.2\" /> <circle cx=\"12\" cy=\"12\" r=\"2\" /> <path d=\"M18 12c0 1.7-.7 3.2-1.8 4.2\" />",
+  "clef-treble": "<path d=\"M10.586 21.414a2 2 0 0 0 3.378-1.791L11.036 4.377a2 2 0 1 1 3.378 1.037C12.414 7.414 7 8 7 13a5 5 0 0 0 5 5 5 4 0 0 0 5-4 3 3 0 0 0-3-3 3 2 0 0 0-3 2\" />",
+  "gem": "<path d=\"M10.5 3 8 9l4 13 4-13-2.5-6\" /> <path d=\"M17 3a2 2 0 0 1 1.6.8l3 4a2 2 0 0 1 .013 2.382l-7.99 10.986a2 2 0 0 1-3.247 0l-7.99-10.986A2 2 0 0 1 2.4 7.8l2.998-3.997A2 2 0 0 1 7 3z\" /> <path d=\"M2 9h20\" />",
+  "heart": "<path d=\"M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5\" />",
+  "martini": "<path d=\"M12 12 4.207 4.207A.707.707 0 0 1 4.707 3h14.586a.707.707 0 0 1 .5 1.207z\" /> <path d=\"M12 12v10\" /> <path d=\"M7 22h10\" />",
+  "wine": "<path d=\"M8 22h8\" /> <path d=\"M7 10h10\" /> <path d=\"M12 15v7\" /> <path d=\"M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z\" />",
+  "camera": "<path d=\"M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z\" /> <circle cx=\"12\" cy=\"13\" r=\"3\" />",
+  "orbit": "<path d=\"M20.341 6.484A10 10 0 0 1 10.266 21.85\" /> <path d=\"M3.659 17.516A10 10 0 0 1 13.74 2.152\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" /> <circle cx=\"19\" cy=\"5\" r=\"2\" /> <circle cx=\"5\" cy=\"19\" r=\"2\" />",
+  "flame": "<path d=\"M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4\" />",
+  "image": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\" /> <circle cx=\"9\" cy=\"9\" r=\"2\" /> <path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\" />",
+  "lamp": "<path d=\"M12 12v6\" /> <path d=\"M4.077 10.615A1 1 0 0 0 5 12h14a1 1 0 0 0 .923-1.385l-3.077-7.384A2 2 0 0 0 15 2H9a2 2 0 0 0-1.846 1.23Z\" /> <path d=\"M8 20a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1z\" />",
+  "droplets": "<path d=\"M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z\" /> <path d=\"M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97\" />",
+  "party-popper": "<path d=\"M5.8 11.3 2 22l10.7-3.79\" /> <path d=\"M4 3h.01\" /> <path d=\"M22 8h.01\" /> <path d=\"M15 2h.01\" /> <path d=\"M22 20h.01\" /> <path d=\"m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10\" /> <path d=\"m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11c-.11.7-.72 1.22-1.43 1.22H17\" /> <path d=\"m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7\" /> <path d=\"M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z\" />",
+  "layers": "<path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\" /> <path d=\"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\" /> <path d=\"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\" />",
+  "grid-3x3": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M3 9h18\" /> <path d=\"M3 15h18\" /> <path d=\"M9 3v18\" /> <path d=\"M15 3v18\" />",
+  "projector": "<path d=\"M5 7 3 5\" /> <path d=\"M9 6V3\" /> <path d=\"m13 7 2-2\" /> <circle cx=\"9\" cy=\"13\" r=\"3\" /> <path d=\"M11.83 12H20a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h2.17\" /> <path d=\"M16 16h2\" />",
+  "cloud": "<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\" />",
+  "sparkles": "<path d=\"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z\" /> <path d=\"M20 2v4\" /> <path d=\"M22 4h-4\" /> <circle cx=\"4\" cy=\"20\" r=\"2\" />",
+  "sun": "<circle cx=\"12\" cy=\"12\" r=\"4\" /> <path d=\"M12 2v2\" /> <path d=\"M12 20v2\" /> <path d=\"m4.93 4.93 1.41 1.41\" /> <path d=\"m17.66 17.66 1.41 1.41\" /> <path d=\"M2 12h2\" /> <path d=\"M20 12h2\" /> <path d=\"m6.34 17.66-1.41 1.41\" /> <path d=\"m19.07 4.93-1.41 1.41\" />",
+  "cloud-sun": "<path d=\"M12 2v2\" /> <path d=\"m4.93 4.93 1.41 1.41\" /> <path d=\"M20 12h2\" /> <path d=\"m19.07 4.93-1.41 1.41\" /> <path d=\"M15.947 12.65a4 4 0 0 0-5.925-4.128\" /> <path d=\"M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z\" />",
+  "cloud-fog": "<path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\" /> <path d=\"M16 17H7\" /> <path d=\"M17 21H9\" />",
+  "cloud-drizzle": "<path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\" /> <path d=\"M8 19v1\" /> <path d=\"M8 14v1\" /> <path d=\"M16 19v1\" /> <path d=\"M16 14v1\" /> <path d=\"M12 21v1\" /> <path d=\"M12 16v1\" />",
+  "cloud-rain": "<path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\" /> <path d=\"M16 14v6\" /> <path d=\"M8 14v6\" /> <path d=\"M12 16v6\" />",
+  "cloud-snow": "<path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\" /> <path d=\"M8 15h.01\" /> <path d=\"M8 19h.01\" /> <path d=\"M12 17h.01\" /> <path d=\"M12 21h.01\" /> <path d=\"M16 15h.01\" /> <path d=\"M16 19h.01\" />",
+  "cloud-lightning": "<path d=\"M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973\" /> <path d=\"m13 12-3 5h4l-3 5\" />",
+  "thermometer": "<path d=\"M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z\" />",
+  "triangle-alert": "<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\" /> <path d=\"M12 9v4\" /> <path d=\"M12 17h.01\" />",
+  "umbrella": "<path d=\"M12 13v7a2 2 0 0 0 4 0\" /> <path d=\"M12 2v2\" /> <path d=\"M20.992 13a1 1 0 0 0 .97-1.274 10.284 10.284 0 0 0-19.923 0A1 1 0 0 0 3 13z\" />",
+  "circle-alert": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <line x1=\"12\" x2=\"12\" y1=\"8\" y2=\"12\" /> <line x1=\"12\" x2=\"12.01\" y1=\"16\" y2=\"16\" />",
+  "car": "<path d=\"M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2\" /> <circle cx=\"7\" cy=\"17\" r=\"2\" /> <path d=\"M9 17h6\" /> <circle cx=\"17\" cy=\"17\" r=\"2\" />",
+  "notebook-pen": "<path d=\"M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4\" /> <path d=\"M2 6h4\" /> <path d=\"M2 10h4\" /> <path d=\"M2 14h4\" /> <path d=\"M2 18h4\" /> <path d=\"M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z\" />",
+  "chart-column": "<path d=\"M3 3v16a2 2 0 0 0 2 2h16\" /> <path d=\"M18 17V9\" /> <path d=\"M13 17V5\" /> <path d=\"M8 17v-3\" />",
+  "timer": "<line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\" /> <line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\" /> <circle cx=\"12\" cy=\"14\" r=\"8\" />",
+  "calendar-x": "<path d=\"M8 2v3\" /> <path d=\"M16 2v3\" /> <rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" /> <path d=\"M3 9h18\" /> <path d=\"m14 13-4 4\" /> <path d=\"m10 13 4 4\" />",
+  "van": "<path d=\"M13 6v5a1 1 0 0 0 1 1h6.102a1 1 0 0 1 .712.298l.898.91a1 1 0 0 1 .288.702V17a1 1 0 0 1-1 1h-3\"/><path d=\"M5 18H3a1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h12c1.1 0 2.1.8 2.4 1.8l1.176 4.2\"/><path d=\"M9 18h5\"/><circle cx=\"16\" cy=\"18\" r=\"2\"/><circle cx=\"7\" cy=\"18\" r=\"2\"/>",
+  "co2-gun": "<rect x=\"2\" y=\"8\" width=\"12\" height=\"4.5\" rx=\"1\"/><path d=\"M14 9.2h4.2a1 1 0 0 1 1 1v1.1a1 1 0 0 1-1 1H14z\"/><path d=\"M6.5 12.5v3.5h3v-3.5\"/><path d=\"M20.5 8.3 23 7M20.8 10.8H23.3M20.5 13.3 23 15\"/>",
+  "smoke-up": "<path d=\"M12 21c-1.3-2 1.3-3.3 0-5.3s1.3-3.3 0-5.3\"/><path d=\"M7.5 21c-1-1.6 1-2.7 0-4.4s1-2.7 0-4.4\"/><path d=\"M16.5 21c-1-1.6 1-2.7 0-4.4s1-2.7 0-4.4\"/>"
+};
+const icn = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="dk-ic" aria-hidden="true">${ICN_SET[n]||""}</svg>`;
 const isAdmin = () => S.user.role === 'admin';
 const el = id => document.getElementById(id);
 // Traducción directa de bloques largos del cliente (con negritas/importes), que el
@@ -98,21 +146,21 @@ const musicAreasFor = ev => isRibas(ev) ? RIBAS_AREAS : (isOliver(ev) ? OLIVER_A
 const EXTRA_IMG = 'https://intranet.conectaso.es/public/images/extras/';
 // [clave, nombre, descripción, icono] — igual que en la intranet (la foto real se carga desde EXTRA_IMG)
 const EXTRAS_CLIENTE = [
-  ['extra_fotomaton', 'Fotomatón', 'Una forma original de crear recuerdos: cámara de alta definición, caja de atrezzo y disfraces, e impresión de las fotos en tiras personalizables. Os enviamos copia de todas las fotos por e-mail.', '📸'],
-  ['extra_videomaton', 'Videomatón 360 grados', 'Cámara sobre un brazo que gira 360º captando movimientos y bailes. Vídeo personalizado (nombres, fecha) que se envía a cada invitado por código QR.', '🎥'],
-  ['extra_hora_loca_animacion', 'Hora loca animación', '2 animadores para dar el show durante la fiesta: chupitos, limbo, palos y gafas led, globos, silbatos y bengalas frías para un fiestón.', '🎉'],
-  ['extra_pistola_co2', 'Pistolas CO₂', 'Efecto megatrón manejado por los novios o los DJs, para que tu boda sea un tomorrowland.', '💨'],
-  ['extra_maquinas_fuego_frio', '2 máquinas fuego frío', 'Momentos increíbles, fotos espectaculares y efecto WOW entre los invitados. Muy recomendable para el baile nupcial.', '🎆'],
-  ['extra_maquinas_humo_vertical_led', '2 máquinas de humo vertical con led', '¿Sumamos contenido a la fiesta con un poco de humo iluminado?', '🌫️'],
-  ['extra_photocall_sofa_chester_letras_led', 'Photocall sofá chester + letras led', 'Un espacio único donde hacerse fotos con los invitados, con 3 frases a elegir.', '🛋️'],
-  ['extra_iluminacion_ambiental_led', 'Iluminación ambiental fachadas led colores', 'Decora con color las zonas donde quieras, personalizable en el color que elijas.', '💡'],
-  ['extra_burbujas_humo_interior', 'Burbujas con humo en su interior', '¿Quieres darle un toque diferente a la entrada al aperitivo o al baile nupcial?', '🫧'],
-  ['extra_confeti', 'Servicio de confeti (a consultar permiso con el lugar)', 'Consigue 3 momentos WOW en diferentes momentos de la boda.', '🎊'],
-  ['extra_servicio_de_tarima', 'Servicio de tarima', 'Que el DJ esté en alto siempre mola. Convierte tu boda en todo un espectáculo.', '🎚️'],
-  ['extra_servicio_de_suelo_led', 'Servicio de suelo led', 'Sorprende a los invitados con un suelo led: fotos espectaculares y una zona de baile diferente.', '🟦'],
-  ['extra_servicio_de_proyeccion', 'Servicio de proyección', '¿Tienes que proyectar un vídeo? Avísanos para estar preparados.', '📽️'],
-  ['extra_humo_bajo', 'Humo bajo', 'Niebla cerca del suelo para el baile nupcial: un efecto nube espectacular.', '🌁'],
-  ['extra_lanzadores_humo_aereo', 'Lanzadores de humo aéreo', 'Humos aéreos de colores que se elevan por el aire. Un toque de magia para el evento.', '🎇'],
+  ['extra_fotomaton', 'Fotomatón', 'Una forma original de crear recuerdos: cámara de alta definición, caja de atrezzo y disfraces, e impresión de las fotos en tiras personalizables. Os enviamos copia de todas las fotos por e-mail.', icn('camera')],
+  ['extra_videomaton', 'Videomatón 360 grados', 'Cámara sobre un brazo que gira 360º captando movimientos y bailes. Vídeo personalizado (nombres, fecha) que se envía a cada invitado por código QR.', icn('orbit')],
+  ['extra_hora_loca_animacion', 'Hora loca animación', '2 animadores para dar el show durante la fiesta: chupitos, limbo, palos y gafas led, globos, silbatos y bengalas frías para un fiestón.', icn('party-popper')],
+  ['extra_pistola_co2', 'Pistolas CO₂', 'Efecto megatrón manejado por los novios o los DJs, para que tu boda sea un tomorrowland.', icn('co2-gun')],
+  ['extra_maquinas_fuego_frio', '2 máquinas fuego frío', 'Momentos increíbles, fotos espectaculares y efecto WOW entre los invitados. Muy recomendable para el baile nupcial.', icn('flame')],
+  ['extra_maquinas_humo_vertical_led', '2 máquinas de humo vertical con led', '¿Sumamos contenido a la fiesta con un poco de humo iluminado?', icn('smoke-up')],
+  ['extra_photocall_sofa_chester_letras_led', 'Photocall sofá chester + letras led', 'Un espacio único donde hacerse fotos con los invitados, con 3 frases a elegir.', icn('image')],
+  ['extra_iluminacion_ambiental_led', 'Iluminación ambiental fachadas led colores', 'Decora con color las zonas donde quieras, personalizable en el color que elijas.', icn('lamp')],
+  ['extra_burbujas_humo_interior', 'Burbujas con humo en su interior', '¿Quieres darle un toque diferente a la entrada al aperitivo o al baile nupcial?', icn('droplets')],
+  ['extra_confeti', 'Servicio de confeti (a consultar permiso con el lugar)', 'Consigue 3 momentos WOW en diferentes momentos de la boda.', icn('party-popper')],
+  ['extra_servicio_de_tarima', 'Servicio de tarima', 'Que el DJ esté en alto siempre mola. Convierte tu boda en todo un espectáculo.', icn('layers')],
+  ['extra_servicio_de_suelo_led', 'Servicio de suelo led', 'Sorprende a los invitados con un suelo led: fotos espectaculares y una zona de baile diferente.', icn('grid-3x3')],
+  ['extra_servicio_de_proyeccion', 'Servicio de proyección', '¿Tienes que proyectar un vídeo? Avísanos para estar preparados.', icn('projector')],
+  ['extra_humo_bajo', 'Humo bajo', 'Niebla cerca del suelo para el baile nupcial: un efecto nube espectacular.', icn('cloud')],
+  ['extra_lanzadores_humo_aereo', 'Lanzadores de humo aéreo', 'Humos aéreos de colores que se elevan por el aire. Un toque de magia para el evento.', icn('smoke-up')],
 ];
 // --- traducciones de los extras (nombre y descripción) para ca / en / fr ---
 const EXTRAS_I18N = {
@@ -295,7 +343,7 @@ on(/^#\/eventos\/(\d+)$/, async m => {
   if (isAdmin()) eventEditorAdmin(ev); else eventViewRole(ev);
   loadEventInfo(ev.id);
 });
-const WMO = { 0: ['☀️', 'Despejado'], 1: ['🌤️', 'Poco nuboso'], 2: ['⛅', 'Nubes y claros'], 3: ['☁️', 'Nublado'], 45: ['🌫️', 'Niebla'], 48: ['🌫️', 'Niebla'], 51: ['🌦️', 'Llovizna'], 53: ['🌦️', 'Llovizna'], 55: ['🌦️', 'Llovizna'], 56: ['🌧️', 'Llovizna helada'], 57: ['🌧️', 'Llovizna helada'], 61: ['🌧️', 'Lluvia'], 63: ['🌧️', 'Lluvia'], 65: ['🌧️', 'Lluvia fuerte'], 66: ['🌧️', 'Lluvia helada'], 67: ['🌧️', 'Lluvia helada'], 71: ['🌨️', 'Nieve'], 73: ['🌨️', 'Nieve'], 75: ['🌨️', 'Nieve fuerte'], 77: ['🌨️', 'Aguanieve'], 80: ['🌦️', 'Chubascos'], 81: ['🌦️', 'Chubascos'], 82: ['⛈️', 'Chubascos fuertes'], 85: ['🌨️', 'Chubascos de nieve'], 86: ['🌨️', 'Chubascos de nieve'], 95: ['⛈️', 'Tormenta'], 96: ['⛈️', 'Tormenta/granizo'], 99: ['⛈️', 'Tormenta/granizo'] };
+const WMO = { 0: [icn('sun'), 'Despejado'], 1: [icn('cloud-sun'), 'Poco nuboso'], 2: [icn('cloud-sun'), 'Nubes y claros'], 3: [icn('cloud'), 'Nublado'], 45: [icn('cloud-fog'), 'Niebla'], 48: [icn('cloud-fog'), 'Niebla'], 51: [icn('cloud-drizzle'), 'Llovizna'], 53: [icn('cloud-drizzle'), 'Llovizna'], 55: [icn('cloud-drizzle'), 'Llovizna'], 56: [icn('cloud-drizzle'), 'Llovizna helada'], 57: [icn('cloud-drizzle'), 'Llovizna helada'], 61: [icn('cloud-rain'), 'Lluvia'], 63: [icn('cloud-rain'), 'Lluvia'], 65: [icn('cloud-rain'), 'Lluvia fuerte'], 66: [icn('cloud-rain'), 'Lluvia helada'], 67: [icn('cloud-rain'), 'Lluvia helada'], 71: [icn('cloud-snow'), 'Nieve'], 73: [icn('cloud-snow'), 'Nieve'], 75: [icn('cloud-snow'), 'Nieve fuerte'], 77: [icn('cloud-snow'), 'Aguanieve'], 80: [icn('cloud-rain'), 'Chubascos'], 81: [icn('cloud-rain'), 'Chubascos'], 82: [icn('cloud-lightning'), 'Chubascos fuertes'], 85: [icn('cloud-snow'), 'Chubascos de nieve'], 86: [icn('cloud-snow'), 'Chubascos de nieve'], 95: [icn('cloud-lightning'), 'Tormenta'], 96: [icn('cloud-lightning'), 'Tormenta/granizo'], 99: [icn('cloud-lightning'), 'Tormenta/granizo'] };
 async function loadEventInfo(id) {
   const box = document.getElementById('evInfoBox'); if (!box) return;
   let d; try { d = await api('event-weather/' + id); } catch (e) { return; }
@@ -304,7 +352,7 @@ async function loadEventInfo(id) {
   // La distancia/desplazamiento ya se muestra en la sección "Lugar de la celebración"
   // (con enlace a Google Maps), así que no se repite aquí arriba.
   if (d.weather) {
-    const w = d.weather, wm = WMO[w.code] || ['🌡️', ''];
+    const w = d.weather, wm = WMO[w.code] || [icn('thermometer'), ''];
     parts.push(chip(`${wm[0]} ${w.tmax}° / ${w.tmin}°${wm[1] ? ' · ' + wm[1] : ''}${w.precip != null ? ' · 💧 ' + w.precip + '%' : ''}`));
   } else {
     const txt = { lejos: '🌤️ Previsión del tiempo disponible ~15 días antes', sincoords: '🌤️ Finca sin coordenadas (sin previsión)', error: '🌤️ Tiempo no disponible ahora' }[d.weatherReason];
@@ -639,8 +687,8 @@ function allSpotify(ev) {
   return ls.every(l => (linkService(l.url) || {}).spotify);
 }
 // Iconos por momento musical (entrada novios, anillos, platos, etc.)
-const MOMENT_ICON = { rings: '💍', signatures: '✍️', exit: '🚪', readings: '📖', vehicle_entry: '🚗', vows: '💌', entry: '💑', first: '🍽️', second: '🍖', sorbet: '🍧', dessert: '🍰', wine_white: '🥂', wine_red: '🍷', cake_presentation: '🎂', cake: '🎂', dance: '💃', last_song: '🎶' };
-const momentIcon = key => { const k = String(key).replace(/^(ceremony|aperitif|banquet|disco)_/, ''); if (k === 'first_spouse_entry' || k === 'second_spouse_entry') return ''; return MOMENT_ICON[k] || '🎵'; };
+const MOMENT_ICON = { rings: icn('gem'), signatures: icn('pen-line'), exit: icn('door-open'), readings: icn('book-open'), vehicle_entry: icn('van'), vows: icn('heart'), entry: icn('users'), first: icn('utensils'), second: icn('utensils'), sorbet: icn('ice-cream-cone'), dessert: icn('cake'), wine_white: icn('martini'), wine_red: icn('wine'), cake_presentation: icn('cake'), cake: icn('cake'), dance: icn('disc-3'), last_song: icn('clef-treble') };
+const momentIcon = key => { const k = String(key).replace(/^(ceremony|aperitif|banquet|disco)_/, ''); if (k === 'first_spouse_entry' || k === 'second_spouse_entry') return ''; return MOMENT_ICON[k] || icn('clef-treble'); };
 // Enlace con el nombre de la plataforma (Spotify / YouTube) y color de marca. Vale para web y PDF.
 function linkChip(url) {
   const s = linkService(url); if (!s || !url) return '';
