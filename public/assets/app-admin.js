@@ -807,7 +807,7 @@ on(/^#\/horario\/resumen$/, async () => {
     loading(['Control horario', 'Resumen']);
     const res = await api('attendance-summary' + (end ? '?end=' + encodeURIComponent(end) : ''));
     end = res.end;
-    shell(`${pageHead('Resumen de horas (últimos 4 meses)', 'Horas por trabajador. Las vacaciones aprobadas cuentan como 8 h por día laborable, una vez llega el día. Puedes retroceder los meses que quieras.')}
+    shell(`${pageHead('Resumen de horas', 'Horas por trabajador. Las vacaciones aprobadas cuentan como 8 h por día laborable, una vez llega el día.')}
       <div class="panel"><div class="panel__head"><h3>${esc(res.months[3])} — ${esc(res.months[0])}</h3>
         <div class="btn-row"><button class="btn btn--sm" id="mPrev">‹ Meses anteriores</button><button class="btn btn--sm" id="mNext" ${res.next ? '' : 'disabled'}>Meses siguientes ›</button></div></div>
       <div class="panel__body">${table('dtSum', { rows: res.rows, order: [2, 'desc'], filters: true, cols: [
