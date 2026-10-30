@@ -871,9 +871,9 @@ function renderTable(id) {
   if (!showAll && st.page >= pages) st.page = pages - 1;
   const slice = showAll ? rows : rows.slice(st.page * st.len, st.page * st.len + st.len);
   const from = total ? (showAll ? 1 : st.page * st.len + 1) : 0, to = showAll ? total : Math.min(total, (st.page + 1) * st.len);
-  const ths = cfg.cols.map((c, i) => `<th data-sort="${c.nosort ? '' : i}" class="${c.nosort ? 'nosort' : ''}">${esc(c.t)}${c.nosort ? '' : `<span class="caret">${oc === i ? (od === 'asc' ? '▲' : '▼') : '⇅'}</span>`}</th>`).join('');
-  const filt = cfg.filters ? `<tr class="filters">${cfg.cols.map((c, i) => `<th>${c.nofilter || c.nosort ? '' : `<input data-cf="${i}"${(c.num || c.t === 'Id') ? ' inputmode="numeric"' : ''} value="${esc(st.f[i] || '')}" placeholder="Buscar">`}</th>`).join('')}</tr>` : '';
-  const body = slice.length ? slice.map(r => `<tr${cfg.rowClass ? ` class="${esc(cfg.rowClass(r))}"` : ''}>${cfg.cols.map(c => `<td>${c.html ? c.html(r) : esc(c.get(r))}</td>`).join('')}</tr>`).join('')
+  const ths = cfg.cols.map((c, i) => `<th data-sort="${c.nosort ? '' : i}" class="${c.nosort ? 'nosort' : ''}${c.cls ? ' ' + c.cls : ''}">${esc(c.t)}${c.nosort ? '' : `<span class="caret">${oc === i ? (od === 'asc' ? '▲' : '▼') : '⇅'}</span>`}</th>`).join('');
+  const filt = cfg.filters ? `<tr class="filters">${cfg.cols.map((c, i) => `<th${c.cls ? ` class="${c.cls}"` : ''}>${c.nofilter || c.nosort ? '' : `<input data-cf="${i}"${(c.num || c.t === 'Id') ? ' inputmode="numeric"' : ''} value="${esc(st.f[i] || '')}" placeholder="Buscar">`}</th>`).join('')}</tr>` : '';
+  const body = slice.length ? slice.map(r => `<tr${cfg.rowClass ? ` class="${esc(cfg.rowClass(r))}"` : ''}>${cfg.cols.map(c => `<td${c.cls ? ` class="${c.cls}"` : ''}>${c.html ? c.html(r) : esc(c.get(r))}</td>`).join('')}</tr>`).join('')
     : `<tr><td class="td-empty" colspan="${cfg.cols.length}">${esc(cfg.empty || 'No hay registros.')}</td></tr>`;
   const start = Math.max(0, Math.min(st.page - 2, pages - 5)); const pb = [];
   for (let p = start; p < Math.min(pages, start + 5); p++) pb.push(`<button data-pg="${p}" class="${p === st.page ? 'cur' : ''}">${p + 1}</button>`);

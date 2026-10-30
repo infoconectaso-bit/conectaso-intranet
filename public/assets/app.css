@@ -1509,3 +1509,7 @@ html .switch .track::after{border-radius:50%!important}
 .ev-head .edituser-toggle{padding-bottom:0;margin-left:4px}
 /* Modo noche: caja de "Pasos recomendados" del mantenimiento legible */
 html.night-dim .mnt-steps{background:#182340!important;border-color:#2B3A5C!important;color:var(--ink)!important}
+/* Listados de eventos: Hora y Lugar más juntos */
+table.dt th.col-hora,table.dt td.col-hora{width:1%;white-space:nowrap;padding-right:2px!important}
+table.dt th.col-lugar,table.dt td.col-lugar{padding-left:4px!important}
+table.dt tr.filters th.col-hora input{width:52px;min-width:0}

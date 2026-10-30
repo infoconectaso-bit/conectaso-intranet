@@ -266,8 +266,8 @@ async function eventsList(done) {
     ...(admin ? [{ t: 'Tipo', get: e => e.tipo, html: e => `<a href="#/eventos/${e.id}">${esc(e.tipo)}</a>` }] : []),
     { t: 'Cónyuges', get: e => e.conyuges, html: e => `<a href="#/eventos/${e.id}">${esc(e.conyuges || 'No indicado')}</a>` },
     { t: 'Fecha', get: e => e.fecha || '', html: e => slash(e.fecha) },
-    { t: 'Hora', get: e => e.hora || '' },
-    { t: 'Lugar', get: e => CS.locName(e), html: e => locBadge(e) + (e.vehicleId ? ` <span class="veh-badge" title="${esc(vehLabel(e.vehicleId))}">${VEH_SVG} ${esc(vehAbbr(e.vehicleId))}</span>` : '') },
+    { t: 'Hora', get: e => e.hora || '', cls: 'col-hora' },
+    { t: 'Lugar', cls: 'col-lugar', get: e => CS.locName(e), html: e => locBadge(e) + (e.vehicleId ? ` <span class="veh-badge" title="${esc(vehLabel(e.vehicleId))}">${VEH_SVG} ${esc(vehAbbr(e.vehicleId))}</span>` : '') },
     { t: 'DJ', get: e => djOf(e), html: e => djOf(e) ? esc(djOf(e)) : (admin ? '<span class="no-dj" title="Sin DJ asignado" aria-label="Sin DJ asignado">🚨</span>' : '<span class="muted">—</span>') },
     { t: 'Extras', get: e => svcList(e).map(s => extraName(s.servicio)).join(' '), nofilter: true, html: svcHtml },
   ];
