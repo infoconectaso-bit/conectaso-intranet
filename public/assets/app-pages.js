@@ -379,7 +379,7 @@ function eventEditorAdmin(ev) {
   const headLabel = (simple ? `${esc(ev.tipo)} #${ev.id}` : `Boda #${ev.id}`) + (lugarName ? ` · ${esc(lugarName)}` : '');
   const body = `<form id="evForm" data-id="${ev.id}">
     <div class="page-head ev-head"><div><h1 style="font-size:24px">${headLabel}</h1><div class="lead">${esc(ev.conyuges || 'Sin cónyuges')} · ${dmy(ev.fecha)}</div><div class="page-head__accent"></div></div>
-      <div class="btn-row" style="align-items:center;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button> <a class="btn btn--sm" href="#/eventos/${ev.id}/pdf">Resumen PDF</a><div id="evInfoBox" style="display:flex;flex-wrap:wrap;gap:6px"></div></div></div>
+      <div class="btn-row" style="align-items:center;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button> <a class="btn btn--sm" href="#/eventos/${ev.id}/pdf">Resumen PDF</a><div class="ev-estado-head" title="Estado de contacto">${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div><div id="evInfoBox" style="display:flex;flex-wrap:wrap;gap:6px"></div></div></div>
     <div class="panel evtop"><div class="panel__body">
       <div class="evtop-top">
         <div style="display:flex;gap:12px;flex-wrap:nowrap;align-items:flex-start">
@@ -388,7 +388,6 @@ function eventEditorAdmin(ev) {
               <label class="chk chk--radio"><input type="radio" name="payment_method" value="Efectivo" ${ev.metodo === 'Efectivo' ? 'checked' : ''}> <span>Efectivo</span></label>
               <label class="chk chk--radio"><input type="radio" name="payment_method" value="Transferencia" ${ev.metodo === 'Transferencia' ? 'checked' : ''}> <span>Transferencia</span></label>
             </div></div>
-          <div class="field evtop-estado" style="margin:0;min-width:130px;flex:0 0 auto"><label>Estado</label>${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div>
         </div>
         <div class="field evtop-prog"><label>Progreso</label><div class="progress progress--green"><div id="progBar" style="width:${prog}%">${prog}%</div></div></div>
       </div>

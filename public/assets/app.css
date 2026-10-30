@@ -1503,3 +1503,6 @@ html .switch .track::after{border-radius:50%!important}
   .evtop-pay .field > label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px;text-transform:capitalize}
   .evtop-pay .m-hide{display:none}
 }
+/* Estado de contacto junto a "Resumen PDF", con la misma altura que los botones pequeños */
+.ev-estado-head{display:inline-flex}
+.ev-estado-head .control{width:auto;min-width:130px;padding:6px 30px 6px 10px;font-size:13px;font-weight:700;line-height:1.25;height:auto}
