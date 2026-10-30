@@ -139,6 +139,28 @@ input[type=date]::-webkit-datetime-edit,input[type=time]::-webkit-datetime-edit{
 .btn--primary{background:var(--pink);color:#fff}
 .btn--plano-ok{background:#28A745;color:#fff;border-color:#28A745}
 .btn--plano-ok:hover{background:#23913d}
+/* Tarjetas de vehículos */
+.veh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.veh-card{background:var(--white);border:2px solid var(--onyx);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.veh-card--busy{border-color:#D50000}
+.veh-card__h{display:flex;align-items:center;gap:12px}
+.veh-card__ic{width:46px;height:46px;flex:none;display:flex;align-items:center;justify-content:center;background:var(--cream);border-radius:12px;color:var(--onyx)}
+.veh-card__ic svg{width:30px;height:30px}
+.veh-card__id{flex:1;min-width:0}
+.veh-card__plate{font-family:var(--display,inherit);font-weight:900;font-size:17px;letter-spacing:.02em}
+.veh-card__sub{font-size:12.5px;color:#6b6572}
+.veh-state{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.veh-state--free{background:#E8F5E9;color:#1B5E20}
+.veh-state--busy{background:#FDECEA;color:#B71C1C}
+.veh-card__meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:#6b6572}
+.veh-warn{color:#D50000;font-weight:700}
+.veh-card__use{font-size:13px}
+.veh-card__actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:2px}
+.veh-btn{flex:1;min-width:150px;font-size:15px;padding:11px 16px}
+.veh-busy-by{font-size:13px;color:#B71C1C;font-weight:600}
+.veh-hist{border-top:1px solid #e5e0d5;padding-top:8px;display:flex;flex-direction:column;gap:4px;max-height:240px;overflow:auto}
+.veh-hist__row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px}
+.btn--ghost{background:transparent}
 /* estados del botón Guardar: rosa (normal) → cargando (spinner) → verde (guardado) */
 .btn--loading{background:var(--pink);color:#fff;opacity:.92;cursor:progress}
 .btn--ok{background:#0B8043!important;color:#fff!important}

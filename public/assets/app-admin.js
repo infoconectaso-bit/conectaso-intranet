@@ -1907,20 +1907,35 @@ on(/^#\/vehiculos$/, async () => {
   const admin = isAdmin();
   const openUse = vid => usages.find(u => u.vehicleId == vid && !u.end);
   const openUsages = usages.filter(u => !u.end);
-  shell(`${pageHead('Vehículos', admin ? 'Flota y su historial de uso.' : 'Flota disponible y tu historial de uso.', admin ? `${openUsages.length ? `<button class="btn btn--blue" id="endAllUse">Terminar usos activos (${openUsages.length})</button> ` : ''}<button class="btn btn--primary" id="newVeh">+ Añadir vehículo</button>` : '')}
-    <div class="panel"><div class="panel__head"><h3>Vehículos</h3></div><div class="panel__body"><div class="table-wrap"><table class="dt"><thead><tr><th>Matrícula</th><th>Marca</th><th>Modelo</th><th>Color</th><th>Disponible</th><th>ITV</th><th>Seguro</th><th></th></tr></thead><tbody>
-      ${vehicles.map(v => { const u = openUse(v.id); return `<tr><td><b>${esc(v.license_plate)}</b></td><td>${esc(v.brand)}</td><td>${esc(v.model)}</td><td>${esc(v.color)}</td><td>${u ? dot('#D50000', 'En uso') : dot('#0B8043', 'Disponible')}</td><td>${slash(v.itvDate)}</td><td>${slash(v.insuranceRenewal)}</td>
-        <td class="row-actions">${u ? `<button class="btn btn--sm" data-end="${u.id}">Terminar uso</button>` : `<button class="btn btn--sm btn--blue" data-start="${v.id}">Iniciar uso</button>`}${admin ? `<button class="btn btn--sm" data-edit="${v.id}">Editar</button>` : ''}</td></tr>`; }).join('')}
-    </tbody></table></div></div></div>
-    <div class="panel"><div class="panel__head"><h3>Historial de uso</h3></div><div class="panel__body">${table('dtUse', { rows: usages, order: [0, 'desc'], cols: [
-      { t: 'Matrícula', get: u => (vehicles.find(v => v.id == u.vehicleId) || {}).license_plate || '' },
-      { t: 'Trabajador', get: u => userName(u.userId) },
-      { t: 'Inicio', get: u => u.start || '', html: u => fmtDT(u.start) }, { t: 'Fin', get: u => u.end || '', html: u => u.end ? fmtDT(u.end) : '<span class="tag tag--yellow">En uso</span>' },
-    ] })}</div></div>`, ['Vehículos']);
+  const VAN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 6v5a1 1 0 0 0 1 1h6.1"/><path d="M5 18H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v2"/><path d="M14 9h4l3 3v5a1 1 0 0 1-1 1h-1"/><path d="M9 18h5"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>';
+  const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+  const daysTo = ds => { if (!ds) return null; const d = new Date(ds + 'T00:00:00'); return Math.round((d - today0) / 86400000); };
+  const histOf = vid => usages.filter(u => u.vehicleId == vid).sort((a, b) => String(b.start || '').localeCompare(String(a.start || '')));
+  const mine = u => admin || (u && u.userId == S.user.id);
+  const cards = vehicles.map(v => {
+    const u = openUse(v.id), hist = histOf(v.id), last = hist[0];
+    const itvD = daysTo(v.itvDate), itvWarn = itvD != null && itvD <= 15;
+    const action = u
+      ? (mine(u) ? `<button class="btn btn--primary veh-btn" data-end="${u.id}">Devolver furgoneta</button>` : `<span class="veh-busy-by">La tiene ${esc(userName(u.userId))}</span>${admin ? ` <button class="btn btn--sm" data-end="${u.id}">Terminar uso</button>` : ''}`)
+      : `<button class="btn btn--primary veh-btn" data-start="${v.id}">🚐 Coger furgoneta</button>`;
+    return `<div class="veh-card${u ? ' veh-card--busy' : ''}">
+      <div class="veh-card__h"><span class="veh-card__ic">${VAN}</span>
+        <div class="veh-card__id"><div class="veh-card__plate">${esc(v.license_plate || '—')}</div>
+          <div class="veh-card__sub">${esc([v.brand, v.model].filter(Boolean).join(' ')) || '—'}${v.color ? ' · ' + esc(v.color) : ''}</div></div>
+        <span class="veh-state veh-state--${u ? 'busy' : 'free'}">${u ? 'En uso' : 'Disponible'}</span></div>
+      <div class="veh-card__meta"><span class="${itvWarn ? 'veh-warn' : ''}" title="Próxima ITV">🛠 ITV ${v.itvDate ? slash(v.itvDate) : '—'}${itvWarn ? ` · ${itvD < 0 ? '¡vencida!' : '¡' + itvD + ' días!'}` : ''}</span><span title="Renovación del seguro">🛡 Seguro ${v.insuranceRenewal ? slash(v.insuranceRenewal) : '—'}</span></div>
+      <div class="veh-card__use">${u ? `<b>${esc(userName(u.userId))}</b> desde ${fmtDT(u.start)}` : (last ? `Último uso: <b>${esc(userName(last.userId))}</b> · ${fmtDT(last.start)}${last.end ? ' → ' + fmtDT(last.end) : ''}` : '<span class="muted">Sin usos todavía</span>')}</div>
+      <div class="veh-card__actions">${action}${admin ? ` <button class="btn btn--sm" data-edit="${v.id}">Editar</button>` : ''}${hist.length ? ` <button class="btn btn--sm btn--ghost" data-more="${v.id}">Ver historial (${hist.length})</button>` : ''}</div>
+      ${hist.length ? `<div class="veh-hist" id="vehhist-${v.id}" hidden>${hist.slice(0, 40).map(h => `<div class="veh-hist__row"><span>${esc(userName(h.userId))}</span><span class="muted">${fmtDT(h.start)}${h.end ? ' → ' + fmtDT(h.end) : ' · <span class="tag tag--yellow">en uso</span>'}</span></div>`).join('')}</div>` : ''}
+    </div>`;
+  }).join('');
+  shell(`${pageHead('Vehículos', admin ? 'Flota y uso. Pulsa "Coger" al salir y "Devolver" al volver — te identifica solo.' : 'Pulsa "Coger furgoneta" al salir y "Devolver" al volver. Te identifica automáticamente.', admin ? `${openUsages.length ? `<button class="btn btn--blue" id="endAllUse">Terminar usos activos (${openUsages.length})</button> ` : ''}<button class="btn btn--primary" id="newVeh">+ Añadir vehículo</button>` : '')}
+    <div class="veh-grid">${cards || '<div class="empty">No hay vehículos.</div>'}</div>`, ['Vehículos']);
   if (admin) { el('newVeh').onclick = () => vehForm({}); $$('[data-edit]').forEach(b => b.onclick = () => vehForm(vehicles.find(v => v.id == b.dataset.edit)));
     const endAll = el('endAllUse'); if (endAll) endAll.onclick = () => modal('Terminar usos activos', `¿Terminar los <b>${openUsages.length}</b> usos de furgoneta que siguen abiertos? Se cerrarán con la fecha y hora actuales.`, { okText: 'Terminar todos', onOk: async () => { const now = new Date().toISOString(); for (const u of openUsages) { try { await coll.save('usages', Object.assign({}, u, { end: now })); } catch (e) {} } toast('Usos terminados', 'ok'); location.reload(); } }); }
-  $$('[data-start]').forEach(b => b.onclick = async () => { await coll.save('usages', { vehicleId: +b.dataset.start, userId: S.user.id, start: new Date().toISOString(), end: null }); toast('Uso iniciado', 'ok'); location.reload(); });
-  $$('[data-end]').forEach(b => b.onclick = async () => { const u = usages.find(x => x.id == b.dataset.end); await coll.save('usages', Object.assign({}, u, { end: new Date().toISOString() })); toast('Uso terminado', 'ok'); location.reload(); });
+  $$('[data-more]').forEach(b => b.onclick = () => { const h = el('vehhist-' + b.dataset.more); if (h) { h.hidden = !h.hidden; b.textContent = h.hidden ? `Ver historial (${histOf(+b.dataset.more).length})` : 'Ocultar historial'; } });
+  $$('[data-start]').forEach(b => b.onclick = async () => { b.disabled = true; await coll.save('usages', { vehicleId: +b.dataset.start, userId: S.user.id, start: new Date().toISOString(), end: null }); toast('✅ Has cogido la furgoneta', 'ok'); location.reload(); });
+  $$('[data-end]').forEach(b => b.onclick = async () => { b.disabled = true; const u = usages.find(x => x.id == b.dataset.end); await coll.save('usages', Object.assign({}, u, { end: new Date().toISOString() })); toast('✅ Furgoneta devuelta', 'ok'); location.reload(); });
 });
 function vehForm(v) {
   const f = (lab, n, t) => `<div class="field"><label>${lab}</label>${inp(n, v[n], { type: t || 'text' })}</div>`;
