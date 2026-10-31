@@ -323,6 +323,7 @@ module.exports = function makeReservas(deps) {
 
   // ======================= Parte PÚBLICA (novios, sin sesión) =======================
   const hits = new Map();   // límite simple de envíos por IP
+  const misses = new Map(); // códigos inexistentes probados por IP
   function publicView(r) {
     const imp = importe(r); const n = r.novios || {}; const st = status(r);
     return {
@@ -333,8 +334,11 @@ module.exports = function makeReservas(deps) {
   }
   async function publicApi(req, res, seg, method) {
     // /api/public/r/:code[/factura]
+    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const now = Date.now(); const bad = (misses.get(ip) || []).filter(t => now - t < 3600e3);
+    if (bad.length > 30) return fail(res, 429, 'Demasiados intentos. Prueba más tarde.');
     const r = byCode(seg[2]);
-    if (!r || r.cancelled) return fail(res, 404, 'Este enlace no es válido. Pídenos uno nuevo por WhatsApp.');
+    if (!r || r.cancelled) { bad.push(now); misses.set(ip, bad); return fail(res, 404, 'Este enlace no es válido. Pídenos uno nuevo por WhatsApp.'); }
     if (seg.length === 3 && method === 'GET') return ok(res, publicView(r));
     if (seg[3] === 'factura' && method === 'GET') {
       if (!r.invoice || !r.invoice.holdedId) return fail(res, 404, 'La factura aún no está disponible.');
@@ -343,8 +347,7 @@ module.exports = function makeReservas(deps) {
     }
     if (seg.length === 3 && method === 'POST') {
       if (r.submittedAt) return fail(res, 409, 'Ya hemos recibido vuestros datos. Si hay que cambiar algo, escribidnos por WhatsApp.');
-      const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-      const now = Date.now(); const h = (hits.get(ip) || []).filter(t => now - t < 3600e3); h.push(now); hits.set(ip, h);
+      const h = (hits.get(ip) || []).filter(t => now - t < 3600e3); h.push(now); hits.set(ip, h);
       if (h.length > 20) return fail(res, 429, 'Demasiados intentos. Prueba más tarde.');
       const b = await readBody(req).catch(() => ({}));
       if (b.website) return ok(res, { ok: true });   // trampa anti-bots (campo oculto)
@@ -380,6 +383,7 @@ module.exports = function makeReservas(deps) {
 <meta property="og:type" content="website"><meta property="og:title" content="${escH(title)}"><meta property="og:description" content="${escH(desc)}">
 <meta property="og:image" content="${escH(base)}/assets/brand/og-reserva.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#130F17"><link rel="icon" href="/assets/brand/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap">
 <style>${PAGE_CSS}</style></head><body>
 <header class="top"><img src="/assets/brand/logo-principal-blanco.svg" alt="Conecta So" class="logo"><div class="kick">Reserva de vuestra boda</div></header>
 <main id="app"><div class="card"><p class="muted">Cargando…</p></div></main>
@@ -402,12 +406,12 @@ body{font-family:'Evolve Sans',-apple-system,Segoe UI,Roboto,Arial,sans-serif;ba
 .top{background:var(--ink);padding:34px 16px 30px;text-align:center;position:relative;overflow:hidden}
 .top:after{content:"";position:absolute;left:0;right:0;bottom:0;height:6px;background:linear-gradient(90deg,var(--pink),var(--blue),var(--yellow))}
 .logo{width:220px;max-width:70%;height:auto}
-.kick{margin-top:12px;color:var(--yellow);font-family:'Outer Sans',Arial Black,sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+.kick{margin-top:12px;color:var(--yellow);font-family:'Archivo Black','Outer Sans',Arial Black,sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase}
 main{max-width:620px;margin:0 auto;padding:22px 16px 30px}
 .card{background:#fff;border:2px solid var(--ink);padding:18px 18px;margin-bottom:16px}
-h2{font-family:'Outer Sans',Arial Black,sans-serif;font-size:19px;margin:0 0 12px;letter-spacing:-.01em}
+h2{font-family:'Archivo Black','Outer Sans',Arial Black,sans-serif;font-size:19px;margin:0 0 12px;letter-spacing:-.01em}
 h3{font-size:14px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
-.pack{font-family:'Outer Sans',Arial Black,sans-serif;font-size:24px;color:var(--pink)}
+.pack{font-family:'Archivo Black','Outer Sans',Arial Black,sans-serif;font-size:24px;color:var(--pink)}
 .ex{margin:8px 0 0;padding:0;list-style:none}.ex li{padding:4px 0;border-top:1px dashed var(--line)}.ex li:before{content:"+ ";color:var(--pink);font-weight:700}
 .amount{display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;padding-top:12px;border-top:2px solid var(--ink)}
 .amount b{font-size:22px}
@@ -417,7 +421,7 @@ input,textarea{width:100%;font:inherit;padding:11px 12px;border:2px solid var(--
 input:focus,textarea:focus{outline:3px solid var(--blue);outline-offset:0}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}@media(max-width:520px){.grid{grid-template-columns:1fr}}
 .chk{display:flex;gap:10px;align-items:flex-start;font-weight:400;font-size:13.5px}.chk input{width:20px;height:20px;flex:none;margin-top:1px}
-.btn{display:block;width:100%;padding:15px;border:2px solid var(--ink);background:var(--pink);color:#fff;font-family:'Outer Sans',Arial Black,sans-serif;font-size:15px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;box-shadow:4px 4px 0 var(--ink);margin-top:18px;text-align:center;text-decoration:none}
+.btn{display:block;width:100%;padding:15px;border:2px solid var(--ink);background:var(--pink);color:#fff;font-family:'Archivo Black','Outer Sans',Arial Black,sans-serif;font-size:15px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;box-shadow:4px 4px 0 var(--ink);margin-top:18px;text-align:center;text-decoration:none}
 .btn:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
 .btn--ghost{background:#fff;color:var(--ink)}
 .err{background:#fde7e9;border:2px solid #c62828;color:#8b1a1a;padding:10px 12px;margin-top:12px;font-weight:700}

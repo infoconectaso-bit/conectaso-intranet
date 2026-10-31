@@ -3585,6 +3585,18 @@ const server = http.createServer(async (req, res) => {
 });
 server.listen(PORT, HOST, () => {
   try { R(); } catch (e) { console.error("[reservas] init:", e.message); }
+  try {   // una sola vez: comerciales iniciales (Adrià = cuenta superadmin, y Mark)
+    if (!store.setting('migComerciales1')) {
+      const done = [];
+      users.all().forEach(u => {
+        const em = String(u.email || '').toLowerCase(), eo = String(u.emailOriginal || '').toLowerCase();
+        if (u.role === 'admin' && (em === SUPERADMIN_EMAIL || eo === SUPERADMIN_EMAIL)) { users.update(u.id, { data: { comercial: true, comercialName: 'Adrià' } }); done.push(u.id + ' Adrià'); }
+        else if (u.role === 'dj' && /^mark\b/i.test(String(u.name || '').trim())) { users.update(u.id, { data: { comercial: true, comercialName: 'Mark' } }); done.push(u.id + ' ' + u.name); }
+      });
+      store.setSetting('migComerciales1', { at: new Date().toISOString(), done });
+      console.log('[mig comerciales]', done.join(', ') || 'ninguno');
+    }
+  } catch (e) { console.error('[mig comerciales]', e.message); }
   console.log(`Gestor Conecta So escuchando en http://${HOST}:${PORT}`);
   if (!mail.enabled()) console.log('Aviso: SMTP no configurado — los enlaces de invitación se mostrarán en pantalla al administrador.');
   try { require('./reminders').startReminders(); } catch (e) { console.error('[recordatorios] no se pudo iniciar:', e.message); }
