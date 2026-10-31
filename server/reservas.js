@@ -209,7 +209,9 @@ module.exports = function makeReservas(deps) {
       <p>Os adjuntamos la <b>factura de la paga y señal</b> de vuestra boda con Conecta So: <b>Pack ${escH(r.pack)}</b>${(r.extras || []).length || (r.otros || []).length ? ' con ' + escH(extrasTxt(r).join(', ')) : ''}, el <b>${escH(fechaLarga(n.fecha))}</b> en <b>${escH(c.lugar)}</b>.</p>
       <p>Importe: <b>${escH(eur(imp.total))}</b> (${escH(eur(imp.base))} + IVA 10 %). Para bloquear vuestra fecha, haced la transferencia de este importe: <b>el número de cuenta está al pie de la factura</b>.</p>
       <p>También podéis descargarla cuando queráis desde vuestro enlace de reserva.</p>`;
-    const html = emails.shell({ logoUrl: base ? base + '/assets/brand/logo-email-blanco.png' : '', title: 'Vuestra factura de reserva', lead: 'Factura de la paga y señal de vuestra boda', bodyHtml, cta: 'Ver mi reserva', link, foot: 'Cualquier duda, escribidnos por WhatsApp o respondiendo a este email.' });
+    // Diseño "cartel de neón" (como la página de reserva). bodyHtml/emails.shell quedan como alternativa sobria.
+    const html = require('./email-neon').neonInvoiceEmail({ first, pack: r.pack, extras: extrasTxt(r), fecha: fechaLarga(n.fecha).replace(/^./, ch => ch.toUpperCase()), lugar: c.lugar,
+      total: eur(imp.total), base: eur(imp.base), link, logoUrl: base ? base + '/assets/brand/logo-email-blanco.png' : '', number: r.invoice.number });
     const text = `¡Hola${first ? ' ' + first : ''}!\n\nOs adjuntamos la factura de la paga y señal de vuestra boda con Conecta So (Pack ${r.pack}, ${fechaLarga(n.fecha)}, ${c.lugar}).\nImporte: ${eur(imp.total)}. El número de cuenta para la transferencia está al pie de la factura.\n\nVuestra reserva: ${link}`;
     try {
       const res = await mail.sendMail({ to, subject: 'Vuestra factura de reserva · Conecta So', text, html, attachments: [{ name: 'Factura-reserva-' + (r.invoice.number || 'Conecta-So').replace(/[^A-Za-z0-9_-]/g, '') + '.pdf', content: pdf, type: 'application/pdf' }] });
