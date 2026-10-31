@@ -1121,6 +1121,16 @@ async function handle(req, res, seg, method, url) {
         });
         return send(res, 200, { ok: true, done });
       }
+      if (cmd === 'set-user-data') { // fusiona campos en data de un usuario (p. ej. {comercial:true})
+        const u = users.update(+body.id, { data: body.data || {} });
+        return send(res, 200, { ok: !!u, user: u ? { id: u.id, name: u.name, role: u.role, comercial: !!u.comercial, comercialName: u.comercialName || '' } : null });
+      }
+      if (cmd === 'res-test') { // crea / borra una reserva de PRUEBA (para comprobar el enlace público)
+        if (body.del) { store.del('reservas', +body.del); return send(res, 200, { ok: true }); }
+        const r = { id: store.nextId('reservas'), code: 'TEST' + Math.random().toString(36).slice(2, 4).toUpperCase(), createdAt: new Date().toISOString(), sellerId: +body.seller || 16,
+          pack: body.pack || 'Bodorrio', extras: (body.extras || []).map(id => ({ id: +id, name: ((store.get('extras', +id) || {}).name || '').trim() })), otros: body.otros || [], obs: body.obs || '', checklist: {}, test: true };
+        store.put('reservas', r); return send(res, 200, { ok: true, id: r.id, code: r.code });
+      }
       if (cmd === 'users-brief') { // listado breve de usuarios para cotejar con la intranet
         return send(res, 200, { ok: true, users: users.all().map(u => ({ id: u.id, role: u.role, name: u.name, email: u.email, active: u.active, data: u.data })) });
       }
