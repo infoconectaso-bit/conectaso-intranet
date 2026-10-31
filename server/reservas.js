@@ -61,7 +61,7 @@ module.exports = function makeReservas(deps) {
     return {
       welcome: Object.assign({ Fiesta: '', Bodorrio: '', Tinglado: '' }, c.welcome || {}),
       hiddenExtras: Array.isArray(c.hiddenExtras) ? c.hiddenExtras.map(Number) : DEFAULT_HIDDEN(),
-      holdedDoc: c.holdedDoc === 'invoice' ? 'invoice' : 'estimate',   // PRUEBAS: presupuesto; REAL: factura
+      holdedDoc: c.holdedDoc === 'estimate' ? 'estimate' : 'invoice',   // por defecto FACTURA real; 'estimate' = modo pruebas
       tarifa: { packs: Object.assign({}, DEFAULT_TARIFA.packs, t.packs || {}), extras: Object.assign({}, DEFAULT_TARIFA.extras, t.extras || {}) },
     };
   };
