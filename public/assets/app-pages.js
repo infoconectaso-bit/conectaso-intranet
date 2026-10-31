@@ -380,7 +380,7 @@ function eventEditorAdmin(ev) {
   const headLabel = (simple ? `${esc(ev.tipo)} #${ev.id}` : `Boda #${ev.id}`) + (lugarName ? ` · ${esc(lugarName)}` : '');
   const body = `<form id="evForm" data-id="${ev.id}">
     <div class="page-head ev-head"><div><h1 style="font-size:24px">${headLabel}</h1><div class="lead">${esc(ev.conyuges || 'Sin cónyuges')} · ${dmy(ev.fecha)}</div><div class="page-head__accent"></div></div>
-      <div class="btn-row" style="align-items:center;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button> <a class="btn btn--sm" href="#/eventos/${ev.id}/pdf">Resumen PDF</a><div class="ev-estado-head" title="Estado de contacto">${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div>${simple ? '' : `<label class="switch switch--onoff edituser-toggle" title="La edición del cliente se cierra sola 7 días antes de la boda. Dentro de esos 7 días, actívala aquí para reabrirla puntualmente."><span class="edituser-lbl">Edición cliente</span><input type="checkbox" name="habilitar_edicion_para_usuario" ${(ev.editUser || ev.editUnlock) ? 'checked' : ''}><span class="track"></span><span class="switch-state">${(typeof ev.daysToEvent === 'number' && ev.daysToEvent > 7) ? 'Abierta (auto)' : ((ev.editUser || ev.editUnlock) ? 'Reabierta' : 'Cerrada')}</span></label>`}<div id="evInfoBox" style="display:flex;flex-wrap:wrap;gap:6px"></div></div></div>
+      <div class="btn-row" style="align-items:center;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button> <a class="btn btn--sm" href="#/eventos/${ev.id}/pdf">Resumen PDF</a>${S.user.superadmin ? '<button type="button" class="btn btn--sm" id="evHistBtn" title="Histórico de guardados (solo superadmin)">🕘 Histórico</button>' : ''}<div class="ev-estado-head" title="Estado de contacto">${sel('event_status', S.meta.estados.map((s, i) => [i, s.n]), ev.estado)}</div>${simple ? '' : `<label class="switch switch--onoff edituser-toggle" title="La edición del cliente se cierra sola 7 días antes de la boda. Dentro de esos 7 días, actívala aquí para reabrirla puntualmente."><span class="edituser-lbl">Edición cliente</span><input type="checkbox" name="habilitar_edicion_para_usuario" ${(ev.editUser || ev.editUnlock) ? 'checked' : ''}><span class="track"></span><span class="switch-state">${(typeof ev.daysToEvent === 'number' && ev.daysToEvent > 7) ? 'Abierta (auto)' : ((ev.editUser || ev.editUnlock) ? 'Reabierta' : 'Cerrada')}</span></label>`}<div id="evInfoBox" style="display:flex;flex-wrap:wrap;gap:6px"></div></div></div>
     <div class="panel evtop"><div class="panel__body">
       <div class="evtop-top">
         <div style="display:flex;gap:12px;flex-wrap:nowrap;align-items:flex-start">
@@ -1063,6 +1063,44 @@ async function loadHoldedFacturas(ev) {
 /* --- interacción del formulario de evento --- */
 // bloque "Acceso a la boda": titular + invitados (novio/novia con su propio email)
 // bloque de pago del cliente: total, pagado, pendiente y botón de pasarela (Holded)
+/* Histórico de guardados del evento (solo superadmin; el servidor da 404 a cualquier otro). */
+async function openEventHistory(id) {
+  let r; try { r = await api('events/' + id + '/history'); } catch (e) { toast('No se pudo cargar el histórico', 'err'); return; }
+  const H = r.history || [];
+  const when = iso => { const d = new Date(iso.replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? '' : 'Z')); return d.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+  const ROLE = { admin: 'Administración', dj: 'DJ / Técnico', planner: 'Wedding planner', user: 'Novios' };
+  const what = h => h.action === 'initial' ? '<span class="tag tag--grey">Estado inicial</span>'
+    : (String(h.action).indexOf('revert:') === 0 ? `<span class="tag tag--yellow">Vuelta al punto #${esc(h.action.slice(7))}</span>` : '<span class="tag tag--green">Guardado</span>');
+  const rows = H.map((h, i) => `<div class="hist-row">
+      <div class="hist-main"><b>#${h.id}</b> · ${esc(when(h.at))} ${what(h)}${i === 0 ? ' <span class="tag">Actual</span>' : ''}
+        <div class="hint">${h.userName ? esc(h.userName) + (h.role ? ' · ' + esc(ROLE[h.role] || h.role) : '') : (h.action === 'initial' ? 'Cómo estaba antes del primer guardado registrado' : '—')}</div>
+        ${h.changed && h.changed.length ? `<div class="hist-chg">${h.changed.map(c => `<span>${esc(c)}</span>`).join('')}</div>` : ''}
+        <div class="hist-diff" id="hd-${h.id}" hidden></div></div>
+      <div class="hist-act"><button type="button" class="btn btn--sm btn--ghost" data-hview="${h.id}">Ver cambios</button>${i === 0 ? '' : `<button type="button" class="btn btn--sm" data-hrev="${h.id}">Volver a este punto</button>`}</div>
+    </div>`).join('');
+  const bg = modal('Histórico de guardados', H.length ? `<p class="hint" style="margin-bottom:10px">Solo lo ves tú. Cada vez que alguien guarda esta boda queda un punto aquí. Puedes volver a cualquiera (el estado actual también queda guardado, así que siempre puedes deshacerlo).</p><div class="hist-list">${rows}</div>`
+    : '<p>Todavía no hay guardados registrados para esta boda. A partir de ahora, cada vez que alguien guarde aparecerá aquí.</p>');
+  const m = bg.querySelector('.modal'); if (m) m.classList.add('modal--wide');
+  bg.addEventListener('click', async e => {
+    const v = e.target.closest('[data-hview]'), rv = e.target.closest('[data-hrev]');
+    if (v) {
+      const box = bg.querySelector('#hd-' + v.dataset.hview); if (!box) return;
+      if (!box.hidden) { box.hidden = true; return; }
+      try {
+        const d = await api('events/' + id + '/history/' + v.dataset.hview);
+        box.innerHTML = d.diff.length ? `<table class="hist-tbl"><tr><th>Campo</th><th>Antes</th><th>Después</th></tr>${d.diff.map(x => `<tr><td>${esc(x.campo)}</td><td>${x.antes === null ? '<i>modificado</i>' : esc(x.antes)}</td><td>${x.despues === null ? '<i>modificado</i>' : esc(x.despues)}</td></tr>`).join('')}</table>` : '<span class="hint">Sin cambios respecto al punto anterior.</span>';
+        box.hidden = false;
+      } catch (err) { toast('No se pudo cargar el detalle', 'err'); }
+    }
+    if (rv) {
+      const hid = rv.dataset.hrev;
+      modal('Volver a un punto anterior', `<p>La boda volverá a quedar <b>exactamente como estaba en el punto #${esc(hid)}</b>. El estado actual se guarda en el histórico, así que podrás deshacerlo.</p>`, { okText: 'Sí, volver a este punto', danger: true, onOk: async () => {
+        try { await api('events/' + id + '/history/' + hid + '/revert', { method: 'POST', body: {} }); toast('✓ Boda restaurada al punto #' + hid, 'ok'); bg.remove(); window.dispatchEvent(new HashChangeEvent('hashchange')); }
+        catch (err) { toast(err.message || 'No se pudo restaurar', 'err'); }
+      } });
+    }
+  });
+}
 function isPayMarker(ev) { const p = ev && ev.pago; const one = v => Math.abs(Number(v) - 1) < 0.005; return !!p && one(p.pagado) && (one(p.total) || one(p.pendiente)); }
 function clientPaymentBlock(ev) {
   const p = ev.pago; if (!p) return '';
@@ -1320,6 +1358,7 @@ function wireEventForm(ev, { full, role, canEditMusic, canSave }) {
       { okText: 'Entendido' });
   };
   enhanceSearchSelects(form);
+  const hb = el('evHistBtn'); if (hb && S.user.superadmin) hb.onclick = () => openEventHistory(ev.id);
   // pestañas
   const tabs = el('evTabs');
   if (tabs) tabs.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; $$('[data-tab]', tabs).forEach(x => x.classList.toggle('on', x === b)); $$('[data-pane]', form).forEach(p => p.style.display = p.dataset.pane === b.dataset.tab ? '' : 'none'); if (b.dataset.tab === 'archivos') loadFiles(ev); if (b.dataset.tab === 'ruta' && typeof loadRutaPlano === 'function') loadRutaPlano(ev); if (b.dataset.tab === 'facturacion' && typeof loadHoldedFacturas === 'function') loadHoldedFacturas(ev); });

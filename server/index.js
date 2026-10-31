@@ -1806,6 +1806,7 @@ function meView(u) {
   // Bodas de 2026 y anteriores (o sin fecha): no necesitan firmar, no se les muestra el gate.
   out.tycNotNeeded = u.role === 'user' && !out.tycSigned && !tycNeeded(u);
   out.hasPasskey = waHasPasskey(u.id);
+  if (isSuperadmin(u)) out.superadmin = true;
   return out;
 }
 
@@ -2491,6 +2492,56 @@ const slashDate = f => { const p = String(f || '').slice(0, 10).split('-'); retu
 // (por un novio o wedding planner), avisa por email a facturación. Si el SMTP está apagado no envía nada.
 // Dirección del superadmin / administración a la que llegan los avisos internos.
 const SUPERADMIN_EMAIL = 'infoconectaso@gmail.com';
+
+/* ---------- HISTÓRICO DE GUARDADOS DE CADA EVENTO (solo SUPERADMIN) ----------
+   Cada vez que alguien guarda un evento se guarda una FOTO completa de cómo queda, con quién lo
+   guardó. El superadmin puede verlo y volver a cualquier punto anterior. Va en una tabla propia
+   (event_history), fuera de las colecciones genéricas: nadie más puede leerla por ninguna API. */
+function isSuperadmin(user) {
+  if (!user || user.role !== 'admin') return false;
+  const u = users.get(user.id) || {};
+  const em = e => String(e || '').trim().toLowerCase();
+  return em(u.email) === SUPERADMIN_EMAIL || em(u.emailOriginal) === SUPERADMIN_EMAIL;
+}
+let _histReady = false;
+function histDb() {
+  const D = require('./db').db;
+  if (!_histReady) {
+    D.exec(`CREATE TABLE IF NOT EXISTS event_history (
+      id INTEGER PRIMARY KEY, event_id INTEGER NOT NULL, at TEXT NOT NULL, user_id INTEGER, user_name TEXT,
+      role TEXT, action TEXT, changed TEXT, snapshot TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS ix_event_history_ev ON event_history(event_id, id);`);
+    _histReady = true;
+  }
+  return D;
+}
+const HIST_LABEL = { tipo: 'Tipo', conyuges: 'Cónyuges', fecha: 'Fecha', hora: 'Hora ceremonia', celebrationHour: 'Hora aperitivo', lugar: 'Lugar celebración',
+  lugarOtro: 'Lugar (otro)', lugarCeremonia: 'Lugar ceremonia', ceremoniaFuera: 'Ceremonia fuera', estado: 'Estado', metodo: 'Método de pago',
+  pagoCliente: 'Pago cliente', pagado: 'Pagado', pagoRestaurante: 'Pago finca', guests: 'Invitados', userId: 'Titular', coUsers: 'Accesos',
+  djId: 'DJ', wpId: 'Wedding planner', services: 'Servicios', music: 'Música', optionals: 'Momentos personalizados', disco: 'Discoteca',
+  extras: 'Extras', spouses: 'Datos de los novios', labels: 'Etiquetas', obsDj: 'Observaciones DJ', vehicleId: 'Furgoneta', editUser: 'Edición cliente',
+  editUnlock: 'Edición cliente', rutaTimes: 'Horas de la ruta', djOvertime: 'Horas extra DJ', opinion: 'Opinión', ratesFrozen: 'Tarifas congeladas' };
+const HIST_SKIP = new Set(['ratesFrozen', 'updatedAt', '_updated']);
+function histChanged(a, b) {
+  a = a || {}; b = b || {};
+  const keys = [...new Set(Object.keys(a).concat(Object.keys(b)))].filter(k => !HIST_SKIP.has(k));
+  return keys.filter(k => JSON.stringify(a[k] === undefined ? null : a[k]) !== JSON.stringify(b[k] === undefined ? null : b[k]));
+}
+function recordEventHistory(user, before, after, action) {
+  try {
+    const D = histDb();
+    const changed = histChanged(before, after);
+    if (!changed.length && action === 'save') return;            // guardado sin cambios: no ensucia el histórico
+    const nowIso = new Date().toISOString();
+    const has = D.prepare('SELECT 1 FROM event_history WHERE event_id = ? LIMIT 1').get(+after.id);
+    if (!has && before) D.prepare('INSERT INTO event_history (event_id, at, user_id, user_name, role, action, changed, snapshot) VALUES (?,?,?,?,?,?,?,?)')
+      .run(+after.id, nowIso, null, '', '', 'initial', '[]', JSON.stringify(before));   // punto de partida antes del primer guardado
+    const u = (user && users.get(user.id)) || {};
+    D.prepare('INSERT INTO event_history (event_id, at, user_id, user_name, role, action, changed, snapshot) VALUES (?,?,?,?,?,?,?,?)')
+      .run(+after.id, nowIso, user ? user.id : null, u.name || '', u.role || '', action || 'save', JSON.stringify(changed), JSON.stringify(after));
+  } catch (e) { console.error('[histórico evento]', e.message); }
+}
+const histShort = v => { if (v === undefined || v === null || v === '') return '—'; if (typeof v === 'object') return null; const t = String(v); return t.length > 80 ? t.slice(0, 80) + '…' : t; };
 const _escMail = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 // Aviso a administración cuando un trabajador abre un PARTE DE MANTENIMIENTO.
 function notifyMaintenanceCreated(user, rec) {
@@ -2608,6 +2659,35 @@ async function events(req, res, user, seg, method, url) {
   if (!id) return fail(res, 404, 'Evento no encontrado');
   const ev = store.get('events', id);
   if (!ev || !perm.canSeeEvent(user, ev)) return fail(res, 404, 'Evento no encontrado');
+
+  // --- HISTÓRICO (solo superadmin; para cualquier otro la ruta "no existe") ---
+  if (seg[2] === 'history') {
+    if (!isSuperadmin(user)) return fail(res, 404, 'No encontrado');
+    const D = histDb();
+    if (seg.length === 3 && method === 'GET') {
+      const rows = D.prepare('SELECT id, at, user_id, user_name, role, action, changed FROM event_history WHERE event_id = ? ORDER BY id DESC LIMIT 300').all(id);
+      return ok(res, { history: rows.map(r => ({ id: r.id, at: r.at, userId: r.user_id, userName: r.user_name, role: r.role, action: r.action,
+        changed: (JSON.parse(r.changed || '[]')).map(k => HIST_LABEL[k] || k) })) });
+    }
+    const hid = +seg[3];
+    const row = hid ? D.prepare('SELECT * FROM event_history WHERE id = ? AND event_id = ?').get(hid, id) : null;
+    if (!row) return fail(res, 404, 'Punto del histórico no encontrado');
+    if (seg.length === 4 && method === 'GET') {
+      // Detalle: qué cambió en este guardado respecto al punto anterior (valores simples; objetos = "modificado").
+      const prev = D.prepare('SELECT snapshot FROM event_history WHERE event_id = ? AND id < ? ORDER BY id DESC LIMIT 1').get(id, hid);
+      const a = prev ? JSON.parse(prev.snapshot) : {}, b = JSON.parse(row.snapshot);
+      const diff = histChanged(a, b).map(k => ({ campo: HIST_LABEL[k] || k, antes: prev ? histShort(a[k]) : null, despues: histShort(b[k]) }));
+      return ok(res, { id: row.id, at: row.at, userName: row.user_name, action: row.action, diff });
+    }
+    if (seg[4] === 'revert' && method === 'POST') {
+      const snap = JSON.parse(row.snapshot); snap.id = id;
+      store.put('events', snap);
+      recordEventHistory(user, ev, store.get('events', id), 'revert:' + hid);
+      store.audit(user.id, 'event-revert', 'events', id);
+      return ok(res, { ok: true });
+    }
+    return fail(res, 404, 'No encontrado');
+  }
 
   // --- solicitudes de extras: aceptar (confirmar) / marcar pagado / declinar (solo admin) ---
   if (seg[2] && method === 'POST' && ['extra-confirm', 'extra-pay', 'extra-decline'].includes(seg[2])) {
@@ -2914,6 +2994,7 @@ async function events(req, res, user, seg, method, url) {
       try { fact.prime(); next.ratesFrozen = fact.freezeRates(next); } catch (e) {}
     }
     store.put('events', next);
+    recordEventHistory(user, ev, store.get('events', id), 'save');
     // Reasignar furgoneta ("cambiarla de ubicación"): si el admin lo confirma, se la quitamos a las
     // demás bodas del mismo día que la tuvieran asignada (una furgoneta solo puede estar en un sitio).
     if (user.role === 'admin' && (body.reassignVehicle || (body.event && body.event.reassignVehicle)) && next.vehicleId && next.fecha) {

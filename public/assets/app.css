@@ -1513,3 +1513,16 @@ html.night-dim .mnt-steps{background:#182340!important;border-color:#2B3A5C!impo
 table.dt th.col-hora,table.dt td.col-hora{width:1%;white-space:nowrap;padding-right:2px!important}
 table.dt th.col-lugar,table.dt td.col-lugar{padding-left:4px!important}
 table.dt tr.filters th.col-hora input{width:52px;min-width:0}
+/* Histórico de guardados del evento (superadmin) */
+.modal.modal--wide{max-width:760px;width:calc(100vw - 32px)}
+.hist-list{max-height:60vh;overflow:auto;border-top:1px solid var(--line)}
+.hist-row{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;padding:10px 2px;border-bottom:1px solid var(--line)}
+.hist-main{min-width:0;flex:1}
+.hist-act{display:flex;flex-direction:column;gap:6px;flex:none}
+.hist-chg{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.hist-chg span{font-size:11px;padding:2px 7px;background:var(--cream);border:1px solid var(--line)}
+.hist-diff{margin-top:8px}
+.hist-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.hist-tbl th,.hist-tbl td{border:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top;word-break:break-word}
+.hist-tbl th{background:var(--cream)}
+@media(max-width:600px){.hist-row{flex-direction:column}.hist-act{flex-direction:row}}
