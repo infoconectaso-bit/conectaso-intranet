@@ -65,10 +65,16 @@ module.exports = function makeReservas(deps) {
   const sellerLabel = u => (u && (u.comercialName || u.name)) || '—';
   const extraName = id => { const x = store.get('extras', +id); return x ? String(x.name || '').trim() : ''; };
 
+  // Importe calculado (50/100 € + 50 € por extra). Se puede AJUSTAR a mano (r.importeManual, base sin IVA):
+  // p. ej. 2 cabezas móviles extra van en la factura pero no suman 50 € de reserva.
+  const importeAuto = r => r2((PACK_BASE[r.pack] || 0) + EXTRA_BASE * ((r.extras || []).length + (r.otros || []).filter(o => o.suma).length));
   function importe(r) {
-    const base = (PACK_BASE[r.pack] || 0) + EXTRA_BASE * ((r.extras || []).length + (r.otros || []).filter(o => o.suma).length);
-    return { base: r2(base), iva: r2(base * IVA), total: r2(base * (1 + IVA)) };
+    const auto = importeAuto(r);
+    const manual = r.importeManual != null && r.importeManual !== '' && isFinite(+r.importeManual);
+    const base = manual ? r2(+r.importeManual) : auto;
+    return { base, iva: r2(base * IVA), total: r2(base * (1 + IVA)), auto, manual };
   }
+  const parseManual = v => { if (v == null || v === '') return null; const n = +String(v).replace(',', '.'); return isFinite(n) && n >= 0 ? r2(n) : null; };
   // Todos los extras como texto (catálogo + otros), en orden.
   const extrasTxt = r => (r.extras || []).map(e => e.name).concat((r.otros || []).map(o => o.name)).filter(Boolean);
   // Concepto de la factura: SIEMPRE una sola línea como pack de DJ (IVA cultural 10 %).
@@ -255,7 +261,9 @@ module.exports = function makeReservas(deps) {
       const me = users.get(user.id) || {};
       const r = { id: store.nextId('reservas'), code: newCode(), createdAt: new Date().toISOString(), sellerId: user.id,
         pack: b.pack, extras, otros, obs: String(b.obs || '').slice(0, 4000), checklist: {},
+        importeManual: null,
         obsLog: b.obs ? [{ at: new Date().toISOString(), by: sellerLabel(me), text: String(b.obs).slice(0, 4000) }] : [] };
+      { const m = parseManual(b.importe); if (m != null && m !== importeAuto(r)) r.importeManual = m; }
       store.put('reservas', r);
       store.audit(user.id, 'reserva-create', 'reservas', r.id);
       return ok(res, { reserva: view(r, user) });
@@ -267,6 +275,11 @@ module.exports = function makeReservas(deps) {
     if (seg.length === 2 && method === 'GET') return ok(res, { reserva: view(r, user) });
     if (seg.length === 2 && method === 'PUT') {
       const b = await readBody(req);
+      if (b.importe !== undefined) {   // ajuste manual del importe de reserva (antes de emitir la factura, o administración)
+        if (r.invoice && r.invoice.number && !isAdmin(user)) return fail(res, 403, 'La factura ya está emitida: solo administración puede cambiar el importe.');
+        const m = parseManual(b.importe);
+        r.importeManual = (m == null || m === importeAuto(r)) ? null : m;
+      }
       if (b.obs !== undefined && String(b.obs) !== String(r.obs || '')) {
         r.obs = String(b.obs).slice(0, 4000);
         (r.obsLog = r.obsLog || []).push({ at: new Date().toISOString(), by: sellerLabel(me), text: r.obs });

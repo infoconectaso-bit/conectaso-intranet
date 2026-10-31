@@ -9,6 +9,7 @@ const { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, c
   estado, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$ } = CS;
 // Iconos SVG de linea (Lucide) para momentos musicales, catalogo de extras y clima.
 const ICN_SET = {
+  "phone": "<path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\" />",
   "pen-line": "<path d=\"M13 21h8\" /> <path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" />",
   "door-open": "<path d=\"M10 21H2\" /> <path d=\"M10 3H7a2 2 0 00-2 2v16\" /> <path d=\"M14 12h.01\" /> <path d=\"M19 21V5a2 2 0 00-1.675-1.974l-6.163-1.013A1 1 0 0010 3v18a1 1 0 001.124.992z\" /> <path d=\"M22 21h-3\" />",
   "book-open": "<path d=\"M12 5v16\" /> <path d=\"M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z\" />",
@@ -145,6 +146,8 @@ const isOliver = ev => OLIVER_IDS.includes(+((ev && ev.lugar) || 0));
 const musicAreasFor = ev => isRibas(ev) ? RIBAS_AREAS : (isOliver(ev) ? OLIVER_AREAS : MUSIC_AREAS);
 // base de las imágenes reales de los servicios extra (públicas en el servidor de Conecta So)
 const EXTRA_IMG = 'https://intranet.conectaso.es/public/images/extras/';
+const EXTRA_IMG_LOCAL = { extra_telefono_vintage: '/assets/extras/extra_telefono_vintage.jpg' };
+const exImgSrc = key => EXTRA_IMG_LOCAL[key] || (EXTRA_IMG + key + '.jpg');
 // [clave, nombre, descripción, icono] — igual que en la intranet (la foto real se carga desde EXTRA_IMG)
 const EXTRAS_CLIENTE = [
   ['extra_fotomaton', 'Fotomatón', 'Una forma original de crear recuerdos: cámara de alta definición, caja de atrezzo y disfraces, e impresión de las fotos en tiras personalizables. Os enviamos copia de todas las fotos por e-mail.', icn('camera')],
@@ -161,6 +164,7 @@ const EXTRAS_CLIENTE = [
   ['extra_servicio_de_suelo_led', 'Servicio de suelo led', 'Sorprende a los invitados con un suelo led: fotos espectaculares y una zona de baile diferente.', icn('grid-3x3')],
   ['extra_servicio_de_proyeccion', 'Servicio de proyección', '¿Tienes que proyectar un vídeo? Avísanos para estar preparados.', icn('projector')],
   ['extra_humo_bajo', 'Humo bajo', 'Niebla cerca del suelo para el baile nupcial: un efecto nube espectacular.', icn('cloud')],
+  ['extra_telefono_vintage', 'Teléfono vintage de mensajes', 'Un teléfono retro azul donde vuestros invitados os dejan mensajes de voz: descuelgan, escuchan vuestro saludo y graban sus felicitaciones, anécdotas y alguna que otra confesión. Después de la boda os entregamos todos los audios para que podáis revivir el día siempre que queráis (y alguna risa asegurada).', icn('phone')],
   ['extra_lanzadores_humo_aereo', 'Lanzadores de humo aéreo', 'Humos aéreos de colores que se elevan por el aire. Un toque de magia para el evento.', icn('smoke-up')],
 ];
 // --- traducciones de los extras (nombre y descripción) para ca / en / fr ---
@@ -179,6 +183,7 @@ const EXTRAS_I18N = {
   extra_servicio_de_suelo_led: { ca: ['Servei de terra led', 'Sorprèn els convidats amb un terra led: fotos espectaculars i una zona de ball diferent.'], en: ['LED floor service', 'Surprise your guests with an LED floor: spectacular photos and a different dance area.'], fr: ['Service de sol led', 'Surprenez les invités avec un sol led : des photos spectaculaires et une piste de danse différente.'] },
   extra_servicio_de_proyeccion: { ca: ['Servei de projecció', "Has de projectar un vídeo? Avisa'ns per estar preparats."], en: ['Projection service', "Need to project a video? Let us know so we're ready."], fr: ['Service de projection', 'Vous devez projeter une vidéo ? Prévenez-nous pour que nous soyons prêts.'] },
   extra_humo_bajo: { ca: ['Fum baix', 'Boira a prop del terra per al ball nupcial: un efecte núvol espectacular.'], en: ['Low smoke', 'Fog close to the floor for the first dance: a spectacular cloud effect.'], fr: ['Fumée basse', 'Brouillard au ras du sol pour la danse nuptiale : un effet nuage spectaculaire.'] },
+  extra_telefono_vintage: { ca: ['Telèfon vintage de missatges', "Un telèfon retro blau on els vostres convidats us deixen missatges de veu: despengen, escolten la vostra salutació i graven les seves felicitacions, anècdotes i alguna que altra confessió. Després de la boda us lliurem tots els àudios perquè pugueu reviure el dia sempre que vulgueu (i alguna rialla assegurada)."], en: ['Vintage message phone', 'A blue retro phone where your guests leave you voice messages: they pick up, hear your greeting and record their congratulations, stories and the odd confession. After the wedding we hand you all the recordings so you can relive the day whenever you like (laughs guaranteed).'], fr: ['Téléphone vintage à messages', "Un téléphone rétro bleu où vos invités vous laissent des messages vocaux : ils décrochent, écoutent votre message d'accueil et enregistrent leurs félicitations, anecdotes et quelques confidences. Après le mariage, nous vous remettons tous les enregistrements pour revivre la journée quand vous voulez (fous rires garantis)."] },
   extra_lanzadores_humo_aereo: { ca: ['Llançadors de fum aeri', "Fums aeris de colors que s'eleven per l'aire. Un toc de màgia per a l'esdeveniment."], en: ['Aerial smoke launchers', 'Coloured aerial smoke that rises into the air. A touch of magic for the event.'], fr: ['Lanceurs de fumée aérienne', "Fumées aériennes colorées qui s'élèvent dans les airs. Une touche de magie pour l'événement."] },
 };
 // Acepta tanto la fila completa del extra [clave,nombre,desc,icono] como solo la clave (string).
@@ -904,7 +909,7 @@ function openExtraDetail(key, form) {
     const on = cb && cb.checked;
     ov.innerHTML = `<div class="xmodal__box">
       <button type="button" class="xmodal__x" data-x aria-label="${tt('Cerrar', 'Tancar', 'Close', 'Fermer')}">✕</button>
-      <div class="xmodal__img"><img src="${EXTRA_IMG}${key}.jpg" alt="${esc(exName(x))}" onerror="this.closest('.xmodal__img').classList.add('noimg')"><span class="xmodal__imgnote">${tt('Imagen pendiente de subir', 'Imatge pendent de pujar', 'Image to be uploaded', 'Image à télécharger')}</span></div>
+      <div class="xmodal__img"><img src="${exImgSrc(key)}" alt="${esc(exName(x))}" onerror="this.closest('.xmodal__img').classList.add('noimg')"><span class="xmodal__imgnote">${tt('Imagen pendiente de subir', 'Imatge pendent de pujar', 'Image to be uploaded', 'Image à télécharger')}</span></div>
       <div class="xmodal__body">
         <h3>${x[3] || ''} ${esc(exName(x))}</h3>
         <p>${esc(exDesc(x))}</p>

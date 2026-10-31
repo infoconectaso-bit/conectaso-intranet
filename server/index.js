@@ -2489,7 +2489,7 @@ const EXTRA_LABELS = {
   extra_photocall_sofa_chester_letras_led: 'Photocall sofá chester + letras led', extra_iluminacion_ambiental_led: 'Iluminación ambiental fachadas led colores',
   extra_burbujas_humo_interior: 'Burbujas con humo en su interior', extra_confeti: 'Servicio de confeti', extra_servicio_de_tarima: 'Servicio de tarima',
   extra_servicio_de_suelo_led: 'Servicio de suelo led', extra_servicio_de_proyeccion: 'Servicio de proyección', extra_humo_bajo: 'Humo bajo',
-  extra_lanzadores_humo_aereo: 'Lanzadores de humo aéreo',
+  extra_lanzadores_humo_aereo: 'Lanzadores de humo aéreo', extra_telefono_vintage: 'Teléfono vintage de mensajes',
 };
 const extraLabel = key => EXTRA_LABELS[key] || String(key).replace(/^extra_/, '').replace(/_/g, ' ');
 const slashDate = f => { const p = String(f || '').slice(0, 10).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (f || '—'); };

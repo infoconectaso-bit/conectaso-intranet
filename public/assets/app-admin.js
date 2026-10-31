@@ -74,13 +74,14 @@ function reservaNueva(data) {
     <div class="field"><label>Otros extras <span class="hint">(si no está en el catálogo, escríbelo)</span></label><div id="rnOtros"></div>
       <button type="button" class="btn btn--sm" id="rnAddOtro">+ Añadir otro extra</button></div>
     <div class="field"><label>Observaciones internas <span class="hint">(no las ven los novios; pasan a "Observaciones ocultas" de la boda)</span></label>${ta('obs', '', 'Ej.: Bodorrio con cambio de fotomatón por pistolas CO2')}</div>
-    <div class="res-total" id="rnTotal"></div></form>`, { okText: 'Generar enlace', onOk: async () => {
+    <div class="res-total"><div id="rnTotal"></div>
+      <div class="res-imp"><label>Importe de la reserva (sin IVA)</label><input class="control" type="number" step="0.01" min="0" name="importe" id="rnImp"> <span class="hint" id="rnImpHint"></span></div></div></form>`, { okText: 'Generar enlace', onOk: async () => {
     const pack = (bg.querySelector('[name=pack]:checked') || {}).value;
     const extras = $$('#rnExtras input:checked', bg).map(i => +i.value);
     const otros = $$('[data-otro]', bg).map(r => ({ name: r.querySelector('input[type=text]').value.trim(), suma: r.dataset.suma === '1' })).filter(o => o.name);
     if ($$('[data-otro]', bg).some(r => r.querySelector('input[type=text]').value.trim() && r.dataset.suma === '')) { toast('Indica en cada extra escrito a mano si suma 50 € o no', 'err'); return true; }
     try {
-      const r = await api('reservas', { method: 'POST', body: { pack, extras, otros, obs: bg.querySelector('[name=obs]').value } });
+      const r = await api('reservas', { method: 'POST', body: { pack, extras, otros, obs: bg.querySelector('[name=obs]').value, importe: el('rnImp').value } });
       reservaLink(r.reserva); reservasPage();
     } catch (e) { toast(e.message, 'err'); return true; }
   } });
@@ -88,9 +89,15 @@ function reservaNueva(data) {
   const total = () => {
     const pack = (bg.querySelector('[name=pack]:checked') || {}).value;
     const nEx = $$('#rnExtras input:checked', bg).length + $$('[data-otro]', bg).filter(r => r.dataset.suma === '1' && r.querySelector('input[type=text]').value.trim()).length;
-    const base = (pack === 'Tinglado' ? 100 : 50) + 50 * nEx;
-    el('rnTotal').innerHTML = `Importe de la reserva: <b>${resEur(base)} + 10 % IVA = ${resEur(base * 1.1)}</b>`;
+    const auto = (pack === 'Tinglado' ? 100 : 50) + 50 * nEx;
+    const imp = el('rnImp');
+    if (!imp.dataset.touched) imp.value = auto;               // se recalcula solo hasta que lo tocas a mano
+    const base = imp.value === '' ? auto : +imp.value;
+    el('rnTotal').innerHTML = `Calculado: ${resEur(auto)} <span class="hint">(${pack === 'Tinglado' ? '100' : '50'} € + 50 € por extra)</span>`;
+    el('rnImpHint').innerHTML = `+ 10 % IVA = <b>${resEur(base * 1.1)}</b>${imp.dataset.touched && +imp.value !== auto ? ` · <a href="#" id="rnImpReset">volver a ${resEur(auto)}</a>` : ''}`;
+    const rs = el('rnImpReset'); if (rs) rs.onclick = e => { e.preventDefault(); delete imp.dataset.touched; total(); };
   };
+  el('rnImp').addEventListener('input', () => { el('rnImp').dataset.touched = '1'; total(); });
   const addOtro = () => {
     const d = document.createElement('div'); d.className = 'res-otro'; d.setAttribute('data-otro', ''); d.dataset.suma = '';
     d.innerHTML = `<input type="text" class="control" placeholder="Ej.: Bengalas en la entrada"><div class="res-otro__q">⚠️ No está en el catálogo. ¿Suma <b>50 €</b> a la reserva? <button type="button" class="btn btn--sm" data-s="1">Sí, sumar 50 €</button> <button type="button" class="btn btn--sm" data-s="0">No</button> <button type="button" class="btn btn--sm btn--ghost" data-x-otro>✕</button></div>`;
@@ -125,7 +132,9 @@ async function reservaDetalle(id, data) {
     <div class="res-link"><input class="control" readonly value="${esc(r.link)}"> <button type="button" class="btn btn--sm" id="rdCopy">📋 Copiar</button> <a class="btn btn--sm" target="_blank" rel="noopener" href="${esc(waShare(r.link))}">💬 WhatsApp</a></div>
     <h4 class="form-sub">Venta</h4>
     <p><b>Pack ${esc(r.pack)}</b>${(r.extras || []).map(e => ' + ' + esc(e.name)).join('')}${(r.otros || []).map(o => ` + ${esc(o.name)} <span class="hint">(no catalogado${o.suma ? ', suma 50 €' : ', no suma'})</span>`).join('')}</p>
-    <p>Importe reserva: <b>${resEur(r.importe.base)} + 10 % IVA = ${resEur(r.importe.total)}</b></p>
+    <div class="res-imp"><label>Importe de la reserva (sin IVA)</label><input class="control" type="number" step="0.01" min="0" id="rdImp" value="${r.importe.base}" ${(inv.number && !adm) ? 'disabled' : ''}>
+      <button type="button" class="btn btn--sm" id="rdImpSave">Guardar importe</button>
+      <span class="hint">+ 10 % IVA = <b>${resEur(r.importe.total)}</b>${r.importe.manual ? ` · ajustado a mano (calculado: ${resEur(r.importe.auto)})` : ' · calculado automáticamente'}</span></div>
     <div class="field"><label>Observaciones internas <span class="hint">(no las ven los novios)</span></label><textarea class="control" id="rdObs" rows="3">${esc(r.obs || '')}</textarea>
       <button type="button" class="btn btn--sm" id="rdObsSave" style="margin-top:6px">Guardar observaciones</button></div>
     <h4 class="form-sub">Datos de los novios</h4>
@@ -156,6 +165,7 @@ async function reservaDetalle(id, data) {
   q('#rdCopyC').onclick = () => copyText(r.concepto.linea);
   q('#rdCopyO').onclick = () => copyText(r.concepto.obs);
   if (q('#rdWelCopy')) q('#rdWelCopy').onclick = () => copyText(r.welcome);
+  q('#rdImpSave').onclick = async () => { try { await api('reservas/' + id, { method: 'PUT', body: { importe: q('#rdImp').value } }); toast('Importe guardado ✓', 'ok'); refresh(); } catch (e) { toast(e.message, 'err'); } };
   q('#rdObsSave').onclick = async () => { try { await api('reservas/' + id, { method: 'PUT', body: { obs: q('#rdObs').value } }); toast('Observaciones guardadas ✓', 'ok'); } catch (e) { toast(e.message, 'err'); } };
   if (q('#rdLoc')) { q('#rdLoc').onchange = () => { q('#rdLocOtro').style.display = +q('#rdLoc').value ? 'none' : ''; };
     q('#rdLocSave').onclick = async () => { try { await api('reservas/' + id, { method: 'PUT', body: { loc: { lugar: +q('#rdLoc').value, lugarOtro: q('#rdLocOtro').value } } }); toast('Finca guardada ✓', 'ok'); refresh(); } catch (e) { toast(e.message, 'err'); } }; }

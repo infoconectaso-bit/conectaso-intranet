@@ -1559,3 +1559,6 @@ table.dt tr.filters th.col-hora input{width:52px;min-width:0}
 .res-tar{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 12px;max-height:300px;overflow:auto}
 .res-tar label{font-size:12.5px;font-weight:600;display:flex;flex-direction:column;gap:3px}
 html.night-dim .res-total,html.night-dim .res-fact{background:#182340}
+.res-imp{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:8px}
+.res-imp label{width:100%;font-weight:700;font-size:13px}
+.res-imp .control{width:130px}
