@@ -31,6 +31,8 @@ const DEFAULT_TARIFA = {
 };
 
 const r2 = n => Math.round((+n || 0) * 100) / 100;
+// Servicios internos/de prueba que por defecto no se ofrecen al vender (se cambia en Configuración).
+const HIDE_RE = /aprendizaje|prueba|probando|revisar observ/i;
 const deac = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // sin 0/O/1/I/L: no se confunden al leerlo
@@ -52,11 +54,13 @@ const CHECKS = [
 module.exports = function makeReservas(deps) {
   const { store, users, mail, holded, ok, fail, readBody, send, APP_URL, makeInvite } = deps;
 
+  const DEFAULT_HIDDEN = () => store.all('extras').filter(x => HIDE_RE.test(String(x.name || ''))).map(x => +x.id);
   const cfg = () => {
     const c = store.setting('reservasConfig') || {};
     const t = c.tarifa || {};
     return {
       welcome: Object.assign({ Fiesta: '', Bodorrio: '', Tinglado: '' }, c.welcome || {}),
+      hiddenExtras: Array.isArray(c.hiddenExtras) ? c.hiddenExtras.map(Number) : DEFAULT_HIDDEN(),
       tarifa: { packs: Object.assign({}, DEFAULT_TARIFA.packs, t.packs || {}), extras: Object.assign({}, DEFAULT_TARIFA.extras, t.extras || {}) },
     };
   };
@@ -245,13 +249,14 @@ module.exports = function makeReservas(deps) {
         const b = await readBody(req); const cur = store.setting('reservasConfig') || {};
         if (b.welcome) cur.welcome = { Fiesta: String(b.welcome.Fiesta || ''), Bodorrio: String(b.welcome.Bodorrio || ''), Tinglado: String(b.welcome.Tinglado || '') };
         if (b.tarifa) cur.tarifa = { packs: b.tarifa.packs || {}, extras: b.tarifa.extras || {} };
+        if (Array.isArray(b.hiddenExtras)) cur.hiddenExtras = b.hiddenExtras.map(Number).filter(Boolean);
         store.setSetting('reservasConfig', cur);
         return ok(res, cfg());
       }
     }
     if (seg.length === 1 && method === 'GET') {
       const list = store.all('reservas').sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(r => view(r, user));
-      return ok(res, { reservas: list, packs: PACKS, extrasCatalog: store.all('extras').map(x => ({ id: x.id, name: x.name })).sort((a, b) => String(a.name).localeCompare(String(b.name), 'es')), isAdmin: isAdmin(user) });
+      return ok(res, { reservas: list, packs: PACKS, hiddenExtras: cfg().hiddenExtras, extrasCatalog: store.all('extras').map(x => ({ id: x.id, name: x.name })).sort((a, b) => String(a.name).localeCompare(String(b.name), 'es')), isAdmin: isAdmin(user) });
     }
     if (seg.length === 1 && method === 'POST') {
       const b = await readBody(req);
@@ -275,6 +280,15 @@ module.exports = function makeReservas(deps) {
     if (seg.length === 2 && method === 'GET') return ok(res, { reserva: view(r, user) });
     if (seg.length === 2 && method === 'PUT') {
       const b = await readBody(req);
+      if (b.venta) {   // editar pack / extras / otros: el enlace (código) es el mismo y muestra los cambios al momento
+        if (r.eventId) return fail(res, 400, 'La boda ya está creada: los cambios se hacen en la propia boda.');
+        if (r.invoice && r.invoice.number && !isAdmin(user)) return fail(res, 403, 'La factura ya está emitida: solo administración puede cambiar la venta.');
+        if (!PACKS.includes(b.pack)) return fail(res, 400, 'Elige un pack.');
+        r.pack = b.pack;
+        r.extras = (b.extras || []).map(x => ({ id: +x, name: extraName(x) })).filter(e => e.id && e.name);
+        r.otros = (b.otros || []).map(o => ({ name: String(o.name || '').trim().slice(0, 120), suma: !!o.suma })).filter(o => o.name);
+        (r.ventaLog = r.ventaLog || []).push({ at: new Date().toISOString(), by: sellerLabel(me), pack: r.pack, extras: extrasTxt(r) });
+      }
       if (b.importe !== undefined) {   // ajuste manual del importe de reserva (antes de emitir la factura, o administración)
         if (r.invoice && r.invoice.number && !isAdmin(user)) return fail(res, 403, 'La factura ya está emitida: solo administración puede cambiar el importe.');
         const m = parseManual(b.importe);

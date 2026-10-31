@@ -1571,3 +1571,5 @@ html.night-dim .res-total,html.night-dim .res-fact{background:#182340}
 .res-bar{height:5px;background:#f3d4d4;margin:4px -14px -12px;overflow:hidden}
 .res-bar span{display:block;height:100%;background:#D50000}
 .res-card--ok .res-bar{background:#cfe9d9}.res-card--ok .res-bar span{background:#0B8043}
+.res-hide{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 12px;max-height:220px;overflow:auto;border:1px solid var(--line);padding:6px 8px}
+.res-hide label{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:500}

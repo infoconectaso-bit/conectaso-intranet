@@ -70,24 +70,29 @@ async function reservasPage() {
   const q = new URLSearchParams((location.hash.split('?')[1]) || ''); if (q.get('id')) reservaDetalle(+q.get('id'), data);
 }
 function waShare(link) { return 'https://wa.me/?text=' + encodeURIComponent('¡Hola! 🎉 Aquí tenéis el enlace para completar la reserva de vuestra boda con Conecta So. Solo os llevará 2 minutos:\n' + link); }
-function reservaNueva(data) {
-  const cat = data.extrasCatalog || [];
-  const bg = modal('Nueva venta', `<form id="rnForm">
-    <div class="field"><label>Pack</label><div class="res-packs">${(data.packs || []).map((p, i) => `<label class="res-pack"><input type="radio" name="pack" value="${p}" ${i === 0 ? 'checked' : ''}><span>${p}</span><small>${p === 'Tinglado' ? '100' : '50'} € + IVA</small></label>`).join('')}</div></div>
+function reservaNueva(data, cur) {   // cur = reserva existente → modo EDITAR (el enlace es el mismo y se actualiza solo)
+  const hidden = new Set((data.hiddenExtras || []).map(Number));
+  const curEx = new Set(((cur && cur.extras) || []).map(e => +e.id));
+  const cat = (data.extrasCatalog || []).filter(x => !hidden.has(+x.id) || curEx.has(+x.id));
+  const curPack = cur ? cur.pack : (data.packs || [])[0];
+  const bg = modal(cur ? 'Editar venta · ' + cur.code : 'Nueva venta', `<form id="rnForm">
+    <div class="field"><label>Pack</label><div class="res-packs">${(data.packs || []).map((p, i) => `<label class="res-pack"><input type="radio" name="pack" value="${p}" ${p === curPack ? 'checked' : ''}><span>${p}</span><small>${p === 'Tinglado' ? '100' : '50'} € + IVA</small></label>`).join('')}</div></div>
     <div class="field"><label>Extras del catálogo <span class="hint">(+50 € + IVA cada uno)</span></label>
       <input class="control" id="rnSearch" placeholder="Buscar extra…" autocomplete="off">
-      <div class="res-extras" id="rnExtras">${cat.map(x => `<label class="res-ex" data-n="${esc(String(x.name || '').toLowerCase())}"><input type="checkbox" value="${x.id}"> ${esc(x.name)}</label>`).join('')}</div></div>
+      <div class="res-extras" id="rnExtras">${cat.map(x => `<label class="res-ex" data-n="${esc(String(x.name || '').toLowerCase())}"><input type="checkbox" value="${x.id}" ${curEx.has(+x.id) ? 'checked' : ''}> ${esc(x.name)}</label>`).join('')}</div></div>
     <div class="field"><label>Otros extras <span class="hint">(si no está en el catálogo, escríbelo)</span></label><div id="rnOtros"></div>
       <button type="button" class="btn btn--sm" id="rnAddOtro">+ Añadir otro extra</button></div>
-    <div class="field"><label>Observaciones internas <span class="hint">(no las ven los novios; pasan a "Observaciones ocultas" de la boda)</span></label>${ta('obs', '', 'Ej.: Bodorrio con cambio de fotomatón por pistolas CO2')}</div>
+    <div class="field"><label>Observaciones internas <span class="hint">(no las ven los novios; pasan a "Observaciones ocultas" de la boda)</span></label>${ta('obs', cur ? (cur.obs || '') : '', 'Ej.: Bodorrio con cambio de fotomatón por pistolas CO2')}</div>
     <div class="res-total"><div id="rnTotal"></div>
-      <div class="res-imp"><label>Importe de la reserva (sin IVA)</label><input class="control" type="number" step="0.01" min="0" name="importe" id="rnImp"> <span class="hint" id="rnImpHint"></span></div></div></form>`, { okText: 'Generar enlace', onOk: async () => {
+      <div class="res-imp"><label>Importe de la reserva (sin IVA)</label><input class="control" type="number" step="0.01" min="0" name="importe" id="rnImp"> <span class="hint" id="rnImpHint"></span></div></div>${cur ? '<p class="hint" style="margin-top:8px">El enlace de los novios <b>no cambia</b>: al guardar, verán el pack y los extras corregidos.</p>' : ''}</form>`, { okText: cur ? 'Guardar cambios' : 'Generar enlace', onOk: async () => {
     const pack = (bg.querySelector('[name=pack]:checked') || {}).value;
     const extras = $$('#rnExtras input:checked', bg).map(i => +i.value);
     const otros = $$('[data-otro]', bg).map(r => ({ name: r.querySelector('input[type=text]').value.trim(), suma: r.dataset.suma === '1' })).filter(o => o.name);
     if ($$('[data-otro]', bg).some(r => r.querySelector('input[type=text]').value.trim() && r.dataset.suma === '')) { toast('Indica en cada extra escrito a mano si suma 50 € o no', 'err'); return true; }
     try {
-      const r = await api('reservas', { method: 'POST', body: { pack, extras, otros, obs: bg.querySelector('[name=obs]').value, importe: el('rnImp').value } });
+      const body = { pack, extras, otros, obs: bg.querySelector('[name=obs]').value, importe: el('rnImp').value };
+      if (cur) { await api('reservas/' + cur.id, { method: 'PUT', body: Object.assign(body, { venta: true }) }); toast('Venta actualizada ✓ El enlace muestra ya los cambios.', 'ok'); reservasPage(); setTimeout(() => reservaDetalle(cur.id, data), 300); return; }
+      const r = await api('reservas', { method: 'POST', body });
       reservaLink(r.reserva); reservasPage();
     } catch (e) { toast(e.message, 'err'); return true; }
   } });
@@ -104,14 +109,17 @@ function reservaNueva(data) {
     const rs = el('rnImpReset'); if (rs) rs.onclick = e => { e.preventDefault(); delete imp.dataset.touched; total(); };
   };
   el('rnImp').addEventListener('input', () => { el('rnImp').dataset.touched = '1'; total(); });
-  const addOtro = () => {
-    const d = document.createElement('div'); d.className = 'res-otro'; d.setAttribute('data-otro', ''); d.dataset.suma = '';
+  const addOtro = (o) => {
+    const d = document.createElement('div'); d.className = 'res-otro'; d.setAttribute('data-otro', ''); d.dataset.suma = o ? (o.suma ? '1' : '0') : '';
     d.innerHTML = `<input type="text" class="control" placeholder="Ej.: Bengalas en la entrada"><div class="res-otro__q">⚠️ No está en el catálogo. ¿Suma <b>50 €</b> a la reserva? <button type="button" class="btn btn--sm" data-s="1">Sí, sumar 50 €</button> <button type="button" class="btn btn--sm" data-s="0">No</button> <button type="button" class="btn btn--sm btn--ghost" data-x-otro>✕</button></div>`;
     el('rnOtros').appendChild(d);
+    if (o) { d.querySelector('input').value = o.name; const sb = d.querySelector('[data-s="' + d.dataset.suma + '"]'); if (sb) sb.classList.add('btn--dark'); }
     d.addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (b) { d.dataset.suma = b.dataset.s; $$('[data-s]', d).forEach(x => x.classList.toggle('btn--dark', x === b)); total(); } if (e.target.closest('[data-x-otro]')) { d.remove(); total(); } });
     d.querySelector('input').addEventListener('input', total);
   };
-  el('rnAddOtro').onclick = addOtro;
+  el('rnAddOtro').onclick = () => addOtro();
+  ((cur && cur.otros) || []).forEach(o => addOtro(o));
+  if (cur && cur.importe && cur.importe.manual) { el('rnImp').value = cur.importe.base; el('rnImp').dataset.touched = '1'; }
   bg.addEventListener('change', total);
   el('rnSearch').addEventListener('input', e => { const q = e.target.value.toLowerCase().trim(); $$('.res-ex', bg).forEach(l => { l.style.display = !q || l.dataset.n.includes(q) || l.querySelector('input').checked ? '' : 'none'; }); });
   total();
@@ -136,7 +144,7 @@ async function reservaDetalle(id, data) {
   const bg = modal(`Reserva ${r.code} · Pack ${r.pack}`, `
     <div class="res-head"><span class="tag ${st[1]}">${esc(st[0])}</span> <span class="res-seller" style="--seller:${esc(r.sellerColor || '#999')}">${esc(r.sellerName)}</span> <span class="hint">creada ${new Date(r.createdAt).toLocaleDateString('es-ES')}</span></div>
     <div class="res-link"><input class="control" readonly value="${esc(r.link)}"> <button type="button" class="btn btn--sm" id="rdCopy">📋 Copiar</button> <a class="btn btn--sm" target="_blank" rel="noopener" href="${esc(waShare(r.link))}">💬 WhatsApp</a></div>
-    <h4 class="form-sub">Venta</h4>
+    <h4 class="form-sub">Venta ${(!r.eventId && !r.cancelled && (adm || !(r.invoice && r.invoice.number))) ? '<button type="button" class="btn btn--sm" id="rdEdit" style="margin-left:8px">✏️ Editar pack / extras</button>' : ''}</h4>
     <p><b>Pack ${esc(r.pack)}</b>${(r.extras || []).map(e => ' + ' + esc(e.name)).join('')}${(r.otros || []).map(o => ` + ${esc(o.name)} <span class="hint">(no catalogado${o.suma ? ', suma 50 €' : ', no suma'})</span>`).join('')}</p>
     <div class="res-imp"><label>Importe de la reserva (sin IVA)</label><input class="control" type="number" step="0.01" min="0" id="rdImp" value="${r.importe.base}" ${(inv.number && !adm) ? 'disabled' : ''}>
       <button type="button" class="btn btn--sm" id="rdImpSave">Guardar importe</button>
@@ -171,6 +179,7 @@ async function reservaDetalle(id, data) {
   q('#rdCopyC').onclick = () => copyText(r.concepto.linea);
   q('#rdCopyO').onclick = () => copyText(r.concepto.obs);
   if (q('#rdWelCopy')) q('#rdWelCopy').onclick = () => copyText(r.welcome);
+  if (q('#rdEdit')) q('#rdEdit').onclick = () => { bg.remove(); reservaNueva(data, r); };
   q('#rdImpSave').onclick = async () => { try { await api('reservas/' + id, { method: 'PUT', body: { importe: q('#rdImp').value } }); toast('Importe guardado ✓', 'ok'); refresh(); } catch (e) { toast(e.message, 'err'); } };
   q('#rdObsSave').onclick = async () => { try { await api('reservas/' + id, { method: 'PUT', body: { obs: q('#rdObs').value } }); toast('Observaciones guardadas ✓', 'ok'); } catch (e) { toast(e.message, 'err'); } };
   if (q('#rdLoc')) { q('#rdLoc').onchange = () => { q('#rdLocOtro').style.display = +q('#rdLoc').value ? 'none' : ''; };
@@ -206,6 +215,8 @@ async function reservasConfig() {
     <h4 class="form-sub">Textos de bienvenida (WhatsApp)</h4>
     <p class="hint">Puedes usar <b>{novios}</b>, <b>{fecha}</b>, <b>{lugar}</b> y <b>{pack}</b>: se rellenan solos en cada reserva.</p>
     ${['Fiesta', 'Bodorrio', 'Tinglado'].map(p => `<div class="field"><label>Pack ${p}</label><textarea class="control" rows="4" data-wel="${p}" placeholder="Texto pendiente">${esc(c.welcome[p] || '')}</textarea></div>`).join('')}
+    <h4 class="form-sub">Servicios que NO salen en "Nueva venta" <span class="hint">(internos o de prueba: aprendizaje de DJ, técnicos…)</span></h4>
+    <div class="res-hide">${cat.map(x => `<label><input type="checkbox" data-hide="${x.id}" ${(c.hiddenExtras || []).map(Number).includes(+x.id) ? 'checked' : ''}> ${esc(x.name)}</label>`).join('')}</div>
     <h4 class="form-sub">Precios de tarifa (sin IVA) <span class="hint">solo se usan al marcar "Aplicar precio de tarifa"</span></h4>
     <div class="grid-3">${['Fiesta', 'Bodorrio', 'Tinglado'].map(p => `<div class="field"><label>Pack ${p}</label><input class="control" type="number" data-tp="${p}" value="${esc(c.tarifa.packs[p] != null ? c.tarifa.packs[p] : '')}"></div>`).join('')}</div>
     <div class="res-tar">${cat.map(x => `<label>${esc(x.name)}<input class="control" type="number" data-te="${x.id}" value="${esc(c.tarifa.extras[x.id] != null ? c.tarifa.extras[x.id] : '')}" placeholder="—"></label>`).join('')}</div>`,
@@ -213,7 +224,8 @@ async function reservasConfig() {
     const welcome = {}; $$('[data-wel]', bg).forEach(t => welcome[t.dataset.wel] = t.value);
     const packs = {}; $$('[data-tp]', bg).forEach(i => { if (i.value !== '') packs[i.dataset.tp] = +i.value; });
     const extras = {}; $$('[data-te]', bg).forEach(i => { if (i.value !== '') extras[i.dataset.te] = +i.value; });
-    try { await api('reservas/config', { method: 'PUT', body: { welcome, tarifa: { packs, extras } } }); toast('Configuración guardada ✓', 'ok'); } catch (e) { toast(e.message, 'err'); return true; }
+    const hiddenExtras = $$('[data-hide]', bg).filter(i => i.checked).map(i => +i.dataset.hide);
+    try { await api('reservas/config', { method: 'PUT', body: { welcome, tarifa: { packs, extras }, hiddenExtras } }); toast('Configuración guardada ✓', 'ok'); } catch (e) { toast(e.message, 'err'); return true; }
   } });
   bg.querySelector('.modal').classList.add('modal--wide');
 }
