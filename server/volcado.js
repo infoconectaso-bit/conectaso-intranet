@@ -1131,6 +1131,11 @@ async function handle(req, res, seg, method, url) {
           pack: body.pack || 'Bodorrio', extras: (body.extras || []).map(id => ({ id: +id, name: ((store.get('extras', +id) || {}).name || '').trim() })), otros: body.otros || [], obs: body.obs || '', checklist: {}, test: true };
         store.put('reservas', r); return send(res, 200, { ok: true, id: r.id, code: r.code });
       }
+      if (cmd === 'holded-raw') { // DIAGNÓSTICO: petición directa a la API v2 de Holded (para ver formatos reales)
+        const h = require('./holded');
+        const r = await h.apiRequest(String(body.method || 'GET').toUpperCase(), String(body.path || '/'), body.body);
+        return send(res, 200, { ok: true, status: r.status, data: r.data });
+      }
       if (cmd === 'users-brief') { // listado breve de usuarios para cotejar con la intranet
         return send(res, 200, { ok: true, users: users.all().map(u => ({ id: u.id, role: u.role, name: u.name, email: u.email, active: u.active, data: u.data })) });
       }

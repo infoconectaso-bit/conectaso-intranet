@@ -35,6 +35,25 @@ async function apiGet(path) {
   throw new Error('Holded respondió con error: ' + lastErr);
 }
 
+/** Petición genérica (GET/POST/PUT/DELETE) a la API v2 de Holded. Devuelve { status, ok, data }.
+ * Se usa para ESCRIBIR (crear contacto y presupuesto/factura de reserva). */
+async function apiRequest(method, path, body) {
+  const c = getConfig();
+  if (!c.apiKey) throw new Error('Falta la clave de API de Holded.');
+  const attempts = [{ Authorization: 'Bearer ' + c.apiKey }, { key: c.apiKey }];
+  let last = null;
+  for (const h of attempts) {
+    let r;
+    try { r = await fetch(BASE + path, { method, headers: Object.assign({ 'Content-Type': 'application/json', Accept: 'application/json' }, h), body: body != null ? JSON.stringify(body) : undefined }); }
+    catch (e) { throw new Error('No se pudo conectar con Holded: ' + e.message); }
+    const text = await r.text();
+    let data; try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+    last = { status: r.status, ok: r.ok, data };
+    if (r.ok || (r.status !== 401 && r.status !== 403)) return last;
+  }
+  return last;
+}
+
 /** Comprueba que la clave funciona (pide contactos). Devuelve {ok, info}. */
 async function testConnection() {
   const data = await apiGet('/contacts');
@@ -434,4 +453,4 @@ async function testPayslips() {
   return { ok: true, probes };
 }
 
-module.exports = { BASE, getConfig, enabled, apiGet, testConnection, listInvoices, getInvoice, getInvoiceCached, listEstimates, listCreditNotes, estimateConcept, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, findInvoicesByNumber, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };
+module.exports = { BASE, getConfig, enabled, apiGet, apiRequest, testConnection, listInvoices, getInvoice, getInvoiceCached, listEstimates, listCreditNotes, estimateConcept, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, findInvoicesByNumber, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };
