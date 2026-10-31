@@ -1131,6 +1131,51 @@ async function handle(req, res, seg, method, url) {
           pack: body.pack || 'Bodorrio', extras: (body.extras || []).map(id => ({ id: +id, name: ((store.get('extras', +id) || {}).name || '').trim() })), otros: body.otros || [], obs: body.obs || '', checklist: {}, test: true };
         store.put('reservas', r); return send(res, 200, { ok: true, id: r.id, code: r.code });
       }
+      if (cmd === 'audit-launch') { // REVISIÓN antes del lanzamiento: emails, datos rotos, adjuntos y servidor (solo lectura)
+        const os = require('os'); const path = require('path'); const fs = require('fs');
+        const today = new Date().toISOString().slice(0, 10);
+        const RE_MAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
+        const BAD = /\b(undefined|null|NaN)\b|\[object Object\]/;
+        const allU = users.all(); const allE = store.all('events');
+        const byRole = {}; allU.forEach(u => { byRole[u.role] = (byRole[u.role] || 0) + 1; });
+        const mails = {}; allU.forEach(u => { const m = String(u.email || '').trim().toLowerCase(); if (m) (mails[m] = mails[m] || []).push(u.id); });
+        const brief = u => ({ id: u.id, role: u.role, name: u.name, email: u.email, active: u.active });
+        const sinEmail = allU.filter(u => !String(u.email || '').trim());
+        const emailMal = allU.filter(u => String(u.email || '').trim() && !RE_MAIL.test(String(u.email).trim()));
+        const emailDup = Object.entries(mails).filter(([, ids]) => ids.length > 1).map(([m, ids]) => ({ email: m, ids }));
+        const nombreRoto = allU.filter(u => !String(u.name || '').trim() || BAD.test(String(u.name)));
+        // eventos: textos rotos en cualquier campo, cónyuges y titular
+        const evClient = new Set(); allE.forEach(e => { if (e.userId) evClient.add(+e.userId); (e.coUsers || []).forEach(x => evClient.add(+x)); });
+        const roto = []; const scan = (v, p, out) => { if (typeof v === 'string') { if (BAD.test(v)) out.push(p + '=' + v.slice(0, 60)); } else if (Array.isArray(v)) v.forEach((x, i) => scan(x, p + '[' + i + ']', out)); else if (v && typeof v === 'object') Object.keys(v).forEach(k => scan(v[k], p ? p + '.' + k : k, out)); };
+        allE.forEach(e => { const out = []; scan(e, '', out); if (out.length) roto.push({ id: e.id, fecha: e.fecha, conyuges: e.conyuges, campos: out.slice(0, 6), total: out.length }); });
+        const futuras = allE.filter(e => (e.fecha || '') >= today);
+        const sinTitular = futuras.filter(e => !e.userId || !users.get(+e.userId)).map(e => ({ id: e.id, fecha: e.fecha, conyuges: e.conyuges, tipo: e.tipo }));
+        const titularSinEmail = futuras.filter(e => { const u = e.userId && users.get(+e.userId); return u && !RE_MAIL.test(String(u.email || '').trim()); }).map(e => ({ id: e.id, fecha: e.fecha, conyuges: e.conyuges, userId: e.userId }));
+        const sinFecha = allE.filter(e => !/^\d{4}-\d{2}-\d{2}$/.test(e.fecha || '')).map(e => ({ id: e.id, conyuges: e.conyuges, fecha: e.fecha }));
+        const sinNombres = futuras.filter(e => !String(e.conyuges || '').trim()).map(e => ({ id: e.id, fecha: e.fecha, tipo: e.tipo }));
+        const clientesSinBoda = allU.filter(u => u.role === 'user' && !evClient.has(+u.id)).map(brief);
+        // adjuntos: lista real de la intranet antigua (último volcado) frente a lo que hay aquí y en disco
+        const UP = path.join(dbm.DATA_DIR, 'uploads');
+        let fileMap = null; try { fileMap = JSON.parse(fs.readFileSync(path.join(dbm.DATA_DIR, 'volcado-refresh-files.json'), 'utf8')); } catch (e) {}
+        const rows = dbm.db.prepare("SELECT id, record_id, name, size FROM files WHERE collection='events'").all();
+        const byEv = {}; rows.forEach(r => (byEv[r.record_id] = byEv[r.record_id] || []).push(r.name));
+        let realTotal = 0; const faltanVolcado = [];
+        if (fileMap) Object.keys(fileMap).forEach(id => { (fileMap[id] || []).forEach(n => { realTotal++; const name = decodeURIComponent(String(n)); if (!(byEv[id] || []).includes(name)) faltanVolcado.push({ evento: +id, archivo: name }); }); });
+        const dirCache = {}; const enDisco = r => { const d = path.join(UP, 'boda-' + r.record_id); if (!(d in dirCache)) { try { dirCache[d] = fs.readdirSync(d); } catch (e) { dirCache[d] = []; } } return dirCache[d].some(f => f.startsWith(r.id + '-')); };
+        const evFecha = {}; allE.forEach(e => { evFecha[e.id] = e.fecha || ''; });
+        const sinDisco = rows.filter(r => !enDisco(r)).map(r => ({ evento: r.record_id, fecha: evFecha[r.record_id] || '', archivo: r.name }));
+        // servidor
+        let disco = null; try { const s = fs.statfsSync(dbm.DATA_DIR); disco = { totalGB: +(s.blocks * s.bsize / 1e9).toFixed(1), libreGB: +(s.bavail * s.bsize / 1e9).toFixed(1) }; } catch (e) {}
+        let dbMB = null; try { dbMB = +(fs.statSync(path.join(dbm.DATA_DIR, 'conectaso.db')).size / 1048576).toFixed(1); } catch (e) {}
+        let memInfo = null; try { const t = fs.readFileSync('/proc/meminfo', 'utf8'); const g = k => { const m = new RegExp('^' + k + ':\\s+(\\d+)', 'm').exec(t); return m ? +(m[1] / 1048576).toFixed(2) : null; }; memInfo = { totalGB: g('MemTotal'), disponibleGB: g('MemAvailable') }; } catch (e) {}
+        const lim = (a, n) => ({ total: a.length, ejemplos: a.slice(0, n || 15) });
+        return send(res, 200, { ok: true,
+          usuarios: { total: allU.length, porRol: byRole, sinEmail: lim(sinEmail.map(brief)), emailMal: lim(emailMal.map(brief)), emailDuplicado: lim(emailDup), nombreRoto: lim(nombreRoto.map(brief)), clientesSinBoda: lim(clientesSinBoda) },
+          eventos: { total: allE.length, futuras: futuras.length, conTextoRoto: lim(roto, 20), futurasSinTitular: lim(sinTitular), titularSinEmailValido: lim(titularSinEmail), sinFecha: lim(sinFecha), futurasSinNombres: lim(sinNombres) },
+          adjuntos: { listaVolcado: !!fileMap, realesIntranetAntigua: realTotal, enReplica: rows.length, faltanDelVolcado: lim(faltanVolcado, 30), registradosSinFicheroEnDisco: lim(sinDisco, 30) },
+          servidor: { cpus: os.cpus().length, carga: os.loadavg().map(x => +x.toFixed(2)), memoria: memInfo, procesoMB: +(process.memoryUsage().rss / 1048576).toFixed(0), diasEncendido: +(os.uptime() / 86400).toFixed(1), disco, baseDatosMB: dbMB },
+        });
+      }
       if (cmd === 'holded-raw') { // DIAGNÓSTICO: petición directa a la API v2 de Holded (para ver formatos reales)
         const h = require('./holded');
         const r = await h.apiRequest(String(body.method || 'GET').toUpperCase(), String(body.path || '/'), body.body);

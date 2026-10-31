@@ -63,7 +63,7 @@ module.exports = function makeReservas(deps) {
       hiddenExtras: Array.isArray(c.hiddenExtras) ? c.hiddenExtras.map(Number) : DEFAULT_HIDDEN(),
       holdedDoc: c.holdedDoc === 'estimate' ? 'estimate' : 'invoice',   // por defecto FACTURA real; 'estimate' = modo pruebas
       tarifa: { packs: Object.assign({}, DEFAULT_TARIFA.packs, t.packs || {}), extras: Object.assign({}, DEFAULT_TARIFA.extras, t.extras || {}) },
-      pago: { titular: String((c.pago || {}).titular || ''), iban: String((c.pago || {}).iban || ''), swift: String((c.pago || {}).swift || 'BBVAESMMXXX') },
+      pago: { titular: String((c.pago || {}).titular || 'Conecta Sonido e Iluminación S.L.'), iban: String((c.pago || {}).iban || ''), swift: String((c.pago || {}).swift || 'BBVAESMMXXX') },
     };
   };
   const isComercial = u => !!u && (u.role === 'admin' || !!(users.get(u.id) || {}).comercial);
