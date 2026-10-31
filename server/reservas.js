@@ -470,7 +470,10 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){retur
 function eur(n){return (Math.round((+n||0)*100)/100).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'}
 var DOW=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'],MON=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 function larga(iso){var m=/^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(iso||'');if(!m)return iso;var d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));var t=DOW[d.getUTCDay()];return t.charAt(0).toUpperCase()+t.slice(1)+', '+(+m[3])+' de '+MON[+m[2]-1]+' de '+m[1]}
-function api(method,body){return fetch('/api/public/r/'+code,{method:method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Error');return j})})}
+var NET='No hemos podido conectar con el servidor. Esperad unos segundos y volved a pulsar el botón: vuestros datos siguen aquí.';
+function once(method,body){return fetch('/api/public/r/'+code,{method:method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,cache:'no-store'}).then(function(r){return r.text().then(function(t){var j=null;try{j=JSON.parse(t)}catch(e){}
+ if(!j){var er=new Error(NET);er.net=true;throw er}if(!r.ok)throw new Error(j.error||'Error');return j})},function(){var er=new Error(NET);er.net=true;throw er})}
+function api(method,body){return once(method,body).catch(function(e){if(!e.net)throw e;return new Promise(function(ok){setTimeout(ok,2500)}).then(function(){return once(method,body)})})}
 function packCard(d){return '<div class="card"><h2>Vuestra reserva</h2><div class="pack">Pack '+esc(d.pack)+'</div>'+(d.extras.length?'<ul class="ex">'+d.extras.map(function(x){return '<li>'+esc(x)+'</li>'}).join('')+'</ul>':'')+
  '<div class="amount"><span>Importe de la reserva<br><span class="muted small">'+eur(d.importe.base)+' + 10 % IVA</span></span><b>'+eur(d.importe.total)+'</b></div></div>'}
 function done(d){
