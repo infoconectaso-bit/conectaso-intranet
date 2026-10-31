@@ -63,6 +63,7 @@ module.exports = function makeReservas(deps) {
       hiddenExtras: Array.isArray(c.hiddenExtras) ? c.hiddenExtras.map(Number) : DEFAULT_HIDDEN(),
       holdedDoc: c.holdedDoc === 'estimate' ? 'estimate' : 'invoice',   // por defecto FACTURA real; 'estimate' = modo pruebas
       tarifa: { packs: Object.assign({}, DEFAULT_TARIFA.packs, t.packs || {}), extras: Object.assign({}, DEFAULT_TARIFA.extras, t.extras || {}) },
+      pago: { titular: String((c.pago || {}).titular || ''), iban: String((c.pago || {}).iban || ''), swift: String((c.pago || {}).swift || 'BBVAESMMXXX') },
     };
   };
   const isComercial = u => !!u && (u.role === 'admin' || !!(users.get(u.id) || {}).comercial);
@@ -211,8 +212,9 @@ module.exports = function makeReservas(deps) {
       <p>También podéis descargarla cuando queráis desde vuestro enlace de reserva.</p>`;
     // Diseño "cartel de neón" (como la página de reserva). bodyHtml/emails.shell quedan como alternativa sobria.
     const html = require('./email-neon').neonInvoiceEmail({ first, pack: r.pack, extras: extrasTxt(r), fecha: fechaLarga(n.fecha).replace(/^./, ch => ch.toUpperCase()), lugar: c.lugar,
-      total: eur(imp.total), base: eur(imp.base), link, logoUrl: base ? base + '/assets/brand/logo-email-blanco.png' : '', number: r.invoice.number });
-    const text = `¡Hola${first ? ' ' + first : ''}!\n\nOs adjuntamos la factura de la paga y señal de vuestra boda con Conecta So (Pack ${r.pack}, ${fechaLarga(n.fecha)}, ${c.lugar}).\nImporte: ${eur(imp.total)}. El número de cuenta para la transferencia está al pie de la factura.\n\nVuestra reserva: ${link}`;
+      total: eur(imp.total), base: eur(imp.base), link, logoUrl: base ? base + '/assets/brand/logo-email-blanco.png' : '', number: r.invoice.number,
+      facturaUrl: base ? base + '/api/public/r/' + r.code + '/factura' : link, payUrl: link + '#pagar' });
+    const text = `¡Hola${first ? ' ' + first : ''}!\n\nOs adjuntamos la factura de la paga y señal de vuestra boda con Conecta So (Pack ${r.pack}, ${fechaLarga(n.fecha)}, ${c.lugar}).\nImporte: ${eur(imp.total)}. El número de cuenta para la transferencia está al pie de la factura.\n\nPagar aquí (transferencia o tarjeta): ${link}#pagar\n\nDescargar la factura: ${base ? base + '/api/public/r/' + r.code + '/factura' : link}\nVuestra reserva: ${link}`;
     try {
       const res = await mail.sendMail({ to, subject: 'Vuestra factura de reserva · Conecta So', text, html, attachments: [{ name: 'Factura-reserva-' + (r.invoice.number || 'Conecta-So').replace(/[^A-Za-z0-9_-]/g, '') + '.pdf', content: pdf, type: 'application/pdf' }] });
       if (res && res.skipped) return { sent: false, reason: 'bloqueado: el correo a clientes está desactivado (lista blanca)' };
@@ -278,6 +280,11 @@ module.exports = function makeReservas(deps) {
         if (b.tarifa) cur.tarifa = { packs: b.tarifa.packs || {}, extras: b.tarifa.extras || {} };
         if (Array.isArray(b.hiddenExtras)) cur.hiddenExtras = b.hiddenExtras.map(Number).filter(Boolean);
         if (b.holdedDoc) cur.holdedDoc = b.holdedDoc === 'invoice' ? 'invoice' : 'estimate';
+        if (b.pago) {   // datos para la transferencia que ven los novios (titular / nombre fiscal, IBAN, SWIFT)
+          const ib = String(b.pago.iban || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (ib && !/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(ib)) return fail(res, 400, 'El IBAN no parece correcto (ej.: ES12 3456 7890 1234 5678 9012).');
+          cur.pago = { titular: String(b.pago.titular || '').trim().slice(0, 160), iban: ib.replace(/(.{4})/g, '$1 ').trim(), swift: String(b.pago.swift || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11) || 'BBVAESMMXXX' };
+        }
         store.setSetting('reservasConfig', cur);
         return ok(res, cfg());
       }
@@ -334,6 +341,11 @@ module.exports = function makeReservas(deps) {
         }
         if (b.loc !== undefined) r.loc = b.loc ? { lugar: +b.loc.lugar || 0, lugarOtro: +b.loc.lugar ? '' : String(b.loc.lugarOtro || '').trim() } : null;
         if (b.cancelled !== undefined) r.cancelled = !!b.cancelled;
+        if (b.payLink !== undefined) {   // enlace de pago con tarjeta (TPV / Paygold / Bizum…) para el botón "Pagar aquí"
+          const pl = String(b.payLink || '').trim();
+          if (pl && !/^https:\/\/[^\s<>"']+$/i.test(pl)) return fail(res, 400, 'El enlace de pago debe empezar por https://');
+          r.payLink = pl.slice(0, 1000) || null;
+        }
       }
       store.put('reservas', r);
       if (b.invoiceNumber) await checkHolded(r, false);
@@ -417,6 +429,9 @@ module.exports = function makeReservas(deps) {
       code: r.code, pack: r.pack, extras: extrasTxt(r), importe: imp, status: st, submitted: !!r.submittedAt,
       resumen: r.submittedAt ? { novios: [n.s1 && n.s1.name, n.s2 && n.s2.name].filter(Boolean).join(' y '), fecha: fechaLarga(n.fecha), fechaIso: n.fecha, lugar: n.lugar } : null,
       factura: !!(r.invoice && r.invoice.holdedId) && !r.cancelled, pagada: !!(r.invoice && r.invoice.paid),
+      pago: (r.invoice && r.invoice.holdedId && !r.invoice.paid && !r.cancelled) ? Object.assign({}, cfg().pago, {
+        concepto: r.invoice.draft ? 'Reserva ' + r.code : (r.invoice.number || 'Reserva ' + r.code),
+        tarjeta: r.payLink || null, metodo: (r.payChoice && r.payChoice.metodo) || null }) : null,
     };
   }
   async function publicApi(req, res, seg, method) {
@@ -431,6 +446,23 @@ module.exports = function makeReservas(deps) {
       if (!r.invoice || !r.invoice.holdedId) return fail(res, 404, 'La factura aún no está disponible.');
       try { const buf = await holded.getDocPdf(r.invoice.docType || 'invoice', r.invoice.holdedId); return send(res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="Factura-reserva-Conecta-So.pdf"` }); }
       catch (e) { return fail(res, 502, 'No se pudo descargar la factura. Inténtalo más tarde.'); }
+    }
+    if (seg[3] === 'pago' && method === 'POST') {   // los novios eligen cómo pagar
+      const h = (hits.get(ip) || []).filter(t => now - t < 3600e3); h.push(now); hits.set(ip, h);
+      if (h.length > 40) return fail(res, 429, 'Demasiados intentos. Prueba más tarde.');
+      if (!r.invoice || !r.invoice.holdedId || r.invoice.paid) return fail(res, 400, 'Ahora mismo no hay nada pendiente de pago.');
+      const b = await readBody(req).catch(() => ({}));
+      const metodo = b.metodo === 'tarjeta' ? 'tarjeta' : 'transferencia';
+      const prev = r.payChoice || {};
+      r.payChoice = { metodo, at: new Date().toISOString(), avisado: prev.avisado || false };
+      if (metodo === 'tarjeta' && !r.payLink && !prev.avisado) {   // aviso a comercial + facturación para que les mandéis el enlace
+        r.payChoice.avisado = true;
+        const n = r.novios || {}; const who = [n.s1 && n.s1.name].filter(Boolean).join('') || r.code; const url = (APP_URL() || '') + '/#/reservas?id=' + r.id;
+        const text = `${who} (reserva ${r.code}, pack ${r.pack}, ${fechaCorta(n.fecha)}) quieren pagar la paga y señal (${eur(importe(r).total)}) con TARJETA.\nHay que enviarles el enlace de pago por WhatsApp o email, o pegarlo en la reserva para que les salga el botón "Pagar con tarjeta".\n${url}`;
+        NOTIFY_TO.forEach(to => { try { mail.sendMail({ to, subject: `💳 Quieren pagar con tarjeta · ${who}`, text, html: '<p>' + escH(text).replace(/\n/g, '<br>') + '</p>' }).catch(() => {}); } catch (e) {} });
+      }
+      store.put('reservas', r);
+      return ok(res, publicView(r));
     }
     if (seg.length === 3 && method === 'POST') {
       if (r.submittedAt) return fail(res, 409, 'Ya hemos recibido vuestros datos. Si hay que cambiar algo, escribidnos por WhatsApp.');
@@ -550,6 +582,25 @@ body{font-family:'Outfit',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;c
 .rows li span{color:var(--muted)}.rows li b{text-align:right;font-weight:600}
 .warn{margin-top:12px;padding:11px 14px;border-radius:14px;background:rgba(255,213,74,.12);border:1px solid rgba(255,213,74,.4);color:#FFE38A;font-weight:600;font-size:14.5px}
 .bs-act{display:grid;grid-template-columns:1fr 1.4fr;gap:10px}.bs-act .btn{margin-top:16px}
+/* pago: transferencia o tarjeta */
+.pay{margin:4px 0 14px;scroll-margin-top:16px}
+.pay-q{margin:0 0 10px;font-weight:600;font-size:16px;color:var(--txt)}
+.pay-opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.pay-opt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:64px;padding:13px 15px;border-radius:16px;border:1px solid var(--edge);background:var(--glass);color:var(--txt);font:inherit;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.pay-opt b{font-size:17px;font-weight:700}.pay-opt span{font-size:13px;color:var(--muted)}
+.pay-opt[aria-pressed=true]{border-color:var(--pink2);box-shadow:0 0 0 3px rgba(232,44,136,.18),0 0 18px rgba(232,44,136,.35)}
+.pay-opt:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+.pay-box{margin-top:12px;padding:6px 16px 14px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08)}
+.cp{margin:0;padding:0;list-style:none}
+.cp li{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+.cp li:last-child{border-bottom:0}
+.cp .k{display:block;font-size:12.5px;color:var(--muted)}.cp .v{display:block;font-size:16px;font-weight:600;word-break:break-word}
+.cp .mono{font-variant-numeric:tabular-nums;letter-spacing:.3px}
+.cp li>div{flex:1;min-width:0}
+.cpb{flex:none;min-height:36px;padding:0 12px;border-radius:12px;border:1px solid rgba(127,231,244,.55);background:transparent;color:#BFF4FA;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer}
+.cpb.ok{border-color:#7BE0A6;color:#B8F5CF}
+.pay-note{margin:10px 0 0;font-size:14px;line-height:1.45;color:#CFF6FB}
+.pay-box .btn{margin-top:12px}
 /* enviado */
 .done h1{margin:0 0 8px;font-size:25px;font-weight:700;line-height:1.2}.done p{margin:0 0 12px;color:var(--txt2)}
 .foot{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 16px calc(28px + env(safe-area-inset-bottom));color:#8E8194;font-size:12.5px}.foot a{color:#8E8194}
@@ -571,13 +622,35 @@ function ticket(d,lit){
  '<section class="sign" aria-label="Vuestra reserva">'+(lit?'<span class="lit">'+esc(lit)+'</span>':'')+'<span class="sign-sub">vuestro pack</span><h1 class="neon">'+esc(d.pack)+'</h1>'+
   (d.extras.length?'<ul class="chips">'+d.extras.map(function(x){return '<li>+ '+esc(x)+'</li>'}).join('')+'</ul>':'')+'</section>'+
  '<div class="amt"><div class="amt-l"><span>Paga y señal</span><b>'+eur(d.importe.total)+'</b><small>'+eur(d.importe.base)+' + IVA (10 %)</small></div><p>Con este pago vuestra fecha queda bloqueada.</p></div>'}
+function payHtml(d){
+ var p=d.pago,m=p.metodo,h='<div class="pay" id="pagar"><p class="pay-q">¿Cómo preferís pagar?</p><div class="pay-opts">'+
+  '<button type="button" class="pay-opt" data-m="transferencia" aria-pressed="'+(m==='transferencia')+'"><b>Transferencia</b><span>Os damos los datos</span></button>'+
+  '<button type="button" class="pay-opt" data-m="tarjeta" aria-pressed="'+(m==='tarjeta')+'"><b>Tarjeta</b><span>Pago online</span></button></div>';
+ if(m==='transferencia'){
+  var row=function(k,v,cls){return '<li><div><span class="k">'+k+'</span><span class="v '+(cls||'')+'">'+esc(v)+'</span></div><button type="button" class="cpb" data-cp="'+esc(v)+'">Copiar</button></li>'};
+  h+='<div class="pay-box"><ul class="cp">'+(p.titular?row('Titular (nombre fiscal)',p.titular):'')+(p.iban?row('Número de cuenta (IBAN)',p.iban,'mono'):'')+(p.swift?row('SWIFT / BIC',p.swift,'mono'):'')+
+   row('Importe',eur(d.importe.total),'mono')+row('Concepto',p.concepto)+'</ul>'+
+   '<p class="pay-note">'+(p.iban?'':'El número de cuenta está al pie de la factura. ')+'En el concepto poned <b>'+esc(p.concepto)+'</b>, que es vuestro número de factura: así identificamos vuestro pago enseguida.</p></div>';
+ } else if(m==='tarjeta'){
+  h+='<div class="pay-box">'+(p.tarjeta?'<a class="btn btn--pink" href="'+esc(p.tarjeta)+'" target="_blank" rel="noopener">Pagar con tarjeta · '+eur(d.importe.total)+'</a><p class="pay-note">Se abre la pasarela de pago segura del banco.</p>':
+   '<p class="pay-note">¡Perfecto! Os enviaremos el enlace para pagar con tarjeta por WhatsApp o email en breve. Si preferís no esperar, también podéis pagar por transferencia.</p>')+'</div>';
+ }
+ return h+'</div>';
+}
+function copyTxt(t){if(navigator.clipboard&&window.isSecureContext)return navigator.clipboard.writeText(t);var a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();try{document.execCommand('copy')}catch(e){}a.remove();return Promise.resolve()}
+function bindPay(d){
+ [].forEach.call(document.querySelectorAll('.pay-opt'),function(b){b.onclick=function(){var m=b.getAttribute('data-m');d.pago.metodo=m;done(d);var el=document.getElementById('pagar');if(el&&el.scrollIntoView)el.scrollIntoView({block:'start',behavior:'smooth'});
+  fetch('/api/public/r/'+code+'/pago',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({metodo:m})}).catch(function(){})}});
+ [].forEach.call(document.querySelectorAll('.cpb'),function(b){b.onclick=function(){var t=b.getAttribute('data-cp');if(/^[A-Z]{2}[0-9]{2}[A-Z0-9 ]+$/.test(t))t=t.split(' ').join('');t=t.replace(' €','');copyTxt(t).then(function(){b.textContent='Copiado ✓';b.classList.add('ok');setTimeout(function(){b.textContent='Copiar';b.classList.remove('ok')},1800)})}});
+}
 function done(d){
  var r=d.resumen||{},h=ticket(d,d.pagada?'¡reservado!':'recibido')+'<div class="done">';
  if(d.pagada)h+='<h1>Vuestra fecha está reservada</h1><p>Hemos recibido el pago. En breve os llegará el acceso a vuestra intranet para preparar la música y todos los detalles.</p>';
- else if(d.factura)h+='<h1>Ya tenéis la factura</h1><p>Haced la transferencia de <b>'+eur(d.importe.total)+'</b> para bloquear la fecha. El número de cuenta está al pie de la factura.</p><a class="btn btn--pink" href="/api/public/r/'+code+'/factura">Descargar factura</a>';
+ else if(d.factura)h+='<h1>Ya tenéis la factura</h1><p>Para bloquear vuestra fecha, pagad <b style="white-space:nowrap">'+eur(d.importe.total)+'</b>.</p>'+(d.pago?payHtml(d):'')+'<a class="btn btn--ghost" href="/api/public/r/'+code+'/factura">Descargar factura</a>';
  else h+='<h1>¡Gracias! Ya tenemos vuestros datos</h1><p>En breve os enviaremos la factura de la paga y señal. También podréis descargarla desde este mismo enlace.</p>';
  if(r.novios)h+='<ul class="rows"><li><span>A nombre de</span><b>'+esc(r.novios)+'</b></li><li><span>Fecha</span><b>'+esc(cap(r.fecha||''))+'</b></li><li><span>Lugar</span><b>'+esc(r.lugar)+'</b></li></ul>';
- app.innerHTML=h+'</div>';
+ app.innerHTML=h+'</div>';if(d.pago)bindPay(d);
+ if(location.hash==='#pagar'&&!d._scrolled){d._scrolled=true;var pe=document.getElementById('pagar');if(pe)setTimeout(function(){pe.scrollIntoView({block:'start'})},60)}
 }
 function form(d,err){
  app.innerHTML=ticket(d)+'<form id="f" class="step" novalidate>'+

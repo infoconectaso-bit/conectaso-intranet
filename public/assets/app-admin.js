@@ -73,7 +73,7 @@ async function reservasPage() {
 function waFactura(r) {
   const n = r.novios || {}; const s1 = n.s1 || {}; const first = String(s1.name || '').trim().split(/\s+/)[0] || '';
   let tel = String(s1.mobile || '').replace(/[^0-9]/g, ''); if (tel.length === 9) tel = '34' + tel;
-  const msg = '¡Hola' + (first ? ' ' + first : '') + '! 😊 Aquí tenéis la factura de la paga y señal de vuestra boda (' + resEur(r.importe.total) + '). Podéis descargarla desde este enlace: ' + r.link + '\nEl número de cuenta para la transferencia está al pie de la factura.';
+  const msg = '¡Hola' + (first ? ' ' + first : '') + '! 😊 Aquí tenéis la factura de la paga y señal de vuestra boda (' + resEur(r.importe.total) + '). Desde este enlace podéis descargarla y pagar por transferencia o con tarjeta: ' + r.link + '#pagar';
   return 'https://wa.me/' + tel + '?text=' + encodeURIComponent(msg);
 }
 function waShare(link) { return 'https://wa.me/?text=' + encodeURIComponent('¡Hola! 🎉 Aquí tenéis el enlace para completar la reserva de vuestra boda con Conecta So. Solo os llevará 2 minutos:\n' + link); }
@@ -177,7 +177,9 @@ async function reservaDetalle(id, data) {
       <button type="button" class="btn btn--sm" id="rdHold">🔄 Comprobar pago</button> ${inv.holdedId ? `<a class="btn btn--sm" target="_blank" href="/api/reservas/${r.id}/factura">📄 Ver factura</a>` : ''}
       ${inv.email ? `<br><span class="hint">${inv.email.sent ? '✉️ Enviada por email a <b>' + esc(inv.email.to || '') + '</b> el ' + new Date(inv.email.at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '⚠️ Email no enviado: ' + esc(inv.email.reason || '')}</span>` : ''}
       ${inv.holdedId ? `<br>${adm ? '<button type="button" class="btn btn--sm" id="rdResend">✉️ Reenviar por email</button> ' : ''}<a class="btn btn--sm" target="_blank" rel="noopener" href="${esc(waFactura(r))}">💬 Enviar por WhatsApp</a>` : ''}
+      ${!inv.paid && r.payChoice ? `<br><span class="tag ${r.payChoice.metodo === 'tarjeta' ? 'tag--yellow' : 'tag--grey'}">${r.payChoice.metodo === 'tarjeta' ? '💳 Quieren pagar con tarjeta' : '🏦 Pagarán por transferencia'}</span> <span class="hint">${new Date(r.payChoice.at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>` : ''}
       ${inv.checkedAt ? `<span class="hint">Última comprobación ${new Date(inv.checkedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>` : ''}</p>` : ''}
+    ${adm && inv.holdedId && !inv.paid ? `<div class="field"><label>Enlace de pago con tarjeta <span class="hint">(opcional: TPV / Paygold / Bizum… Si lo pegas, a los novios les sale el botón "Pagar con tarjeta")</span></label><div class="res-link"><input class="control" id="rdPay" value="${esc(r.payLink || '')}" placeholder="https://…"> <button type="button" class="btn btn--sm" id="rdPaySave">Guardar</button></div></div>` : ''}
     <h4 class="form-sub">Checklist</h4><div class="res-chks">${chk}</div>
     <h4 class="form-sub">Mensaje de bienvenida (WhatsApp)</h4>
     ${r.welcome ? `<div class="readbox" id="rdWel">${esc(r.welcome)}</div><button type="button" class="btn btn--sm" id="rdWelCopy" style="margin-top:6px">📋 Copiar mensaje</button>` : `<p class="hint">Texto de bienvenida para el pack ${esc(r.pack)} <b>pendiente</b>. Se escribe en Reservas → ⚙ Configuración.</p>`}
@@ -200,6 +202,7 @@ async function reservaDetalle(id, data) {
   if (q('#rdLoc')) { q('#rdLoc').onchange = () => { q('#rdLocOtro').style.display = +q('#rdLoc').value ? 'none' : ''; };
     q('#rdLocSave').onclick = async () => { try { await api('reservas/' + id, { method: 'PUT', body: { loc: { lugar: +q('#rdLoc').value, lugarOtro: q('#rdLocOtro').value } } }); toast('Finca guardada ✓', 'ok'); refresh(); } catch (e) { toast(e.message, 'err'); } }; }
   if (q('#rdInvSave')) q('#rdInvSave').onclick = async () => { const b = q('#rdInvSave'); b.disabled = true; b.textContent = 'Comprobando en Holded…'; try { await api('reservas/' + id, { method: 'PUT', body: { invoiceNumber: q('#rdInv').value } }); toast('Factura guardada ✓', 'ok'); refresh(); } catch (e) { toast(e.message, 'err'); b.disabled = false; b.textContent = 'Guardar'; } };
+  if (q('#rdPaySave')) q('#rdPaySave').onclick = async () => { try { await api('reservas/' + id, { method: 'PUT', body: { payLink: q('#rdPay').value } }); toast('Enlace de pago guardado ✓', 'ok'); refresh(); } catch (e) { toast(e.message, 'err'); } };
   if (q('#rdHold')) q('#rdHold').onclick = async () => { const b = q('#rdHold'); b.disabled = true; b.textContent = 'Comprobando…'; try { await api('reservas/' + id + '/holded', { method: 'POST', body: {} }); refresh(); } catch (e) { toast(e.message, 'err'); b.disabled = false; } };
   $$('[data-chk]', bg).forEach(c => c.onchange = async () => { try { await api('reservas/' + id + '/check', { method: 'POST', body: { key: c.dataset.chk, on: c.checked } }); refresh(); } catch (e) { toast(e.message, 'err'); c.checked = !c.checked; } });
   if (q('#rdCancel')) q('#rdCancel').onclick = () => modal(r.cancelled ? 'Reactivar reserva' : 'Cancelar reserva', `<p>${r.cancelled ? 'La reserva vuelve a estar activa y el enlace vuelve a funcionar.' : 'La reserva pasa a "Canceladas" y el enlace de los novios deja de funcionar.'}</p>`, { okText: r.cancelled ? 'Reactivar' : 'Cancelar reserva', danger: true, onOk: async () => { try { await api('reservas/' + id, { method: 'PUT', body: { cancelled: !r.cancelled } }); refresh(); } catch (e) { toast(e.message, 'err'); } } });
@@ -234,6 +237,11 @@ async function reservasConfig() {
     <h4 class="form-sub">Documento que se crea en Holded</h4>
     <div class="field"><select class="control" id="cfgDoc"><option value="invoice" ${c.holdedDoc !== 'estimate' ? 'selected' : ''}>Factura real</option><option value="estimate" ${c.holdedDoc === 'estimate' ? 'selected' : ''}>Presupuesto (solo para pruebas)</option></select>
       <p class="hint"><b>Factura real</b>: se crea en Holded y se aprueba, con el número siguiente de la serie. <b>Presupuesto</b> solo si queréis volver a hacer pruebas (queda en borrador).</p></div>
+    <h4 class="form-sub">Datos para la transferencia <span class="hint">(los ven los novios en su enlace al elegir "Transferencia", con botón de copiar)</span></h4>
+    <div class="field"><label>Titular / nombre fiscal</label><input class="control" id="cfgTit" value="${esc((c.pago || {}).titular || '')}" placeholder="Tal y como sale en la factura"></div>
+    <div class="grid-2"><div class="field"><label>Número de cuenta (IBAN)</label><input class="control" id="cfgIban" value="${esc((c.pago || {}).iban || '')}" placeholder="ES00 0000 0000 0000 0000 0000" autocomplete="off"></div>
+      <div class="field"><label>SWIFT / BIC</label><input class="control" id="cfgSwift" value="${esc((c.pago || {}).swift || 'BBVAESMMXXX')}"></div></div>
+    <p class="hint">En el concepto de la transferencia se les pide que pongan el <b>número de factura</b>.</p>
     <h4 class="form-sub">Servicios que NO salen en "Nueva venta" <span class="hint">(internos o de prueba: aprendizaje de DJ, técnicos…)</span></h4>
     <div class="res-hide">${cat.map(x => `<label><input type="checkbox" data-hide="${x.id}" ${(c.hiddenExtras || []).map(Number).includes(+x.id) ? 'checked' : ''}> ${esc(x.name)}</label>`).join('')}</div>
     <h4 class="form-sub">Precios de tarifa (sin IVA) <span class="hint">solo se usan al marcar "Aplicar precio de tarifa"</span></h4>
@@ -244,7 +252,7 @@ async function reservasConfig() {
     const packs = {}; $$('[data-tp]', bg).forEach(i => { if (i.value !== '') packs[i.dataset.tp] = +i.value; });
     const extras = {}; $$('[data-te]', bg).forEach(i => { if (i.value !== '') extras[i.dataset.te] = +i.value; });
     const hiddenExtras = $$('[data-hide]', bg).filter(i => i.checked).map(i => +i.dataset.hide);
-    try { await api('reservas/config', { method: 'PUT', body: { welcome, tarifa: { packs, extras }, hiddenExtras, holdedDoc: el('cfgDoc').value } }); toast('Configuración guardada ✓', 'ok'); } catch (e) { toast(e.message, 'err'); return true; }
+    try { await api('reservas/config', { method: 'PUT', body: { welcome, tarifa: { packs, extras }, hiddenExtras, holdedDoc: el('cfgDoc').value, pago: { titular: el('cfgTit').value, iban: el('cfgIban').value, swift: el('cfgSwift').value } } }); toast('Configuración guardada ✓', 'ok'); } catch (e) { toast(e.message, 'err'); return true; }
   } });
   bg.querySelector('.modal').classList.add('modal--wide', 'res-modal');
 }
