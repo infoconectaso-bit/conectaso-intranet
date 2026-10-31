@@ -44,7 +44,7 @@ const eur = n => (r2(n)).toLocaleString('es-ES', { minimumFractionDigits: 2, max
 
 const CHECKS = [
   ['factura_emitida', 'Factura de reserva emitida'],
-  ['factura_enviada', 'Factura enviada por WhatsApp'],
+  ['factura_enviada', 'Factura enviada a los novios (email o WhatsApp)'],
   ['pago', 'Pago recibido (marcado en Holded)'],
   ['boda_creada', 'Boda y usuarios creados en la intranet'],
   ['whatsapp', 'Grupo de WhatsApp creado (novios + WP si hay)'],
@@ -196,6 +196,29 @@ module.exports = function makeReservas(deps) {
     NOTIFY_TO.forEach(to => { try { mail.sendMail({ to, subject: `🎉 Nueva venta · ${r.pack} · ${fechaCorta(n.fecha)} · ${seller}`, text, html }).catch(() => {}); } catch (e) {} });
   }
 
+  // ---- enviar la factura por email a los novios (PDF adjunto + enlace a su reserva) ----
+  async function emailFactura(r) {
+    const n = r.novios || {}; const s1 = n.s1 || {}; const to = String(s1.email || '').trim();
+    if (!to) return { sent: false, reason: 'sin email' };
+    let pdf = null;
+    try { pdf = await holded.getDocPdf(r.invoice.docType || 'invoice', r.invoice.holdedId); } catch (e) { return { sent: false, reason: 'No se pudo descargar el PDF de Holded: ' + e.message }; }
+    const emails = require('./emails'); const base = APP_URL() || ''; const link = linkOf(r); const imp = importe(r);
+    const first = String(s1.name || '').trim().split(/\s+/)[0] || '';
+    const c = concepto(r);
+    const bodyHtml = `<p>¡Hola${first ? ' ' + escH(first) : ''}!</p>
+      <p>Os adjuntamos la <b>factura de la paga y señal</b> de vuestra boda con Conecta So: <b>Pack ${escH(r.pack)}</b>${(r.extras || []).length || (r.otros || []).length ? ' con ' + escH(extrasTxt(r).join(', ')) : ''}, el <b>${escH(fechaLarga(n.fecha))}</b> en <b>${escH(c.lugar)}</b>.</p>
+      <p>Importe: <b>${escH(eur(imp.total))}</b> (${escH(eur(imp.base))} + IVA 10 %). Para bloquear vuestra fecha, haced la transferencia de este importe: <b>el número de cuenta está al pie de la factura</b>.</p>
+      <p>También podéis descargarla cuando queráis desde vuestro enlace de reserva.</p>`;
+    const html = emails.shell({ logoUrl: base ? base + '/assets/brand/logo-email-blanco.png' : '', title: 'Vuestra factura de reserva', lead: 'Factura de la paga y señal de vuestra boda', bodyHtml, cta: 'Ver mi reserva', link, foot: 'Cualquier duda, escribidnos por WhatsApp o respondiendo a este email.' });
+    const text = `¡Hola${first ? ' ' + first : ''}!\n\nOs adjuntamos la factura de la paga y señal de vuestra boda con Conecta So (Pack ${r.pack}, ${fechaLarga(n.fecha)}, ${c.lugar}).\nImporte: ${eur(imp.total)}. El número de cuenta para la transferencia está al pie de la factura.\n\nVuestra reserva: ${link}`;
+    try {
+      const res = await mail.sendMail({ to, subject: 'Vuestra factura de reserva · Conecta So', text, html, attachments: [{ name: 'Factura-reserva-' + (r.invoice.number || 'Conecta-So').replace(/[^A-Za-z0-9_-]/g, '') + '.pdf', content: pdf, type: 'application/pdf' }] });
+      if (res && res.skipped) return { sent: false, reason: 'bloqueado: el correo a clientes está desactivado (lista blanca)' };
+      if (res && res.disabled) return { sent: false, reason: 'el envío de correo está desactivado' };
+      return { sent: true, to };
+    } catch (e) { return { sent: false, reason: e.message }; }
+  }
+
   // ---- crear la boda a partir de la reserva (solo administración) ----
   async function crearBoda(r, body, user) {
     if (r.eventId) throw Object.assign(new Error('Esta reserva ya tiene boda creada (#' + r.eventId + ').'), { status: 409 });
@@ -337,8 +360,23 @@ module.exports = function makeReservas(deps) {
         r.invoice = { number: doc.number || ('Borrador ' + String(doc.id).slice(-6).toUpperCase()), draft: !doc.number, holdedId: doc.id, docType: type, contactId: ct.id, createdAt: new Date().toISOString(), paid: false };
         r.checklist = r.checklist || {}; if (!r.checklist.factura_emitida) r.checklist.factura_emitida = { at: new Date().toISOString(), by: sellerLabel(me) };
         store.put('reservas', r); store.audit(user.id, 'reserva-emitir-' + type, 'reservas', r.id);
-        return ok(res, { reserva: view(r, user), doc });
+        // Al confirmar se envía la factura por email al email que dieron los novios (no en modo pruebas).
+        let email = { sent: false, reason: 'modo pruebas (presupuesto): no se envía' };
+        if (type === 'invoice') {
+          email = await emailFactura(r);
+          r.invoice.email = Object.assign({ at: new Date().toISOString() }, email);
+          if (email.sent) { r.checklist = r.checklist || {}; if (!r.checklist.factura_enviada) r.checklist.factura_enviada = { at: new Date().toISOString(), by: 'Email automático' }; }
+          store.put('reservas', r);
+        }
+        return ok(res, { reserva: view(r, user), doc, email });
       } catch (e) { return fail(res, 502, e.message); }
+    }
+    if (seg[2] === 'reenviar' && method === 'POST') {   // volver a enviar la factura por email
+      if (!isAdmin(user)) return fail(res, 403, 'Solo administración');
+      if (!r.invoice || !r.invoice.holdedId) return fail(res, 400, 'Esta reserva aún no tiene factura.');
+      const email = await emailFactura(r); r.invoice.email = Object.assign({ at: new Date().toISOString() }, email);
+      if (email.sent) { r.checklist = r.checklist || {}; if (!r.checklist.factura_enviada) r.checklist.factura_enviada = { at: new Date().toISOString(), by: 'Email automático' }; }
+      store.put('reservas', r); return ok(res, { reserva: view(r, user), email });
     }
     if (seg[2] === 'holded' && method === 'POST') { await checkHolded(r, true); return ok(res, { reserva: view(store.get('reservas', id), user) }); }
     if (seg[2] === 'factura' && method === 'GET') {

@@ -27,7 +27,7 @@ function cfg() {
   };
 }
 // Envío por la API HTTP de Brevo (https://api.brevo.com/v3/smtp/email). Puerto 443.
-function sendViaBrevoApi(c, { to, subject, text, html }) {
+function sendViaBrevoApi(c, { to, subject, text, html, attachments }) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({
       sender: { email: c.from, name: c.fromName || 'Conecta Só' },
@@ -35,6 +35,7 @@ function sendViaBrevoApi(c, { to, subject, text, html }) {
       subject,
       htmlContent: html || ('<pre>' + (text || '') + '</pre>'),
       textContent: text || '',
+      ...(attachments && attachments.length ? { attachment: attachments.map(a => ({ name: a.name, content: Buffer.from(a.content).toString('base64') })) } : {}),
     });
     const req = https.request('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -67,7 +68,7 @@ const b64 = s => Buffer.from(String(s), 'utf8').toString('base64');
 const encHeader = s => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${b64(s)}?=`);
 
 /** Conversa con el servidor SMTP paso a paso. Resuelve al aceptarse el mensaje. */
-function sendMail({ to, subject, text, html }) {
+function sendMail({ to, subject, text, html, attachments }) {   // attachments: [{ name, content: Buffer, type }]
   if (isDisabled()) { console.log('[CORREO DESACTIVADO] NO se envía →', to, '·', subject); return Promise.resolve({ disabled: true }); }
   // RED DE SEGURIDAD: si hay lista blanca, SOLO se envía a esas direcciones; cualquier otra
   // (p. ej. un cliente real) se bloquea. Imprescindible en un servidor de pruebas con datos reales.
@@ -78,7 +79,7 @@ function sendMail({ to, subject, text, html }) {
   }
   const c = cfg();
   // Si hay clave API de Brevo, se envía por HTTPS (evita el bloqueo de puertos SMTP del servidor).
-  if (c.apiKey) return sendViaBrevoApi(c, { to, subject, text, html });
+  if (c.apiKey) return sendViaBrevoApi(c, { to, subject, text, html, attachments });
   if (!c.host) return Promise.reject(new Error('SMTP no configurado'));
   const b64body = s => b64(s).replace(/(.{76})/g, '$1\r\n');
   const head = [
@@ -97,6 +98,15 @@ function sendMail({ to, subject, text, html }) {
       `--${bnd}`, 'Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', b64body(html),
       `--${bnd}--`,
     ]).join('\r\n');
+    // Con adjuntos: multipart/mixed que envuelve el cuerpo (texto + HTML) y los ficheros.
+    if (attachments && attachments.length) {
+      const mx = 'csm_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      const body = lines.split('\r\n').slice(head.length).join('\r\n');
+      lines = head.concat([`Content-Type: multipart/mixed; boundary="${mx}"`, '', `--${mx}`, body]
+        .concat(...attachments.map(a => [`--${mx}`, `Content-Type: ${a.type || 'application/octet-stream'}; name="${a.name}"`, 'Content-Transfer-Encoding: base64',
+          `Content-Disposition: attachment; filename="${a.name}"`, '', Buffer.from(a.content).toString('base64').replace(/(.{76})/g, '$1\r\n')]))
+        .concat([`--${mx}--`])).join('\r\n');
+    }
   } else {
     lines = head.concat(['Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', b64body(text || '')]).join('\r\n');
   }

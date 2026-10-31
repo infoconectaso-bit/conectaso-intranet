@@ -70,6 +70,12 @@ async function reservasPage() {
   $$('[data-res]').forEach(c => c.onclick = () => reservaDetalle(+c.dataset.res, data));
   const q = new URLSearchParams((location.hash.split('?')[1]) || ''); if (q.get('id')) reservaDetalle(+q.get('id'), data);
 }
+function waFactura(r) {
+  const n = r.novios || {}; const s1 = n.s1 || {}; const first = String(s1.name || '').trim().split(/\s+/)[0] || '';
+  let tel = String(s1.mobile || '').replace(/[^0-9]/g, ''); if (tel.length === 9) tel = '34' + tel;
+  const msg = '¡Hola' + (first ? ' ' + first : '') + '! 😊 Aquí tenéis la factura de la paga y señal de vuestra boda (' + resEur(r.importe.total) + '). Podéis descargarla desde este enlace: ' + r.link + '\nEl número de cuenta para la transferencia está al pie de la factura.';
+  return 'https://wa.me/' + tel + '?text=' + encodeURIComponent(msg);
+}
 function waShare(link) { return 'https://wa.me/?text=' + encodeURIComponent('¡Hola! 🎉 Aquí tenéis el enlace para completar la reserva de vuestra boda con Conecta So. Solo os llevará 2 minutos:\n' + link); }
 function reservaNueva(data, cur) {   // cur = reserva existente → modo EDITAR (el enlace es el mismo y se actualiza solo)
   const hidden = new Set((data.hiddenExtras || []).map(Number));
@@ -169,6 +175,8 @@ async function reservaDetalle(id, data) {
     ${adm ? `<div class="field"><label>Nº de factura en Holded <span class="hint">(se rellena solo al crearla desde aquí)</span></label><div class="res-link"><input class="control" id="rdInv" value="${esc(inv.number || '')}" placeholder="Ej.: F260123"> <button type="button" class="btn btn--sm" id="rdInvSave">Guardar</button></div></div>` : (inv.number ? `<p>Factura: <b>${esc(inv.number)}</b></p>` : '')}
     ${inv.number ? `<p>${inv.paid ? '<span class="tag tag--green">✓ Pagada en Holded</span>' : (inv.found ? '<span class="tag tag--blue">Pendiente de pago</span>' : '')} ${inv.error ? `<span class="tag tag--red">${esc(inv.error)}</span>` : ''}
       <button type="button" class="btn btn--sm" id="rdHold">🔄 Comprobar pago</button> ${inv.holdedId ? `<a class="btn btn--sm" target="_blank" href="/api/reservas/${r.id}/factura">📄 Ver factura</a>` : ''}
+      ${inv.email ? `<br><span class="hint">${inv.email.sent ? '✉️ Enviada por email a <b>' + esc(inv.email.to || '') + '</b> el ' + new Date(inv.email.at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '⚠️ Email no enviado: ' + esc(inv.email.reason || '')}</span>` : ''}
+      ${inv.holdedId ? `<br>${adm ? '<button type="button" class="btn btn--sm" id="rdResend">✉️ Reenviar por email</button> ' : ''}<a class="btn btn--sm" target="_blank" rel="noopener" href="${esc(waFactura(r))}">💬 Enviar por WhatsApp</a>` : ''}
       ${inv.checkedAt ? `<span class="hint">Última comprobación ${new Date(inv.checkedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>` : ''}</p>` : ''}
     <h4 class="form-sub">Checklist</h4><div class="res-chks">${chk}</div>
     <h4 class="form-sub">Mensaje de bienvenida (WhatsApp)</h4>
@@ -182,7 +190,8 @@ async function reservaDetalle(id, data) {
   q('#rdCopy').onclick = () => copyText(r.link);
   q('#rdCopyC').onclick = () => copyText(r.concepto.conceptoFactura || r.concepto.linea);
   q('#rdCopyL').onclick = () => copyText([r.concepto.lugar, (r.novios || {}).fecha ? resFecha((r.novios || {}).fecha) : ''].filter(Boolean).join(' '));
-  if (q('#rdEmit')) q('#rdEmit').onclick = async () => { if (data.holdedDoc !== 'estimate' && !confirm('Se va a emitir una FACTURA REAL en Holded a nombre de ' + (((r.novios || {}).s1 || {}).name || '') + ' por ' + resEur(r.importe.total) + '. Una factura aprobada no se puede borrar. ¿Continuar?')) return; const b = q('#rdEmit'); b.disabled = true; b.textContent = 'Creando en Holded…'; try { const x = await api('reservas/' + id + '/emitir', { method: 'POST', body: {} }); toast('✓ Creado en Holded: ' + (x.doc.number || 'sin número'), 'ok'); refresh(); } catch (e) { toast(e.message, 'err'); b.disabled = false; b.textContent = 'Reintentar en Holded'; } };
+  if (q('#rdResend')) q('#rdResend').onclick = async () => { const b = q('#rdResend'); b.disabled = true; try { const x = await api('reservas/' + id + '/reenviar', { method: 'POST', body: {} }); toast(x.email.sent ? '✉️ Enviada a ' + x.email.to : 'No enviada: ' + x.email.reason, x.email.sent ? 'ok' : 'err'); refresh(); } catch (e) { toast(e.message, 'err'); b.disabled = false; } };
+  if (q('#rdEmit')) q('#rdEmit').onclick = async () => { if (data.holdedDoc !== 'estimate' && !confirm('Se va a emitir una FACTURA REAL en Holded a nombre de ' + (((r.novios || {}).s1 || {}).name || '') + ' por ' + resEur(r.importe.total) + '. Se enviará por email a ' + ((((r.novios || {}).s1 || {}).email) || 'los novios') + '. Una factura aprobada no se puede borrar. ¿Continuar?')) return; const b = q('#rdEmit'); b.disabled = true; b.textContent = 'Creando en Holded…'; try { const x = await api('reservas/' + id + '/emitir', { method: 'POST', body: {} }); const em = x.email || {}; toast('✓ Factura ' + (x.doc.number || '(borrador)') + ' creada en Holded' + (em.sent ? ' y enviada por email a ' + em.to : (em.reason ? ' · email NO enviado: ' + em.reason : '')), em.sent || !em.reason ? 'ok' : 'err'); refresh(); } catch (e) { toast(e.message, 'err'); b.disabled = false; b.textContent = 'Reintentar en Holded'; } };
   q('#rdCopyO').onclick = () => copyText(r.concepto.obs);
   if (q('#rdWelCopy')) q('#rdWelCopy').onclick = () => copyText(r.welcome);
   if (q('#rdEdit')) q('#rdEdit').onclick = () => { bg.remove(); reservaNueva(data, r); };
