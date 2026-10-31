@@ -54,6 +54,43 @@ async function apiRequest(method, path, body) {
   return last;
 }
 
+/* ---------- ESCRITURA: contacto + presupuesto/factura de reserva ---------- */
+const errMsg = r => { const d = r && r.data; return (d && (d.detail || d.title || d.message || d.info || (d.errors && JSON.stringify(d.errors)))) || ('HTTP ' + (r && r.status)); };
+/** Busca el contacto por NIF (índice cacheado); si no existe lo crea. Devuelve { id, created }. */
+async function ensureContact({ name, nif, email, mobile }) {
+  try { const idx = await buildIndex(false); const hit = (idx.byNif[normNif(nif)] || [])[0]; if (hit) return { id: hit, created: false }; } catch (e) {}
+  const r = await apiRequest('POST', '/contacts', { name, code: nif, email: email || undefined, mobile: mobile || undefined, is_person: true, type: 'client' });
+  if (!r.ok) throw new Error('Holded no deja crear el contacto: ' + errMsg(r) + (r.status === 403 ? ' (la clave de API no tiene permiso de escritura)' : ''));
+  const id = r.data && (r.data.id || (r.data.data && r.data.data.id));
+  if (!id) throw new Error('Holded creó el contacto pero no devolvió su id.');
+  _idx = null;   // el índice se rehará con el contacto nuevo
+  return { id, created: true };
+}
+/** Crea un PRESUPUESTO ('estimate') o una FACTURA ('invoice') de reserva. Una sola línea con IVA 10 %.
+ * Devuelve { id, number, type }. El número lo pone Holded (siguiente de la serie). */
+async function createReservaDoc(type, { contactId, date, concept, lineDesc, notes, base }) {
+  const path = type === 'invoice' ? '/invoices' : '/estimates';
+  const body = { contact_id: contactId, date, description: concept, notes,
+    lines: [{ name: concept, description: lineDesc, units: 1, price: base, taxes: ['s_iva_10'] }] };
+  const r = await apiRequest('POST', path, body);
+  if (!r.ok) throw new Error('Holded no deja crear el ' + (type === 'invoice' ? 'documento de factura' : 'presupuesto') + ': ' + errMsg(r) + (r.status === 403 ? ' (la clave de API no tiene permiso de escritura)' : ''));
+  const id = r.data && (r.data.id || (r.data.data && r.data.data.id));
+  let number = r.data && (r.data.document_number || r.data.docNumber);
+  if (id && !number) { const g = await apiRequest('GET', path + '/' + encodeURIComponent(id)); number = g.ok && g.data && g.data.document_number; }
+  return { id, number: number || '', type };
+}
+/** PDF de un presupuesto o factura. */
+async function getDocPdf(type, id) {
+  if (type !== 'estimate') return getInvoicePdf(id);
+  const c = getConfig(); if (!c.apiKey) throw new Error('Falta la clave de API de Holded.');
+  for (const h of [{ Authorization: 'Bearer ' + c.apiKey }, { key: c.apiKey }]) {
+    const r = await fetch(BASE + '/estimates/' + encodeURIComponent(id) + '/pdf', { headers: Object.assign({ Accept: 'application/pdf' }, h) });
+    if (r.ok) { const ct = r.headers.get('content-type') || ''; if (/json/i.test(ct)) { const j = await r.json().catch(() => null); const b = j && (j.data || j.pdf || j.base64); if (b) return Buffer.from(String(b), 'base64'); } return Buffer.from(await r.arrayBuffer()); }
+    if (r.status !== 401 && r.status !== 403) throw new Error('Holded respondió ' + r.status + ' al pedir el PDF');
+  }
+  throw new Error('Sin permiso para descargar el PDF del presupuesto');
+}
+
 /** Comprueba que la clave funciona (pide contactos). Devuelve {ok, info}. */
 async function testConnection() {
   const data = await apiGet('/contacts');
@@ -453,4 +490,4 @@ async function testPayslips() {
   return { ok: true, probes };
 }
 
-module.exports = { BASE, getConfig, enabled, apiGet, apiRequest, testConnection, listInvoices, getInvoice, getInvoiceCached, listEstimates, listCreditNotes, estimateConcept, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, findInvoicesByNumber, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };
+module.exports = { BASE, getConfig, enabled, apiGet, apiRequest, ensureContact, createReservaDoc, getDocPdf, testConnection, listInvoices, getInvoice, getInvoiceCached, listEstimates, listCreditNotes, estimateConcept, listContacts, getInvoicePdf, buildIndex, mapInvoice, invoicesForClient, invoicesByIds, findInvoicesByNumber, allUnpaid, findByText, parseAmount, listPayslips, getPayslipPdf, testPayslips };

@@ -61,6 +61,7 @@ module.exports = function makeReservas(deps) {
     return {
       welcome: Object.assign({ Fiesta: '', Bodorrio: '', Tinglado: '' }, c.welcome || {}),
       hiddenExtras: Array.isArray(c.hiddenExtras) ? c.hiddenExtras.map(Number) : DEFAULT_HIDDEN(),
+      holdedDoc: c.holdedDoc === 'invoice' ? 'invoice' : 'estimate',   // PRUEBAS: presupuesto; REAL: factura
       tarifa: { packs: Object.assign({}, DEFAULT_TARIFA.packs, t.packs || {}), extras: Object.assign({}, DEFAULT_TARIFA.extras, t.extras || {}) },
     };
   };
@@ -87,7 +88,8 @@ module.exports = function makeReservas(deps) {
     const n = r.novios || {};
     const lugar = (r.loc && (r.loc.lugarOtro || (r.loc.lugar && (store.get('locations', +r.loc.lugar) || {}).name))) || n.lugar || '';
     const linea = `Reserva Pack DJ ${r.pack}${ex.length ? ' + ' + ex.join(' + ') : ''}${lugar || n.fecha ? ' — ' + [lugar, fechaCorta(n.fecha)].filter(Boolean).join(', ') : ''}`;
-    return { linea, lugar, fecha: n.fecha || '', obs: `Fecha: ${fechaLarga(n.fecha)} · Lugar: ${lugar}` };
+    const conceptoFactura = `Reserva servicio DJ + Pack ${r.pack}${ex.length ? ' + ' + ex.join(' + ') : ''}`;
+    return { linea, conceptoFactura, lugar, fecha: n.fecha || '', obs: `Fecha: ${fechaLarga(n.fecha)} · Lugar: ${lugar}` };
   }
 
   // ---- coincidencia del lugar escrito por los novios con las fincas (palabras clave) ----
@@ -150,7 +152,7 @@ module.exports = function makeReservas(deps) {
 
   // ---- comprobar pago en Holded (solo lectura) ----
   async function checkHolded(r, force) {
-    if (!r.invoice || !r.invoice.number) return r;
+    if (!r.invoice || !r.invoice.number || r.invoice.docType === 'estimate') return r;
     if (!holded.enabled()) { r.invoice.error = 'Holded no está configurado'; return r; }
     try {
       let hits = await holded.findInvoicesByNumber(r.invoice.number, !!force);
@@ -250,13 +252,14 @@ module.exports = function makeReservas(deps) {
         if (b.welcome) cur.welcome = { Fiesta: String(b.welcome.Fiesta || ''), Bodorrio: String(b.welcome.Bodorrio || ''), Tinglado: String(b.welcome.Tinglado || '') };
         if (b.tarifa) cur.tarifa = { packs: b.tarifa.packs || {}, extras: b.tarifa.extras || {} };
         if (Array.isArray(b.hiddenExtras)) cur.hiddenExtras = b.hiddenExtras.map(Number).filter(Boolean);
+        if (b.holdedDoc) cur.holdedDoc = b.holdedDoc === 'invoice' ? 'invoice' : 'estimate';
         store.setSetting('reservasConfig', cur);
         return ok(res, cfg());
       }
     }
     if (seg.length === 1 && method === 'GET') {
       const list = store.all('reservas').sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(r => view(r, user));
-      return ok(res, { reservas: list, packs: PACKS, hiddenExtras: cfg().hiddenExtras, extrasCatalog: store.all('extras').map(x => ({ id: x.id, name: x.name })).sort((a, b) => String(a.name).localeCompare(String(b.name), 'es')), isAdmin: isAdmin(user) });
+      return ok(res, { reservas: list, packs: PACKS, hiddenExtras: cfg().hiddenExtras, holdedDoc: cfg().holdedDoc, extrasCatalog: store.all('extras').map(x => ({ id: x.id, name: x.name })).sort((a, b) => String(a.name).localeCompare(String(b.name), 'es')), isAdmin: isAdmin(user) });
     }
     if (seg.length === 1 && method === 'POST') {
       const b = await readBody(req);
@@ -320,10 +323,27 @@ module.exports = function makeReservas(deps) {
       store.put('reservas', r);
       return ok(res, { reserva: view(r, user) });
     }
+    if (seg[2] === 'emitir' && method === 'POST') {   // crea el contacto y el PRESUPUESTO/FACTURA en Holded
+      if (!isAdmin(user)) return fail(res, 403, 'Solo administración');
+      if (!r.submittedAt) return fail(res, 400, 'Los novios aún no han rellenado sus datos.');
+      if (r.invoice && r.invoice.number) return fail(res, 409, 'Esta reserva ya tiene documento en Holded (' + r.invoice.number + ').');
+      if (!holded.enabled()) return fail(res, 400, 'Holded no está configurado.');
+      const n = r.novios || {}; const s1 = n.s1 || {}; const c = concepto(r); const type = cfg().holdedDoc;
+      try {
+        const ct = await holded.ensureContact({ name: s1.name, nif: s1.dni, email: s1.email, mobile: s1.mobile });
+        const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' });
+        const lineDesc = [c.lugar, fechaCorta(n.fecha)].filter(Boolean).join(' ');
+        const doc = await holded.createReservaDoc(type, { contactId: ct.id, date: today, concept: c.conceptoFactura, lineDesc, notes: c.obs, base: importe(r).base });
+        r.invoice = { number: doc.number, holdedId: doc.id, docType: type, contactId: ct.id, createdAt: new Date().toISOString(), paid: false };
+        r.checklist = r.checklist || {}; if (!r.checklist.factura_emitida) r.checklist.factura_emitida = { at: new Date().toISOString(), by: sellerLabel(me) };
+        store.put('reservas', r); store.audit(user.id, 'reserva-emitir-' + type, 'reservas', r.id);
+        return ok(res, { reserva: view(r, user), doc });
+      } catch (e) { return fail(res, 502, e.message); }
+    }
     if (seg[2] === 'holded' && method === 'POST') { await checkHolded(r, true); return ok(res, { reserva: view(store.get('reservas', id), user) }); }
     if (seg[2] === 'factura' && method === 'GET') {
       if (!r.invoice || !r.invoice.holdedId) return fail(res, 404, 'Factura no disponible');
-      try { const buf = await holded.getInvoicePdf(r.invoice.holdedId); return send(res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="factura-reserva-${r.code}.pdf"` }); }
+      try { const buf = await holded.getDocPdf(r.invoice.docType || 'invoice', r.invoice.holdedId); return send(res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="factura-reserva-${r.code}.pdf"` }); }
       catch (e) { return fail(res, 502, 'No se pudo obtener la factura: ' + e.message); }
     }
     if (seg[2] === 'crear-boda' && method === 'POST') {
@@ -355,7 +375,7 @@ module.exports = function makeReservas(deps) {
     const imp = importe(r); const n = r.novios || {}; const st = status(r);
     return {
       code: r.code, pack: r.pack, extras: extrasTxt(r), importe: imp, status: st, submitted: !!r.submittedAt,
-      resumen: r.submittedAt ? { novios: [n.s1 && n.s1.name, n.s2 && n.s2.name].filter(Boolean).join(' y '), fecha: fechaLarga(n.fecha), lugar: n.lugar } : null,
+      resumen: r.submittedAt ? { novios: [n.s1 && n.s1.name, n.s2 && n.s2.name].filter(Boolean).join(' y '), fecha: fechaLarga(n.fecha), fechaIso: n.fecha, lugar: n.lugar } : null,
       factura: !!(r.invoice && r.invoice.holdedId) && !r.cancelled, pagada: !!(r.invoice && r.invoice.paid),
     };
   }
@@ -369,7 +389,7 @@ module.exports = function makeReservas(deps) {
     if (seg.length === 3 && method === 'GET') return ok(res, publicView(r));
     if (seg[3] === 'factura' && method === 'GET') {
       if (!r.invoice || !r.invoice.holdedId) return fail(res, 404, 'La factura aún no está disponible.');
-      try { const buf = await holded.getInvoicePdf(r.invoice.holdedId); return send(res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="Factura-reserva-Conecta-So.pdf"` }); }
+      try { const buf = await holded.getDocPdf(r.invoice.docType || 'invoice', r.invoice.holdedId); return send(res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="Factura-reserva-Conecta-So.pdf"` }); }
       catch (e) { return fail(res, 502, 'No se pudo descargar la factura. Inténtalo más tarde.'); }
     }
     if (seg.length === 3 && method === 'POST') {
@@ -409,12 +429,12 @@ module.exports = function makeReservas(deps) {
 <title>${escH(title)}</title><meta name="robots" content="noindex,nofollow">
 <meta property="og:type" content="website"><meta property="og:title" content="${escH(title)}"><meta property="og:description" content="${escH(desc)}">
 <meta property="og:image" content="${escH(base)}/assets/brand/og-reserva.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#0A101D"><link rel="icon" href="/assets/brand/favicon-32.png">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#F4F3F7"><link rel="icon" href="/assets/brand/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&display=swap">
 <style>${PAGE_CSS}</style></head><body>
-<header class="top"><img src="/assets/brand/logo-principal-blanco.svg" alt="Conecta So" class="logo"><div class="kick">Reserva de vuestra boda</div></header>
-<main id="app"><div class="card"><p class="muted">Cargando…</p></div></main>
-<footer class="foot">Conecta So · DJs, sonido e iluminación · <a href="https://www.conectaso.es">conectaso.es</a></footer>
+<main id="app" class="wrap"><div class="loading">Cargando vuestra reserva…</div></main>
+<footer class="foot"><img src="/assets/brand/logo-principal-azul.svg" alt="Conecta So" class="foot-logo"><span>DJs, sonido e iluminación para bodas</span><a href="https://www.conectaso.es">conectaso.es</a></footer>
 <script>window.__CODE=${JSON.stringify(String(code || '').toUpperCase())};${PAGE_JS}</script></body></html>`;
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(html);
@@ -425,48 +445,91 @@ module.exports = function makeReservas(deps) {
 
 /* ---------------- estilos y lógica de la página pública ---------------- */
 const PAGE_CSS = `
-@font-face{font-family:'Evolve Sans';src:url('/assets/fonts/evolve-sans.woff2') format('woff2');font-weight:400;font-display:swap}
-/* Azul noche + dorado (mismos tonos que el tema elegante de la intranet) */
-:root{--bg:#0C1322;--bg2:#0A101D;--card:#131C30;--card2:#182340;--line:#2B3A5C;--text:#ECEFF6;--muted:#9AA6BF;--gold:#C9A96A;--gold2:#E3C68C;--blue:#6F8FC2;--red:#E07A7A;color-scheme:dark}
+/* Página pública de reserva: la reserva como una ENTRADA de evento (ticket). */
+:root{--bg:#F4F3F7;--paper:#FFFFFF;--ink:#130F17;--ink2:#4A4452;--muted:#7D7787;--line:#E4E1EA;--pink:#E82C88;--blue:#31B9CB;--lemon:#F0E85A;--bad:#C4213A}
 *{box-sizing:border-box}html,body{margin:0}
-body{font-family:'Evolve Sans',-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;
- background-image:radial-gradient(circle at 10% 0%,rgba(201,169,106,.10),transparent 40%),radial-gradient(circle at 100% 30%,rgba(111,143,194,.12),transparent 45%);background-attachment:fixed}
-.top{background:var(--bg2);padding:36px 16px 30px;text-align:center;position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
-.top:after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
-.logo{width:220px;max-width:70%;height:auto}
-.kick{margin-top:14px;color:var(--gold);font-family:'Archivo Black',Arial Black,sans-serif;font-size:12.5px;letter-spacing:.22em;text-transform:uppercase}
-main{max-width:620px;margin:0 auto;padding:22px 16px 30px}
-.card{background:var(--card);border:1px solid var(--line);border-top:2px solid var(--gold);padding:20px 18px;margin-bottom:16px;box-shadow:0 18px 40px rgba(0,0,0,.35)}
-h2{font-family:'Archivo Black',Arial Black,sans-serif;font-size:18px;margin:0 0 12px;letter-spacing:.01em;color:var(--text)}
-h3{font-size:12.5px;margin:20px 0 8px;text-transform:uppercase;letter-spacing:.16em;color:var(--gold)}
-.pack{font-family:'Archivo Black',Arial Black,sans-serif;font-size:26px;color:var(--gold);letter-spacing:.01em}
-.ex{margin:8px 0 0;padding:0;list-style:none}.ex li{padding:6px 0;border-top:1px solid var(--line)}.ex li:before{content:"+ ";color:var(--gold);font-weight:700}
-.amount{display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;padding-top:12px;border-top:1px solid var(--gold)}
-.amount b{font-size:24px;color:var(--gold2)}
-.muted{color:var(--muted)}.small{font-size:12.5px}
-label{display:block;font-weight:700;font-size:13px;margin:12px 0 5px;color:var(--text)}
-input:not([type=checkbox]),textarea{width:100%;font:inherit;padding:12px 13px;border:1px solid var(--line);background:#0F172B;color:var(--text);border-radius:0;-webkit-appearance:none}
-input::placeholder,textarea::placeholder{color:#5f6c88}
-input[type=checkbox]{accent-color:var(--gold)}
-input:not([type=checkbox]):focus,textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,169,106,.22)}
-input[type=date]{min-height:48px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}@media(max-width:520px){.grid{grid-template-columns:1fr}}
-.chk{display:flex;gap:10px;align-items:flex-start;font-weight:400;font-size:13.5px}.chk input{width:20px;height:20px;flex:none;margin-top:1px}
-.btn{display:block;width:100%;padding:16px;border:0;background:linear-gradient(135deg,var(--gold2),var(--gold));color:#0C1322;font-family:'Archivo Black',Arial Black,sans-serif;font-size:14.5px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;box-shadow:0 10px 26px rgba(201,169,106,.28);margin-top:18px;text-align:center;text-decoration:none}
-.btn:active{transform:translateY(1px);box-shadow:0 4px 12px rgba(201,169,106,.25)}
-.btn:disabled{opacity:.7}
-.btn--ghost{background:transparent;color:var(--text);border:1px solid var(--line);box-shadow:none}
-.err{background:rgba(224,122,122,.12);border:1px solid var(--red);border-left:3px solid var(--red);color:#F2B3B3;padding:10px 12px;margin-top:12px;font-weight:700}
-.ok{text-align:center}.ok .big{font-size:46px}
-.ovl{position:fixed;inset:0;background:rgba(5,8,15,.8);display:flex;align-items:center;justify-content:center;padding:16px;z-index:9;backdrop-filter:blur(3px)}
-.ovl .card{max-width:480px;width:100%;margin:0}
-.conf div{padding:10px 0;border-bottom:1px solid var(--line);font-size:16px}.conf span{display:block;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
-.conf .date{font-size:21px;font-weight:800;color:var(--gold2)}
-.warn{background:rgba(201,169,106,.12);border:1px solid var(--gold);padding:10px 12px;margin-top:10px;font-weight:700;color:var(--gold2)}
-.row2{display:flex;gap:10px}.row2 .btn{margin-top:14px}
-.note{background:var(--card2);border:1px solid var(--line);border-left:3px solid var(--gold);padding:11px 13px;margin:16px 0 4px;font-size:13.5px;color:var(--text)}
+body{font-family:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-optical-sizing:auto;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:560px;margin:0 auto;padding:max(18px,env(safe-area-inset-top)) 16px 24px}
+.loading{padding:80px 0;text-align:center;color:var(--muted)}
+/* ---------- ticket ---------- */
+.tk{position:relative;filter:drop-shadow(0 18px 30px rgba(19,15,23,.18));margin:6px 0 22px}
+@media (prefers-reduced-motion:no-preference){.tk{animation:tkIn .7s cubic-bezier(.2,.8,.2,1) both}@keyframes tkIn{from{opacity:0;transform:translateY(18px) rotate(-1.2deg)}to{opacity:1;transform:none}}}
+.tk-top{position:relative;overflow:hidden;background:var(--ink);color:#fff;border-radius:22px 22px 0 0;padding:20px 22px 26px}
+.tk-top:before{content:"";position:absolute;inset:-40% -30% auto auto;width:300px;height:300px;border-radius:50%;background:radial-gradient(closest-side,rgba(232,44,136,.75),rgba(232,44,136,0))}
+.tk-top:after{content:"";position:absolute;inset:auto auto -55% -25%;width:320px;height:320px;border-radius:50%;background:radial-gradient(closest-side,rgba(49,185,203,.55),rgba(49,185,203,0))}
+.tk-top>*{position:relative;z-index:1}
+.tk-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.tk-logo{height:22px;width:auto}
+.tk-code{font-size:13px;font-weight:600;letter-spacing:.08em;opacity:.8}
+.tk-for{margin:26px 0 0;font-size:15px;font-weight:500;opacity:.8}
+.tk-pack{margin:0;font-size:clamp(46px,14vw,64px);line-height:.92;font-weight:800;letter-spacing:-.035em}
+.tk-pack small{display:block;font-size:.36em;font-weight:500;letter-spacing:0;opacity:.75;margin-bottom:4px}
+.tk-ex{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px;padding:0;list-style:none}
+.tk-ex li{font-size:13.5px;font-weight:600;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22)}
+.tk-cut{position:relative;height:22px;background:var(--paper);overflow:hidden}
+.tk-cut:before,.tk-cut:after{content:"";position:absolute;top:0;width:22px;height:22px;border-radius:50%;background:var(--bg)}
+.tk-cut:before{left:-11px}.tk-cut:after{right:-11px}
+.tk-cut span{position:absolute;left:18px;right:18px;top:10px;border-top:2px dashed var(--line)}
+.tk-bot{background:var(--paper);border-radius:0 0 22px 22px;padding:6px 22px 20px;display:flex;justify-content:space-between;align-items:flex-end;gap:14px}
+.tk-lbl{font-size:14px;color:var(--ink2);font-weight:600}
+.tk-amt{font-size:clamp(30px,9vw,38px);font-weight:800;letter-spacing:-.03em;line-height:1;white-space:nowrap}
+.tk-sub{font-size:13px;color:var(--muted);margin-top:4px}
+.tk-why{font-size:13px;color:var(--ink2);text-align:right;max-width:130px;line-height:1.35}
+.stamp{position:absolute;right:16px;top:58px;z-index:2;transform:rotate(-10deg);border:2.5px solid var(--lemon);color:var(--lemon);font-weight:800;font-size:16px;letter-spacing:.03em;padding:3px 11px;border-radius:9px;background:rgba(19,15,23,.45)}
+@media (prefers-reduced-motion:no-preference){.stamp{animation:stampIn .45s .35s cubic-bezier(.2,1.6,.4,1) both}@keyframes stampIn{from{opacity:0;transform:rotate(-10deg) scale(1.8)}to{opacity:1;transform:rotate(-10deg) scale(1)}}}
+/* ---------- formulario ---------- */
+.sheet{background:var(--paper);border-radius:22px;padding:22px 20px 24px;box-shadow:0 1px 0 var(--line)}
+.intro{margin:0 0 6px;font-size:22px;font-weight:700;letter-spacing:-.015em;line-height:1.2}
+.intro-sub{margin:0 0 4px;color:var(--ink2);font-size:15px}
+.step{margin-top:26px}
+.step-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:18px;font-weight:700;letter-spacing:-.01em}
+.step-h b{display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--ink);color:#fff;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex:none}
+.f{margin-top:12px}
+.f label{display:block;font-size:14.5px;font-weight:600;margin:0 0 6px;color:var(--ink)}
+.f .opt{font-weight:400;color:var(--muted)}
+.f input:not([type=checkbox]),.f textarea{display:block;width:100%;font:inherit;font-size:16px;color:var(--ink);background:#FAFAFC;border:1.5px solid var(--line);border-radius:12px;padding:13px 14px;min-height:52px;-webkit-appearance:none;appearance:none;transition:border-color .15s,box-shadow .15s}
+.f textarea{min-height:96px;resize:vertical}
+.f input::placeholder,.f textarea::placeholder{color:#A9A3B3}
+.f input:focus,.f textarea:focus{outline:none;border-color:var(--ink);background:#fff;box-shadow:0 0 0 4px rgba(232,44,136,.16)}
+.f .help{font-size:13px;color:var(--muted);margin-top:6px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}@media(max-width:480px){.two{grid-template-columns:1fr}}
+.hint{margin-top:14px;padding:12px 14px;border-radius:12px;background:#EEF9FB;color:#1E5E68;font-size:14px;line-height:1.45}
+.tick{display:flex;gap:12px;align-items:flex-start;margin-top:16px;font-size:15px;cursor:pointer}
+.tick input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--pink)}
+.tick small{display:block;color:var(--muted);font-size:13px}
+.err{margin-top:16px;padding:12px 14px;border-radius:12px;background:#FDECEF;color:var(--bad);font-weight:600;font-size:14.5px}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;margin-top:20px;padding:0 20px;border:0;border-radius:14px;background:var(--ink);color:#fff;font:inherit;font-size:17px;font-weight:700;cursor:pointer;text-decoration:none;transition:transform .1s}
+.btn:active{transform:scale(.985)}
+.btn:focus-visible{outline:3px solid var(--pink);outline-offset:3px}
+.btn[disabled]{opacity:.6}
+.btn--pink{background:var(--pink)}
+.btn--ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
-.foot{text-align:center;color:var(--muted);font-size:12px;padding:10px 16px 30px}.foot a{color:var(--muted)}
+/* ---------- hoja de confirmación ---------- */
+.ovl{position:fixed;inset:0;background:rgba(19,15,23,.5);display:flex;align-items:flex-end;justify-content:center;z-index:9}
+.bs{width:100%;max-width:560px;background:var(--paper);border-radius:24px 24px 0 0;padding:10px 20px calc(20px + env(safe-area-inset-bottom))}
+@media (prefers-reduced-motion:no-preference){.bs{animation:bsUp .32s cubic-bezier(.2,.9,.25,1) both}@keyframes bsUp{from{transform:translateY(100%)}to{transform:none}}}
+.bs-grip{width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 14px}
+.bs h2{margin:0 0 4px;font-size:22px;font-weight:700;letter-spacing:-.015em}
+.bs p{margin:0;color:var(--ink2);font-size:15px}
+.cal{display:flex;gap:16px;align-items:center;margin:18px 0 6px}
+.cal-pg{flex:none;width:96px;border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 0 0 1.5px var(--line),0 8px 18px rgba(19,15,23,.08);text-align:center}
+.cal-m{background:var(--pink);color:#fff;font-size:13px;font-weight:700;padding:5px 0;text-transform:capitalize}
+.cal-d{font-size:44px;font-weight:800;line-height:1.05;letter-spacing:-.03em;padding-top:4px}
+.cal-y{font-size:12.5px;color:var(--muted);padding-bottom:7px}
+.cal-txt b{display:block;font-size:19px;letter-spacing:-.01em;text-transform:none}
+.cal-txt span{display:block;color:var(--ink2);font-size:15px;margin-top:2px}
+.rows{margin:12px 0 0;padding:0;list-style:none;border-top:1px solid var(--line)}
+.rows li{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--line);font-size:15px}
+.rows li span{color:var(--muted)}.rows li b{text-align:right;font-weight:600}
+.warn{margin-top:12px;padding:11px 14px;border-radius:12px;background:#FFF8C7;color:#5B4D00;font-weight:600;font-size:14.5px}
+.bs-act{display:grid;grid-template-columns:1fr 1.4fr;gap:10px}.bs-act .btn{margin-top:16px}
+/* ---------- estado enviado ---------- */
+.done{text-align:left}
+.done h1{margin:0 0 8px;font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.done p{margin:0 0 10px;color:var(--ink2)}
+.foot{display:flex;flex-direction:column;align-items:center;gap:4px;padding:18px 16px calc(28px + env(safe-area-inset-bottom));color:var(--muted);font-size:13px}
+.foot-logo{height:20px;width:auto;opacity:.85;margin-bottom:4px}.foot a{color:var(--muted)}
 `;
 const PAGE_JS = `
 (function(){
@@ -474,50 +537,68 @@ var app=document.getElementById('app'),code=window.__CODE,data=null;
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function eur(n){return (Math.round((+n||0)*100)/100).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'}
 var DOW=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'],MON=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-function larga(iso){var m=/^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(iso||'');if(!m)return iso;var d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));var t=DOW[d.getUTCDay()];return t.charAt(0).toUpperCase()+t.slice(1)+', '+(+m[3])+' de '+MON[+m[2]-1]+' de '+m[1]}
+function parts(iso){var m=/^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(iso||'');if(!m)return null;var d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));return {y:m[1],m:MON[+m[2]-1],d:+m[3],w:DOW[d.getUTCDay()]}}
+function cap(t){return t.charAt(0).toUpperCase()+t.slice(1)}
 var NET='No hemos podido conectar con el servidor. Esperad unos segundos y volved a pulsar el botón: vuestros datos siguen aquí.';
 function once(method,body){return fetch('/api/public/r/'+code,{method:method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,cache:'no-store'}).then(function(r){return r.text().then(function(t){var j=null;try{j=JSON.parse(t)}catch(e){}
  if(!j){var er=new Error(NET);er.net=true;throw er}if(!r.ok)throw new Error(j.error||'Error');return j})},function(){var er=new Error(NET);er.net=true;throw er})}
 function api(method,body){return once(method,body).catch(function(e){if(!e.net)throw e;return new Promise(function(ok){setTimeout(ok,2500)}).then(function(){return once(method,body)})})}
-function packCard(d){return '<div class="card"><h2>Vuestra reserva</h2><div class="pack">Pack '+esc(d.pack)+'</div>'+(d.extras.length?'<ul class="ex">'+d.extras.map(function(x){return '<li>'+esc(x)+'</li>'}).join('')+'</ul>':'')+
- '<div class="amount"><span>Importe de la reserva<br><span class="muted small">'+eur(d.importe.base)+' + 10 % IVA</span></span><b>'+eur(d.importe.total)+'</b></div></div>'}
+function ticket(d,stamp){
+ return '<section class="tk" aria-label="Vuestra reserva"><div class="tk-top">'+(stamp?'<div class="stamp">'+esc(stamp)+'</div>':'')+
+  '<div class="tk-head"><img class="tk-logo" src="/assets/brand/logo-principal-blanco.svg" alt="Conecta So"><span class="tk-code">'+esc(d.code)+'</span></div>'+
+  '<p class="tk-for">Vuestra boda con nosotros</p><h1 class="tk-pack"><small>Pack</small>'+esc(d.pack)+'</h1>'+
+  (d.extras.length?'<ul class="tk-ex">'+d.extras.map(function(x){return '<li>+ '+esc(x)+'</li>'}).join('')+'</ul>':'')+
+ '</div><div class="tk-cut" aria-hidden="true"><span></span></div><div class="tk-bot"><div><div class="tk-lbl">Paga y señal</div><div class="tk-amt">'+eur(d.importe.total)+'</div><div class="tk-sub">'+eur(d.importe.base)+' + IVA (10 %)</div></div>'+
+ '<div class="tk-why">Con este pago vuestra fecha queda bloqueada.</div></div></section>'}
 function done(d){
- var h=packCard(d)+'<div class="card ok"><div class="big">'+(d.pagada?'🎉':'✅')+'</div><h2>'+(d.pagada?'¡Reserva confirmada!':'¡Datos recibidos!')+'</h2>';
- if(d.resumen)h+='<p><b>'+esc(d.resumen.novios)+'</b><br>'+esc(larga(d.resumen.fecha)||d.resumen.fecha)+' · '+esc(d.resumen.lugar)+'</p>';
- if(d.pagada)h+='<p>Hemos recibido el pago. ¡Vuestra fecha está reservada! En breve recibiréis el acceso a vuestra intranet para preparar la boda.</p>';
- else if(d.factura)h+='<p>Ya tenéis disponible la <b>factura de reserva</b>. Para reservar la fecha, haced la transferencia del importe indicado: <b>el número de cuenta está en el pie de la factura</b>.</p><a class="btn" href="/api/public/r/'+code+'/factura">Descargar factura</a>';
- else h+='<p>¡Gracias! En breve os enviaremos la <b>factura de reserva</b>. Podréis descargarla también desde este mismo enlace.</p>';
+ var r=d.resumen||{},h=ticket(d,d.pagada?'¡Reservado!':'Recibido')+'<div class="sheet done">';
+ if(d.pagada)h+='<h1>Vuestra fecha está reservada</h1><p>Hemos recibido el pago. En breve os llegará el acceso a vuestra intranet para preparar la música y todos los detalles.</p>';
+ else if(d.factura)h+='<h1>Ya tenéis la factura</h1><p>Haced la transferencia de <b>'+eur(d.importe.total)+'</b> para bloquear la fecha. El número de cuenta está al pie de la factura.</p><a class="btn btn--pink" href="/api/public/r/'+code+'/factura">Descargar factura</a>';
+ else h+='<h1>¡Gracias! Ya tenemos vuestros datos</h1><p>En breve os enviaremos la factura de la paga y señal. También podréis descargarla desde este mismo enlace.</p>';
+ if(r.novios)h+='<ul class="rows"><li><span>A nombre de</span><b>'+esc(r.novios)+'</b></li><li><span>Fecha</span><b>'+esc(cap(r.fecha||''))+'</b></li><li><span>Lugar</span><b>'+esc(r.lugar)+'</b></li></ul>';
  app.innerHTML=h+'</div>';
 }
 function form(d,err){
- app.innerHTML=packCard(d)+'<form class="card" id="f" novalidate><h2>Vuestros datos</h2><p class="muted small">Los necesitamos para la factura de reserva y para crear vuestra intranet privada.</p>'+
- '<h3>Datos de uno de los dos</h3><label>Nombre y los dos apellidos</label><input name="s1n" autocomplete="name" placeholder="Ej.: Laura Pérez Gil" required><div class="grid"><div><label>DNI / NIE</label><input name="s1d" required></div><div><label>Móvil</label><input name="s1m" type="tel" autocomplete="tel" required></div></div><label>Email</label><input name="s1e" type="email" autocomplete="email" required>'+
- '<p class="note">💡 Con los datos de uno de los dos es suficiente. Los datos del otro cónyuge los podréis introducir más adelante dentro de vuestra propia intranet.</p>'+
- '<h3>La boda</h3><label>Fecha de la boda</label><input name="fecha" type="date" required><label>Lugar de la celebración (nombre de la finca)</label><input name="lugar" placeholder="Ej.: Mas la Boella" required>'+
- '<label class="chk" style="margin-top:16px"><input type="checkbox" name="wph" id="wph"> Tenemos wedding planner</label><div id="wpb" hidden><label>Nombre de la wedding planner</label><input name="wpn"><label>Email de la wedding planner <span class="muted">(opcional)</span></label><input name="wpe" type="email"></div>'+
- '<label>¿Algo que queráis comentarnos? <span class="muted">(opcional)</span></label><textarea name="com" rows="3"></textarea>'+
- '<div class="hp"><label>Web</label><input name="website" tabindex="-1" autocomplete="off"></div>'+
- '<label class="chk" style="margin-top:18px"><input type="checkbox" name="consent"> <span>Acepto que Conecta So trate estos datos para gestionar la reserva, emitir la factura y preparar nuestra boda.</span></label>'+
- (err?'<div class="err">'+esc(err)+'</div>':'')+'<button class="btn" type="submit">Revisar y enviar</button></form>';
+ app.innerHTML=ticket(d)+'<form class="sheet" id="f" novalidate>'+
+ '<h2 class="intro">Completad la reserva</h2><p class="intro-sub">Son dos minutos. Con estos datos preparamos la factura de la paga y señal.</p>'+
+ '<div class="step"><h3 class="step-h"><b>1</b>Vuestros datos</h3>'+
+  '<div class="f"><label for="s1n">Nombre y los dos apellidos</label><input id="s1n" name="s1n" autocomplete="name" placeholder="Laura Pérez Gil"><div class="help">Tal y como aparecerá en la factura.</div></div>'+
+  '<div class="two"><div class="f"><label for="s1d">DNI o NIE</label><input id="s1d" name="s1d" autocapitalize="characters"></div><div class="f"><label for="s1m">Móvil</label><input id="s1m" name="s1m" type="tel" autocomplete="tel" inputmode="tel"></div></div>'+
+  '<div class="f"><label for="s1e">Email</label><input id="s1e" name="s1e" type="email" autocomplete="email" inputmode="email"><div class="help">Aquí os llegará el acceso a vuestra intranet.</div></div>'+
+  '<div class="hint">Basta con los datos de uno de los dos. Los de tu pareja los podréis añadir después desde vuestra intranet.</div></div>'+
+ '<div class="step"><h3 class="step-h"><b>2</b>La boda</h3>'+
+  '<div class="f"><label for="fecha">Fecha de la boda</label><input id="fecha" name="fecha" type="date"></div>'+
+  '<div class="f"><label for="lugar">Lugar de la celebración</label><input id="lugar" name="lugar" placeholder="Nombre de la finca o del restaurante"></div>'+
+  '<label class="tick"><input type="checkbox" name="wph" id="wph"><span>Tenemos wedding planner</span></label>'+
+  '<div id="wpb" hidden><div class="f"><label for="wpn">Nombre de la wedding planner</label><input id="wpn" name="wpn"></div><div class="f"><label for="wpe">Su email <span class="opt">(opcional)</span></label><input id="wpe" name="wpe" type="email" inputmode="email"></div></div>'+
+  '<div class="f"><label for="com">¿Algo que queráis contarnos? <span class="opt">(opcional)</span></label><textarea id="com" name="com" rows="3"></textarea></div></div>'+
+ '<div class="step"><h3 class="step-h"><b>3</b>Revisar y enviar</h3>'+
+  '<div class="hp"><label>Web</label><input name="website" tabindex="-1" autocomplete="off"></div>'+
+  '<label class="tick"><input type="checkbox" name="consent"><span>Acepto que Conecta So use estos datos para gestionar la reserva, emitir la factura y preparar nuestra boda.</span></label>'+
+  (err?'<div class="err" role="alert">'+esc(err)+'</div>':'')+'<button class="btn" type="submit">Revisar y enviar</button></div></form>';
  var f=document.getElementById('f');document.getElementById('wph').onchange=function(){document.getElementById('wpb').hidden=!this.checked};
  if(window.__last){Object.keys(window.__last).forEach(function(k){var e=f.elements[k];if(!e)return;if(e.type==='checkbox')e.checked=!!window.__last[k];else e.value=window.__last[k]});document.getElementById('wpb').hidden=!f.elements.wph.checked}
+ if(err){var ee=f.querySelector('.err');if(ee)ee.scrollIntoView({block:'center'})}
  f.onsubmit=function(ev){ev.preventDefault();var v={};Array.prototype.forEach.call(f.elements,function(e){if(e.name)v[e.name]=e.type==='checkbox'?e.checked:e.value.trim()});window.__last=v;
-  var miss=[];if(!v.s1n)miss.push('nombre y los dos apellidos');else if(v.s1n.split(/\\s+/).filter(Boolean).length<3)miss.push('el nombre completo con los DOS apellidos (lo necesitamos para la factura)');if(!v.s1d)miss.push('DNI / NIE');if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(v.s1e))miss.push('email válido');if(!v.s1m)miss.push('móvil');if(!v.fecha)miss.push('fecha');if(!v.lugar)miss.push('lugar');if(!v.consent)miss.push('aceptar el tratamiento de datos');
+  var miss=[];if(!v.s1n)miss.push('nombre y los dos apellidos');else if(v.s1n.split(/\\s+/).filter(Boolean).length<3)miss.push('el nombre completo con los dos apellidos (lo necesitamos para la factura)');if(!v.s1d)miss.push('DNI o NIE');if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(v.s1e))miss.push('un email válido');if(!v.s1m)miss.push('el móvil');if(!v.fecha)miss.push('la fecha de la boda');if(!v.lugar)miss.push('el lugar');if(!v.consent)miss.push('aceptar el uso de los datos');
   if(miss.length){form(d,'Falta: '+miss.join(', ')+'.');return}
   confirmBox(d,v)}
 }
 function confirmBox(d,v){
- var today=new Date().toISOString().slice(0,10),yrs=(+v.fecha.slice(0,4))-new Date().getFullYear(),w='';
- if(v.fecha<today)w='⚠️ Esta fecha ya ha pasado. ¿Seguro que es correcta?';else if(yrs>3)w='⚠️ Esta fecha es dentro de más de 3 años. Revisad el año.';
- var o=document.createElement('div');o.className='ovl';o.innerHTML='<div class="card"><h2>¿Está todo bien?</h2><p class="muted small">Revisad sobre todo la fecha y el lugar antes de enviar.</p><div class="conf">'+
- '<div><span>Fecha de la boda</span><b class="date">'+esc(larga(v.fecha))+'</b></div><div><span>Lugar</span><b>'+esc(v.lugar)+'</b></div><div><span>Pack</span><b>'+esc(d.pack)+(d.extras.length?' + '+esc(d.extras.join(' + ')):'')+'</b></div><div><span>A nombre de</span><b>'+esc(v.s1n)+'</b></div></div>'+
- (w?'<div class="warn">'+w+'</div>':'')+'<div class="row2"><button class="btn btn--ghost" id="back" type="button">← Corregir</button><button class="btn" id="go" type="button">✓ Sí, es correcto</button></div></div>';
- document.body.appendChild(o);
+ var today=new Date().toISOString().slice(0,10),yrs=(+v.fecha.slice(0,4))-new Date().getFullYear(),w='',p=parts(v.fecha);
+ if(v.fecha<today)w='Esta fecha ya ha pasado. Revisad el día y el año.';else if(yrs>3)w='Esta fecha es dentro de más de tres años. Revisad el año.';
+ var o=document.createElement('div');o.className='ovl';o.setAttribute('role','dialog');o.setAttribute('aria-modal','true');
+ o.innerHTML='<div class="bs"><div class="bs-grip"></div><h2>¿Es correcto?</h2><p>Revisad sobre todo la fecha y el lugar antes de enviar.</p>'+
+ (p?'<div class="cal"><div class="cal-pg"><div class="cal-m">'+esc(p.m)+'</div><div class="cal-d">'+p.d+'</div><div class="cal-y">'+p.y+'</div></div><div class="cal-txt"><b>'+esc(cap(p.w))+', '+p.d+' de '+esc(p.m)+'</b><span>'+esc(v.lugar)+'</span></div></div>':'')+
+ '<ul class="rows"><li><span>Pack</span><b>'+esc(d.pack)+(d.extras.length?' + '+esc(d.extras.join(' + ')):'')+'</b></li><li><span>A nombre de</span><b>'+esc(v.s1n)+'</b></li><li><span>Paga y señal</span><b>'+eur(d.importe.total)+'</b></li></ul>'+
+ (w?'<div class="warn">'+w+'</div>':'')+'<div class="bs-act"><button class="btn btn--ghost" id="back" type="button">Corregir</button><button class="btn btn--pink" id="go" type="button">Sí, enviar</button></div></div>';
+ document.body.appendChild(o);o.querySelector('#go').focus();
+ o.addEventListener('click',function(e){if(e.target===o)o.remove()});
  o.querySelector('#back').onclick=function(){o.remove()};
  o.querySelector('#go').onclick=function(){var b=this;b.disabled=true;b.textContent='Enviando…';
   api('POST',{s1:{name:v.s1n,dni:v.s1d,email:v.s1e,mobile:v.s1m},fecha:v.fecha,lugar:v.lugar,wp:{has:v.wph,name:v.wpn,email:v.wpe},comentario:v.com,consent:v.consent,website:v.website})
   .then(function(r){o.remove();data=r;done(r);window.scrollTo(0,0)}).catch(function(e){o.remove();form(d,e.message)})}
 }
-api('GET').then(function(d){data=d;if(d.submitted)done(d);else form(d)}).catch(function(e){app.innerHTML='<div class="card"><h2>Enlace no válido</h2><p>'+esc(e.message)+'</p></div>'});
+api('GET').then(function(d){data=d;if(d.submitted)done(d);else form(d)}).catch(function(e){app.innerHTML='<div class="sheet done"><h1>Este enlace no funciona</h1><p>'+esc(e.message)+'</p></div>'});
 })();
 `;

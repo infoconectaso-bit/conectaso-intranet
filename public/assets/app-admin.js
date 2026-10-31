@@ -161,10 +161,12 @@ async function reservaDetalle(id, data) {
       ${n.wp ? `<p>👰 Wedding planner: <b>${esc(n.wp.name)}</b> <span class="hint">${esc(n.wp.email || '')}</span></p>` : ''}
       ${n.comentario ? `<p>💬 Comentario de los novios: <i>${esc(n.comentario)}</i></p>` : ''}` : '<p class="hint">Los novios aún no han rellenado el enlace.</p>'}
     <h4 class="form-sub">Factura de reserva (Holded)</h4>
-    <div class="res-fact"><div><span class="hint">Concepto (una sola línea)</span><b id="rdConcept">${esc(r.concepto.linea)}</b></div><button type="button" class="btn btn--sm" id="rdCopyC">📋</button></div>
-    <div class="res-fact"><div><span class="hint">Observaciones</span><b id="rdObsF">${esc(r.concepto.obs)}</b></div><button type="button" class="btn btn--sm" id="rdCopyO">📋</button></div>
+    <div class="res-fact"><div><span class="hint">Concepto (una sola línea, IVA 10 %)</span><b>${esc(r.concepto.conceptoFactura || r.concepto.linea)}</b></div><button type="button" class="btn btn--sm" id="rdCopyC">📋</button></div>
+    <div class="res-fact"><div><span class="hint">Descripción de la línea</span><b>${esc([r.concepto.lugar, (r.novios || {}).fecha ? resFecha((r.novios || {}).fecha) : ''].filter(Boolean).join(' '))}</b></div><button type="button" class="btn btn--sm" id="rdCopyL">📋</button></div>
+    <div class="res-fact"><div><span class="hint">Observaciones</span><b>${esc(r.concepto.obs)}</b></div><button type="button" class="btn btn--sm" id="rdCopyO">📋</button></div>
+    ${adm && r.submittedAt && !inv.number ? `<p><button type="button" class="btn btn--primary" id="rdEmit">🧾 Crear ${data.holdedDoc === 'invoice' ? 'factura' : 'presupuesto (pruebas)'} en Holded</button> <span class="hint">Crea el contacto (nombre y DNI) y el documento con este concepto; Holded pone el número.</span></p>` : ''}
     <p class="hint">Base ${resEur(r.importe.base)} · IVA 10 % ${resEur(r.importe.iva)} · <b>Total ${resEur(r.importe.total)}</b></p>
-    ${adm ? `<div class="field"><label>Nº de factura en Holded</label><div class="res-link"><input class="control" id="rdInv" value="${esc(inv.number || '')}" placeholder="Ej.: F260123"> <button type="button" class="btn btn--sm" id="rdInvSave">Guardar</button></div></div>` : (inv.number ? `<p>Factura: <b>${esc(inv.number)}</b></p>` : '')}
+    ${adm ? `<div class="field"><label>Nº de factura en Holded <span class="hint">(se rellena solo al crearla desde aquí)</span></label><div class="res-link"><input class="control" id="rdInv" value="${esc(inv.number || '')}" placeholder="Ej.: F260123"> <button type="button" class="btn btn--sm" id="rdInvSave">Guardar</button></div></div>` : (inv.number ? `<p>Factura: <b>${esc(inv.number)}</b></p>` : '')}
     ${inv.number ? `<p>${inv.paid ? '<span class="tag tag--green">✓ Pagada en Holded</span>' : (inv.found ? '<span class="tag tag--blue">Pendiente de pago</span>' : '')} ${inv.error ? `<span class="tag tag--red">${esc(inv.error)}</span>` : ''}
       <button type="button" class="btn btn--sm" id="rdHold">🔄 Comprobar pago</button> ${inv.holdedId ? `<a class="btn btn--sm" target="_blank" href="/api/reservas/${r.id}/factura">📄 Ver factura</a>` : ''}
       ${inv.checkedAt ? `<span class="hint">Última comprobación ${new Date(inv.checkedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>` : ''}</p>` : ''}
@@ -178,7 +180,9 @@ async function reservaDetalle(id, data) {
   const refresh = () => { bg.remove(); reservaDetalle(id, data); reservasPageQuiet(); };
   const q = (sel) => bg.querySelector(sel);
   q('#rdCopy').onclick = () => copyText(r.link);
-  q('#rdCopyC').onclick = () => copyText(r.concepto.linea);
+  q('#rdCopyC').onclick = () => copyText(r.concepto.conceptoFactura || r.concepto.linea);
+  q('#rdCopyL').onclick = () => copyText([r.concepto.lugar, (r.novios || {}).fecha ? resFecha((r.novios || {}).fecha) : ''].filter(Boolean).join(' '));
+  if (q('#rdEmit')) q('#rdEmit').onclick = async () => { const b = q('#rdEmit'); b.disabled = true; b.textContent = 'Creando en Holded…'; try { const x = await api('reservas/' + id + '/emitir', { method: 'POST', body: {} }); toast('✓ Creado en Holded: ' + (x.doc.number || 'sin número'), 'ok'); refresh(); } catch (e) { toast(e.message, 'err'); b.disabled = false; b.textContent = 'Reintentar en Holded'; } };
   q('#rdCopyO').onclick = () => copyText(r.concepto.obs);
   if (q('#rdWelCopy')) q('#rdWelCopy').onclick = () => copyText(r.welcome);
   if (q('#rdEdit')) q('#rdEdit').onclick = () => { bg.remove(); reservaNueva(data, r); };
@@ -218,6 +222,9 @@ async function reservasConfig() {
     <h4 class="form-sub">Textos de bienvenida (WhatsApp)</h4>
     <p class="hint">Puedes usar <b>{novios}</b>, <b>{fecha}</b>, <b>{lugar}</b> y <b>{pack}</b>: se rellenan solos en cada reserva.</p>
     ${['Fiesta', 'Bodorrio', 'Tinglado'].map(p => `<div class="field"><label>Pack ${p}</label><textarea class="control" rows="4" data-wel="${p}" placeholder="Texto pendiente">${esc(c.welcome[p] || '')}</textarea></div>`).join('')}
+    <h4 class="form-sub">Documento que se crea en Holded</h4>
+    <div class="field"><select class="control" id="cfgDoc"><option value="estimate" ${c.holdedDoc !== 'invoice' ? 'selected' : ''}>Presupuesto (modo pruebas)</option><option value="invoice" ${c.holdedDoc === 'invoice' ? 'selected' : ''}>Factura real</option></select>
+      <p class="hint">Mientras probáis, deja <b>Presupuesto</b>: se crean presupuestos en Holded que podéis borrar. Cuando todo esté bien, cambia a <b>Factura real</b>.</p></div>
     <h4 class="form-sub">Servicios que NO salen en "Nueva venta" <span class="hint">(internos o de prueba: aprendizaje de DJ, técnicos…)</span></h4>
     <div class="res-hide">${cat.map(x => `<label><input type="checkbox" data-hide="${x.id}" ${(c.hiddenExtras || []).map(Number).includes(+x.id) ? 'checked' : ''}> ${esc(x.name)}</label>`).join('')}</div>
     <h4 class="form-sub">Precios de tarifa (sin IVA) <span class="hint">solo se usan al marcar "Aplicar precio de tarifa"</span></h4>
@@ -228,7 +235,7 @@ async function reservasConfig() {
     const packs = {}; $$('[data-tp]', bg).forEach(i => { if (i.value !== '') packs[i.dataset.tp] = +i.value; });
     const extras = {}; $$('[data-te]', bg).forEach(i => { if (i.value !== '') extras[i.dataset.te] = +i.value; });
     const hiddenExtras = $$('[data-hide]', bg).filter(i => i.checked).map(i => +i.dataset.hide);
-    try { await api('reservas/config', { method: 'PUT', body: { welcome, tarifa: { packs, extras }, hiddenExtras } }); toast('Configuración guardada ✓', 'ok'); } catch (e) { toast(e.message, 'err'); return true; }
+    try { await api('reservas/config', { method: 'PUT', body: { welcome, tarifa: { packs, extras }, hiddenExtras, holdedDoc: el('cfgDoc').value } }); toast('Configuración guardada ✓', 'ok'); } catch (e) { toast(e.message, 'err'); return true; }
   } });
   bg.querySelector('.modal').classList.add('modal--wide', 'res-modal');
 }
