@@ -429,12 +429,12 @@ module.exports = function makeReservas(deps) {
 <title>${escH(title)}</title><meta name="robots" content="noindex,nofollow">
 <meta property="og:type" content="website"><meta property="og:title" content="${escH(title)}"><meta property="og:description" content="${escH(desc)}">
 <meta property="og:image" content="${escH(base)}/assets/brand/og-reserva.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#F4F3F7"><link rel="icon" href="/assets/brand/favicon-32.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#160D19"><link rel="icon" href="/assets/brand/favicon-32.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Yellowtail&family=Outfit:wght@300;400;500;600;700&display=swap">
 <style>${PAGE_CSS}</style></head><body>
 <main id="app" class="wrap"><div class="loading">Cargando vuestra reserva…</div></main>
-<footer class="foot"><img src="/assets/brand/logo-principal-azul.svg" alt="Conecta So" class="foot-logo"><span>DJs, sonido e iluminación para bodas</span><a href="https://www.conectaso.es">conectaso.es</a></footer>
+<footer class="foot"><span>DJs, sonido e iluminación para bodas</span><a href="https://www.conectaso.es">conectaso.es</a></footer>
 <script>window.__CODE=${JSON.stringify(String(code || '').toUpperCase())};${PAGE_JS}</script></body></html>`;
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(html);
@@ -445,91 +445,74 @@ module.exports = function makeReservas(deps) {
 
 /* ---------------- estilos y lógica de la página pública ---------------- */
 const PAGE_CSS = `
-/* Página pública de reserva: la reserva como una ENTRADA de evento (ticket). */
-:root{--bg:#F4F3F7;--paper:#FFFFFF;--ink:#130F17;--ink2:#4A4452;--muted:#7D7787;--line:#E4E1EA;--pink:#E82C88;--blue:#31B9CB;--lemon:#F0E85A;--bad:#C4213A}
-*{box-sizing:border-box}html,body{margin:0}
-body{font-family:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-optical-sizing:auto;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
-.wrap{max-width:560px;margin:0 auto;padding:max(18px,env(safe-area-inset-top)) 16px 24px}
+/* Página pública de reserva: el pack como un CARTEL DE NEÓN de boda. */
+:root{--bg:#160D19;--txt:#F4EEF6;--txt2:#CFC4D3;--muted:#A99AAE;--glass:rgba(255,255,255,.05);--edge:rgba(255,255,255,.12);--pink:#E82C88;--pink2:#FF5FB0;--cyan:#7FE7F4;--cyan2:#31B9CB;--bad:#FF8A9B;color-scheme:dark}
+*{box-sizing:border-box}html,body{margin:0}[hidden]{display:none!important}
+body{font-family:'Outfit',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--txt);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;
+ background:#100A12 radial-gradient(120% 70% at 50% 0%,#2A1530 0%,#160D19 55%,#100A12 100%) no-repeat;min-height:100vh}
+.wrap{max-width:520px;margin:0 auto;padding:max(22px,env(safe-area-inset-top)) 20px 20px;display:flex;flex-direction:column;gap:26px}
 .loading{padding:80px 0;text-align:center;color:var(--muted)}
-/* ---------- ticket ---------- */
-.tk{position:relative;filter:drop-shadow(0 18px 30px rgba(19,15,23,.18));margin:6px 0 22px}
-@media (prefers-reduced-motion:no-preference){.tk{animation:tkIn .7s cubic-bezier(.2,.8,.2,1) both}@keyframes tkIn{from{opacity:0;transform:translateY(18px) rotate(-1.2deg)}to{opacity:1;transform:none}}}
-.tk-top{position:relative;overflow:hidden;background:var(--ink);color:#fff;border-radius:22px 22px 0 0;padding:20px 22px 26px}
-.tk-top:before{content:"";position:absolute;inset:-40% -30% auto auto;width:300px;height:300px;border-radius:50%;background:radial-gradient(closest-side,rgba(232,44,136,.75),rgba(232,44,136,0))}
-.tk-top:after{content:"";position:absolute;inset:auto auto -55% -25%;width:320px;height:320px;border-radius:50%;background:radial-gradient(closest-side,rgba(49,185,203,.55),rgba(49,185,203,0))}
-.tk-top>*{position:relative;z-index:1}
-.tk-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.tk-logo{height:22px;width:auto}
-.tk-code{font-size:13px;font-weight:600;letter-spacing:.08em;opacity:.8}
-.tk-for{margin:26px 0 0;font-size:15px;font-weight:500;opacity:.8}
-.tk-pack{margin:0;font-size:clamp(46px,14vw,64px);line-height:.92;font-weight:800;letter-spacing:-.035em}
-.tk-pack small{display:block;font-size:.36em;font-weight:500;letter-spacing:0;opacity:.75;margin-bottom:4px}
-.tk-ex{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px;padding:0;list-style:none}
-.tk-ex li{font-size:13.5px;font-weight:600;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22)}
-.tk-cut{position:relative;height:22px;background:var(--paper);overflow:hidden}
-.tk-cut:before,.tk-cut:after{content:"";position:absolute;top:0;width:22px;height:22px;border-radius:50%;background:var(--bg)}
-.tk-cut:before{left:-11px}.tk-cut:after{right:-11px}
-.tk-cut span{position:absolute;left:18px;right:18px;top:10px;border-top:2px dashed var(--line)}
-.tk-bot{background:var(--paper);border-radius:0 0 22px 22px;padding:6px 22px 20px;display:flex;justify-content:space-between;align-items:flex-end;gap:14px}
-.tk-lbl{font-size:14px;color:var(--ink2);font-weight:600}
-.tk-amt{font-size:clamp(30px,9vw,38px);font-weight:800;letter-spacing:-.03em;line-height:1;white-space:nowrap}
-.tk-sub{font-size:13px;color:var(--muted);margin-top:4px}
-.tk-why{font-size:13px;color:var(--ink2);text-align:right;max-width:130px;line-height:1.35}
-.stamp{position:absolute;right:16px;top:58px;z-index:2;transform:rotate(-10deg);border:2.5px solid var(--lemon);color:var(--lemon);font-weight:800;font-size:16px;letter-spacing:.03em;padding:3px 11px;border-radius:9px;background:rgba(19,15,23,.45)}
-@media (prefers-reduced-motion:no-preference){.stamp{animation:stampIn .45s .35s cubic-bezier(.2,1.6,.4,1) both}@keyframes stampIn{from{opacity:0;transform:rotate(-10deg) scale(1.8)}to{opacity:1;transform:rotate(-10deg) scale(1)}}}
-/* ---------- formulario ---------- */
-.sheet{background:var(--paper);border-radius:22px;padding:22px 20px 24px;box-shadow:0 1px 0 var(--line)}
-.intro{margin:0 0 6px;font-size:22px;font-weight:700;letter-spacing:-.015em;line-height:1.2}
-.intro-sub{margin:0 0 4px;color:var(--ink2);font-size:15px}
-.step{margin-top:26px}
-.step-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:18px;font-weight:700;letter-spacing:-.01em}
-.step-h b{display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--ink);color:#fff;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex:none}
-.f{margin-top:12px}
-.f label{display:block;font-size:14.5px;font-weight:600;margin:0 0 6px;color:var(--ink)}
-.f .opt{font-weight:400;color:var(--muted)}
-.f input:not([type=checkbox]),.f textarea{display:block;width:100%;font:inherit;font-size:16px;color:var(--ink);background:#FAFAFC;border:1.5px solid var(--line);border-radius:12px;padding:13px 14px;min-height:52px;-webkit-appearance:none;appearance:none;transition:border-color .15s,box-shadow .15s}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.top img{height:24px;width:auto}.top span{font-size:13px;color:var(--muted);font-weight:600}
+/* cartel */
+.sign{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;padding:32px 12px 28px;border-radius:22px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)}
+.sign-sub{font-size:15px;color:var(--cyan);text-shadow:0 0 6px rgba(127,231,244,.9),0 0 18px rgba(49,185,203,.7)}
+.neon{font-family:'Yellowtail',cursive;font-weight:400;font-size:clamp(68px,22vw,96px);line-height:1.05;color:#FFE3F1;margin:4px 0 12px;transform:rotate(-4deg);
+ text-shadow:0 0 4px #fff,0 0 12px var(--pink2),0 0 28px var(--pink),0 0 56px var(--pink),0 0 90px rgba(232,44,136,.6)}
+@media (prefers-reduced-motion:no-preference){.neon{animation:on 1.6s ease-out both}
+ @keyframes on{0%{opacity:.08;text-shadow:none}8%{opacity:1}10%{opacity:.25}14%{opacity:1}22%{opacity:.4}26%,100%{opacity:1}}}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:0;margin:0;list-style:none}
+.chips li{font-size:14px;font-weight:600;padding:6px 13px;border-radius:999px;border:1px solid rgba(127,231,244,.55);color:#BFF4FA;box-shadow:0 0 12px rgba(49,185,203,.35)}
+.lit{position:absolute;top:6px;right:12px;font-family:'Yellowtail',cursive;font-size:26px;color:#E6FBFF;transform:rotate(-8deg);text-shadow:0 0 4px #fff,0 0 12px var(--cyan),0 0 26px var(--cyan2),0 0 44px var(--cyan2)}
+/* importe */
+.amt{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.amt-l{display:flex;flex-direction:column;gap:2px}
+.amt-l span{font-size:14px;color:var(--muted)}.amt-l b{font-size:clamp(38px,11vw,46px);font-weight:700;line-height:1;letter-spacing:-1px;white-space:nowrap}
+.amt-l small{font-size:13px;color:var(--muted)}
+.amt p{margin:0;max-width:140px;text-align:right;font-size:14px;line-height:1.4;color:var(--txt2)}
+/* formulario */
+.intro h2{margin:0 0 4px;font-size:24px;font-weight:700}.intro p{margin:0;font-size:15px;font-weight:300;color:var(--txt2)}
+.step{display:flex;flex-direction:column;gap:16px}
+.step-h{display:flex;align-items:center;gap:10px;margin:8px 0 0;font-size:18px;font-weight:600}
+.step-h b{display:inline-flex;width:28px;height:28px;border-radius:50%;border:1.5px solid var(--pink2);color:#FFE3F1;align-items:center;justify-content:center;font-size:14px;box-shadow:0 0 10px rgba(232,44,136,.45)}
+.f{display:flex;flex-direction:column;gap:7px}
+.f label{font-weight:600;font-size:15px}.f .opt{font-weight:300;color:var(--muted)}
+.f input:not([type=checkbox]),.f textarea{font:inherit;font-size:16px;color:var(--txt);background:var(--glass);border:1px solid var(--edge);border-radius:14px;padding:14px 15px;min-height:52px;width:100%;-webkit-appearance:none;appearance:none;transition:border-color .15s,box-shadow .15s}
 .f textarea{min-height:96px;resize:vertical}
-.f input::placeholder,.f textarea::placeholder{color:#A9A3B3}
-.f input:focus,.f textarea:focus{outline:none;border-color:var(--ink);background:#fff;box-shadow:0 0 0 4px rgba(232,44,136,.16)}
-.f .help{font-size:13px;color:var(--muted);margin-top:6px}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}@media(max-width:480px){.two{grid-template-columns:1fr}}
-.hint{margin-top:14px;padding:12px 14px;border-radius:12px;background:#EEF9FB;color:#1E5E68;font-size:14px;line-height:1.45}
-.tick{display:flex;gap:12px;align-items:flex-start;margin-top:16px;font-size:15px;cursor:pointer}
+.f input::placeholder,.f textarea::placeholder{color:#7E7084}
+.f input:focus,.f textarea:focus{outline:none;border-color:var(--pink2);box-shadow:0 0 0 4px rgba(232,44,136,.18),0 0 18px rgba(232,44,136,.35)}
+.f input[type=date]{color-scheme:dark}
+.f .help{font-size:13px;color:var(--muted)}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}@media(max-width:420px){.two{grid-template-columns:1fr}}
+.hint{padding:12px 14px;border-radius:14px;background:rgba(127,231,244,.08);border:1px solid rgba(127,231,244,.25);color:#CFF6FB;font-size:14px;line-height:1.45}
+.tick{display:flex;gap:12px;align-items:flex-start;font-size:15px;cursor:pointer;color:var(--txt2)}
 .tick input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--pink)}
-.tick small{display:block;color:var(--muted);font-size:13px}
-.err{margin-top:16px;padding:12px 14px;border-radius:12px;background:#FDECEF;color:var(--bad);font-weight:600;font-size:14.5px}
-.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;margin-top:20px;padding:0 20px;border:0;border-radius:14px;background:var(--ink);color:#fff;font:inherit;font-size:17px;font-weight:700;cursor:pointer;text-decoration:none;transition:transform .1s}
-.btn:active{transform:scale(.985)}
-.btn:focus-visible{outline:3px solid var(--pink);outline-offset:3px}
-.btn[disabled]{opacity:.6}
-.btn--pink{background:var(--pink)}
-.btn--ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.err{padding:12px 14px;border-radius:14px;background:rgba(255,95,120,.12);border:1px solid rgba(255,138,155,.5);color:var(--bad);font-weight:600;font-size:14.5px}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:58px;padding:0 20px;border:0;border-radius:16px;background:var(--pink);color:#fff;font:inherit;font-size:17px;font-weight:700;cursor:pointer;text-decoration:none;
+ box-shadow:0 0 24px rgba(232,44,136,.55),0 10px 30px rgba(232,44,136,.35);transition:transform .1s}
+.btn:active{transform:scale(.985)}.btn:focus-visible{outline:3px solid var(--cyan);outline-offset:3px}.btn[disabled]{opacity:.6}
+.btn--ghost{background:transparent;border:1px solid var(--edge);box-shadow:none;color:var(--txt)}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
-/* ---------- hoja de confirmación ---------- */
-.ovl{position:fixed;inset:0;background:rgba(19,15,23,.5);display:flex;align-items:flex-end;justify-content:center;z-index:9}
-.bs{width:100%;max-width:560px;background:var(--paper);border-radius:24px 24px 0 0;padding:10px 20px calc(20px + env(safe-area-inset-bottom))}
-@media (prefers-reduced-motion:no-preference){.bs{animation:bsUp .32s cubic-bezier(.2,.9,.25,1) both}@keyframes bsUp{from{transform:translateY(100%)}to{transform:none}}}
-.bs-grip{width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 14px}
-.bs h2{margin:0 0 4px;font-size:22px;font-weight:700;letter-spacing:-.015em}
-.bs p{margin:0;color:var(--ink2);font-size:15px}
+/* hoja de confirmación */
+.ovl{position:fixed;inset:0;background:rgba(8,4,10,.7);display:flex;align-items:flex-end;justify-content:center;z-index:9;backdrop-filter:blur(3px)}
+.bs{width:100%;max-width:520px;background:#1C1121;border:1px solid rgba(255,255,255,.08);border-bottom:0;border-radius:24px 24px 0 0;padding:10px 20px calc(20px + env(safe-area-inset-bottom))}
+@media (prefers-reduced-motion:no-preference){.bs{animation:up .32s cubic-bezier(.2,.9,.25,1) both}@keyframes up{from{transform:translateY(100%)}to{transform:none}}}
+.bs-grip{width:40px;height:5px;border-radius:3px;background:rgba(255,255,255,.18);margin:0 auto 14px}
+.bs h2{margin:0 0 4px;font-size:22px;font-weight:700}.bs p{margin:0;color:var(--txt2);font-size:15px}
 .cal{display:flex;gap:16px;align-items:center;margin:18px 0 6px}
-.cal-pg{flex:none;width:96px;border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 0 0 1.5px var(--line),0 8px 18px rgba(19,15,23,.08);text-align:center}
+.cal-pg{flex:none;width:96px;border-radius:14px;overflow:hidden;background:#241829;border:1px solid rgba(255,255,255,.1);text-align:center;box-shadow:0 0 18px rgba(232,44,136,.25)}
 .cal-m{background:var(--pink);color:#fff;font-size:13px;font-weight:700;padding:5px 0;text-transform:capitalize}
-.cal-d{font-size:44px;font-weight:800;line-height:1.05;letter-spacing:-.03em;padding-top:4px}
+.cal-d{font-size:44px;font-weight:700;line-height:1.05;padding-top:4px}
 .cal-y{font-size:12.5px;color:var(--muted);padding-bottom:7px}
-.cal-txt b{display:block;font-size:19px;letter-spacing:-.01em;text-transform:none}
-.cal-txt span{display:block;color:var(--ink2);font-size:15px;margin-top:2px}
-.rows{margin:12px 0 0;padding:0;list-style:none;border-top:1px solid var(--line)}
-.rows li{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--line);font-size:15px}
+.cal-txt b{display:block;font-size:19px}.cal-txt span{display:block;color:var(--txt2);font-size:15px;margin-top:2px}
+.rows{margin:12px 0 0;padding:0;list-style:none;border-top:1px solid rgba(255,255,255,.1)}
+.rows li{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:15px}
 .rows li span{color:var(--muted)}.rows li b{text-align:right;font-weight:600}
-.warn{margin-top:12px;padding:11px 14px;border-radius:12px;background:#FFF8C7;color:#5B4D00;font-weight:600;font-size:14.5px}
+.warn{margin-top:12px;padding:11px 14px;border-radius:14px;background:rgba(255,213,74,.12);border:1px solid rgba(255,213,74,.4);color:#FFE38A;font-weight:600;font-size:14.5px}
 .bs-act{display:grid;grid-template-columns:1fr 1.4fr;gap:10px}.bs-act .btn{margin-top:16px}
-/* ---------- estado enviado ---------- */
-.done{text-align:left}
-.done h1{margin:0 0 8px;font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
-.done p{margin:0 0 10px;color:var(--ink2)}
-.foot{display:flex;flex-direction:column;align-items:center;gap:4px;padding:18px 16px calc(28px + env(safe-area-inset-bottom));color:var(--muted);font-size:13px}
-.foot-logo{height:20px;width:auto;opacity:.85;margin-bottom:4px}.foot a{color:var(--muted)}
+/* enviado */
+.done h1{margin:0 0 8px;font-size:25px;font-weight:700;line-height:1.2}.done p{margin:0 0 12px;color:var(--txt2)}
+.foot{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 16px calc(28px + env(safe-area-inset-bottom));color:#8E8194;font-size:12.5px}.foot a{color:#8E8194}
 `;
 const PAGE_JS = `
 (function(){
@@ -543,15 +526,13 @@ var NET='No hemos podido conectar con el servidor. Esperad unos segundos y volve
 function once(method,body){return fetch('/api/public/r/'+code,{method:method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,cache:'no-store'}).then(function(r){return r.text().then(function(t){var j=null;try{j=JSON.parse(t)}catch(e){}
  if(!j){var er=new Error(NET);er.net=true;throw er}if(!r.ok)throw new Error(j.error||'Error');return j})},function(){var er=new Error(NET);er.net=true;throw er})}
 function api(method,body){return once(method,body).catch(function(e){if(!e.net)throw e;return new Promise(function(ok){setTimeout(ok,2500)}).then(function(){return once(method,body)})})}
-function ticket(d,stamp){
- return '<section class="tk" aria-label="Vuestra reserva"><div class="tk-top">'+(stamp?'<div class="stamp">'+esc(stamp)+'</div>':'')+
-  '<div class="tk-head"><img class="tk-logo" src="/assets/brand/logo-principal-blanco.svg" alt="Conecta So"><span class="tk-code">'+esc(d.code)+'</span></div>'+
-  '<p class="tk-for">Vuestra boda con nosotros</p><h1 class="tk-pack"><small>Pack</small>'+esc(d.pack)+'</h1>'+
-  (d.extras.length?'<ul class="tk-ex">'+d.extras.map(function(x){return '<li>+ '+esc(x)+'</li>'}).join('')+'</ul>':'')+
- '</div><div class="tk-cut" aria-hidden="true"><span></span></div><div class="tk-bot"><div><div class="tk-lbl">Paga y señal</div><div class="tk-amt">'+eur(d.importe.total)+'</div><div class="tk-sub">'+eur(d.importe.base)+' + IVA (10 %)</div></div>'+
- '<div class="tk-why">Con este pago vuestra fecha queda bloqueada.</div></div></section>'}
+function ticket(d,lit){
+ return '<div class="top"><img src="/assets/brand/logo-principal-blanco.svg" alt="Conecta So"><span>Reserva '+esc(d.code)+'</span></div>'+
+ '<section class="sign" aria-label="Vuestra reserva">'+(lit?'<span class="lit">'+esc(lit)+'</span>':'')+'<span class="sign-sub">vuestro pack</span><h1 class="neon">'+esc(d.pack)+'</h1>'+
+  (d.extras.length?'<ul class="chips">'+d.extras.map(function(x){return '<li>+ '+esc(x)+'</li>'}).join('')+'</ul>':'')+'</section>'+
+ '<div class="amt"><div class="amt-l"><span>Paga y señal</span><b>'+eur(d.importe.total)+'</b><small>'+eur(d.importe.base)+' + IVA (10 %)</small></div><p>Con este pago vuestra fecha queda bloqueada.</p></div>'}
 function done(d){
- var r=d.resumen||{},h=ticket(d,d.pagada?'¡Reservado!':'Recibido')+'<div class="sheet done">';
+ var r=d.resumen||{},h=ticket(d,d.pagada?'¡reservado!':'recibido')+'<div class="done">';
  if(d.pagada)h+='<h1>Vuestra fecha está reservada</h1><p>Hemos recibido el pago. En breve os llegará el acceso a vuestra intranet para preparar la música y todos los detalles.</p>';
  else if(d.factura)h+='<h1>Ya tenéis la factura</h1><p>Haced la transferencia de <b>'+eur(d.importe.total)+'</b> para bloquear la fecha. El número de cuenta está al pie de la factura.</p><a class="btn btn--pink" href="/api/public/r/'+code+'/factura">Descargar factura</a>';
  else h+='<h1>¡Gracias! Ya tenemos vuestros datos</h1><p>En breve os enviaremos la factura de la paga y señal. También podréis descargarla desde este mismo enlace.</p>';
@@ -559,8 +540,8 @@ function done(d){
  app.innerHTML=h+'</div>';
 }
 function form(d,err){
- app.innerHTML=ticket(d)+'<form class="sheet" id="f" novalidate>'+
- '<h2 class="intro">Completad la reserva</h2><p class="intro-sub">Son dos minutos. Con estos datos preparamos la factura de la paga y señal.</p>'+
+ app.innerHTML=ticket(d)+'<form id="f" class="step" novalidate>'+
+ '<div class="intro"><h2>Completad la reserva</h2><p>Son dos minutos. Con estos datos preparamos la factura de la paga y señal.</p></div>'+
  '<div class="step"><h3 class="step-h"><b>1</b>Vuestros datos</h3>'+
   '<div class="f"><label for="s1n">Nombre y los dos apellidos</label><input id="s1n" name="s1n" autocomplete="name" placeholder="Laura Pérez Gil"><div class="help">Tal y como aparecerá en la factura.</div></div>'+
   '<div class="two"><div class="f"><label for="s1d">DNI o NIE</label><input id="s1d" name="s1d" autocapitalize="characters"></div><div class="f"><label for="s1m">Móvil</label><input id="s1m" name="s1m" type="tel" autocomplete="tel" inputmode="tel"></div></div>'+
@@ -570,7 +551,7 @@ function form(d,err){
   '<div class="f"><label for="fecha">Fecha de la boda</label><input id="fecha" name="fecha" type="date"></div>'+
   '<div class="f"><label for="lugar">Lugar de la celebración</label><input id="lugar" name="lugar" placeholder="Nombre de la finca o del restaurante"></div>'+
   '<label class="tick"><input type="checkbox" name="wph" id="wph"><span>Tenemos wedding planner</span></label>'+
-  '<div id="wpb" hidden><div class="f"><label for="wpn">Nombre de la wedding planner</label><input id="wpn" name="wpn"></div><div class="f"><label for="wpe">Su email <span class="opt">(opcional)</span></label><input id="wpe" name="wpe" type="email" inputmode="email"></div></div>'+
+  '<div id="wpb" class="step" hidden><div class="f"><label for="wpn">Nombre de la wedding planner</label><input id="wpn" name="wpn"></div><div class="f"><label for="wpe">Su email <span class="opt">(opcional)</span></label><input id="wpe" name="wpe" type="email" inputmode="email"></div></div>'+
   '<div class="f"><label for="com">¿Algo que queráis contarnos? <span class="opt">(opcional)</span></label><textarea id="com" name="com" rows="3"></textarea></div></div>'+
  '<div class="step"><h3 class="step-h"><b>3</b>Revisar y enviar</h3>'+
   '<div class="hp"><label>Web</label><input name="website" tabindex="-1" autocomplete="off"></div>'+
@@ -599,6 +580,6 @@ function confirmBox(d,v){
   api('POST',{s1:{name:v.s1n,dni:v.s1d,email:v.s1e,mobile:v.s1m},fecha:v.fecha,lugar:v.lugar,wp:{has:v.wph,name:v.wpn,email:v.wpe},comentario:v.com,consent:v.consent,website:v.website})
   .then(function(r){o.remove();data=r;done(r);window.scrollTo(0,0)}).catch(function(e){o.remove();form(d,e.message)})}
 }
-api('GET').then(function(d){data=d;if(d.submitted)done(d);else form(d)}).catch(function(e){app.innerHTML='<div class="sheet done"><h1>Este enlace no funciona</h1><p>'+esc(e.message)+'</p></div>'});
+api('GET').then(function(d){data=d;if(d.submitted)done(d);else form(d)}).catch(function(e){app.innerHTML='<div class="done"><h1>Este enlace no funciona</h1><p>'+esc(e.message)+'</p></div>'});
 })();
 `;

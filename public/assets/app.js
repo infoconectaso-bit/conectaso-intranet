@@ -1135,6 +1135,23 @@ async function dashboardDj() {
 }
 // Datos de contacto de Conecta So (visibles para el cliente en su Inicio).
 const CS_CONTACT = { phone: '674 758 989', wa: '34674758989', email: 'comercial@conectaso.es', web: 'https://www.conectaso.es', ig: 'https://www.instagram.com/conecta.so/' };
+// Cartel de NEÓN con los nombres de los novios y la cuenta atrás (vista de cliente).
+function neonHead(ev, big) {
+  if (!ev) return '';
+  if (!document.getElementById('neonFont')) { const l = document.createElement('link'); l.id = 'neonFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Yellowtail&display=swap'; document.head.appendChild(l); }
+  const i = LANG_IDX[S.lang]; const T = (es, ca, en, fr) => i == null ? es : ([ca, en, fr][i] || es);
+  const names = String(ev.conyuges || '').split(/\s+y\s+|\s+i\s+|\s*&\s*|\s+and\s+|\s+et\s+/i).map(x => x.trim().split(/\s+/)[0]).filter(Boolean);
+  const title = names.length ? names.slice(0, 2).map(x => x.charAt(0).toUpperCase() + x.slice(1).toLowerCase()).join(' & ') : T('Nuestra boda', 'La nostra boda', 'Our wedding', 'Notre mariage');
+  let when = '', count = '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ev.fecha || '');
+  if (m) {
+    const d = new Date(+m[1], +m[2] - 1, +m[3]); const loc = ['ca-ES', 'en-GB', 'fr-FR'][i] || 'es-ES';
+    when = d.toLocaleDateString(loc, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); when = when.charAt(0).toUpperCase() + when.slice(1);
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0); const n = Math.round((d - t0) / 86400000);
+    count = n > 1 ? T('Faltan ' + n + ' días', 'Falten ' + n + ' dies', n + ' days to go', 'Plus que ' + n + ' jours') : n === 1 ? T('¡Es mañana!', 'És demà!', "It's tomorrow!", "C'est demain !") : n === 0 ? T('¡Hoy es el gran día!', 'Avui és el gran dia!', 'Today is the big day!', "C'est le grand jour !") : '';
+  }
+  return `<div class="neon-head${big ? ' neon-head--big' : ''}"><div class="neon-head__name">${esc(title)}</div>${when ? `<div class="neon-head__date">${esc(when)}</div>` : ''}${count ? `<div class="neon-head__count">${esc(count)}</div>` : ''}</div>`;
+}
 async function dashboardSimple() {
   const ev = await api('events');
   const list = ev.events;
@@ -1153,6 +1170,7 @@ async function dashboardSimple() {
   shell(`<div class="cli-welcome">
       <div class="cli-welcome__hero">
         <img class="cli-welcome__logo" src="assets/brand/logo-principal-azul.svg" alt="Conecta So">
+        ${list.length ? neonHead(list[0], true) : ''}
         <h1>${T('¡Hola, ' + first + '!', 'Hola, ' + first + '!', 'Hi ' + first + '!', 'Bonjour ' + first + ' !')}</h1>
         <p class="cli-welcome__lead">${T(
           'Bienvenido/a a vuestro espacio de Conecta So. Aquí preparáis toda la música y los detalles de vuestra boda: ceremonia, aperitivo, banquete y fiesta. Rellenadlo con calma, se guarda automáticamente y podéis volver siempre que queráis.',
@@ -1188,7 +1206,7 @@ function eventMiniList(list) {
 /* El resto de páginas se cargan desde módulos añadidos abajo */
 window.__CS = { S, api, shell, pageHead, table, refreshTable, bindTable, toast, modal, copyText, esc, fmtEur, dmy, slash, ymd, pad, TODAY, MONTHS, hm, toMin,
   estado, locName, locBadge, extraName, userName, djOf, dot, pagoChip, svg, roleLabel, tycTitleYear, on, loading, eventMiniList, rebuildMaps, loadContext, $, $$,
-  waSupported, passkeyRegister, passkeyLogin, maintenanceMarkup, setBadgeCount };
+  waSupported, passkeyRegister, passkeyLogin, maintenanceMarkup, setBadgeCount, neonHead };
 
 // Descarga un PDF generado en el servidor (Chromium headless). Con blob para manejar bien los
 // errores en vez de navegar a una respuesta de error.
