@@ -27,16 +27,180 @@ const exName = k => ((CS.momentHelpers.EXTRAS_CLIENTE || []).find(e => e[0] === 
 const EX_STATE = { solicitado: ['⏳ Pendiente de confirmación', 'tag--yellow'], pendiente_pago: ['💳 Pendiente de pago', 'tag--blue'], reservado: ['✓ Reservado', 'tag--green'] };
 on(/^#\/extras$/, () => solicitudesExtras());
 on(/^#\/extras-catalogo$/, () => extrasCatalogo());
-// RESERVAS: apartado nuevo, de momento solo el esqueleto. El usuario dará la info para construirlo.
-on(/^#\/reservas$/, () => {
-  if (!requireAdmin()) return;
-  shell(`${pageHead('Reservas', 'Apartado de reservas (en construcción).')}
-    <div class="panel"><div class="panel__body" style="text-align:center;padding:48px 24px">
-      <div style="font-size:40px;margin-bottom:8px">🗓️</div>
-      <h3 style="margin:0 0 6px">Pendiente de construir</h3>
-      <p class="hint" style="max-width:420px;margin:0 auto">Este apartado está reservado para la gestión de reservas. En cuanto me pases la información, lo montamos aquí.</p>
-    </div></div>`, ['Reservas']);
-});
+// RESERVAS (venta directa): comerciales generan un enlace /r/XXXXXX para los novios; administración
+// apunta la factura de Holded, la intranet detecta el pago y aparece "Crear boda". Ver server/reservas.js.
+on(/^#\/reservas(\?.*)?$/, () => reservasPage());
+const RES_ST = {
+  enlace: ['Enlace enviado', 'tag--grey'], pendiente: ['Datos recibidos · falta factura', 'tag--yellow'],
+  facturada: ['Facturada · pendiente de pago', 'tag--blue'], pagada: ['💶 Pagada · crear boda', 'tag--green'],
+  creada: ['✓ Boda creada', 'tag--green'], cancelada: ['Cancelada', 'tag--red'],
+};
+const resFecha = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); if (!m) return ''; const d = new Date(+m[1], +m[2] - 1, +m[3]); return d.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }); };
+const resEur = n => (Math.round((+n || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+async function reservasPage() {
+  if (!(isAdmin() || S.user.comercial)) { shell('<div class="empty">Sin acceso.</div>', ['Sin acceso']); return; }
+  loading(['Reservas']);
+  let data; try { data = await api('reservas'); } catch (e) { shell(`<div class="empty">${esc(e.message)}</div>`, ['Reservas']); return; }
+  const list = data.reservas || [];
+  const act = list.filter(r => r.status !== 'cancelada' && r.status !== 'creada'), done = list.filter(r => r.status === 'creada'), canc = list.filter(r => r.status === 'cancelada');
+  const card = r => {
+    const n = r.novios || {}; const nov = [n.s1 && n.s1.name, n.s2 && n.s2.name].filter(Boolean).join(' y ');
+    const st = RES_ST[r.status] || [r.status, ''];
+    const nChk = (r.checks || []).filter(c => c.at).length;
+    return `<div class="res-card" data-res="${r.id}" style="--seller:${esc(r.sellerColor || '#999')}">
+      <div class="res-card__top"><span class="res-seller">${esc(r.sellerName)}</span><span class="tag ${st[1]}">${esc(st[0])}</span></div>
+      <div class="res-card__pack">Pack ${esc(r.pack)}${(r.extras || []).length + (r.otros || []).length ? ` <span class="muted">+ ${esc([...(r.extras || []).map(e => e.name), ...(r.otros || []).map(o => o.name)].join(' + '))}</span>` : ''}</div>
+      <div class="res-card__who">${nov ? esc(nov) : '<span class="muted">Esperando a que los novios rellenen el enlace</span>'}</div>
+      <div class="res-card__meta">${n.fecha ? '📅 ' + esc(resFecha(n.fecha)) : ''}${r.concepto && r.concepto.lugar ? ' · 📍 ' + esc(r.concepto.lugar) : ''}</div>
+      <div class="res-card__foot"><span>${esc(r.code)} · ${resEur(r.importe.total)}</span><span class="muted">Checklist ${nChk}/${(r.checks || []).length}</span></div></div>`;
+  };
+  shell(`${pageHead('Reservas', 'Ventas directas: genera el enlace para los novios y sigue cada reserva hasta crear la boda.', `<button class="btn btn--primary" id="resNew">+ Nueva venta</button>${data.isAdmin ? ' <button class="btn" id="resCfg">⚙ Configuración</button>' : ''}`)}
+    ${act.length ? `<div class="res-grid">${act.map(card).join('')}</div>` : '<div class="panel"><div class="panel__body"><p class="hint">No hay reservas en curso. Pulsa <b>+ Nueva venta</b> para generar un enlace.</p></div></div>'}
+    ${done.length ? `<details class="res-more" open><summary>Bodas ya creadas (${done.length})</summary><div class="res-grid">${done.map(card).join('')}</div></details>` : ''}
+    ${canc.length ? `<details class="res-more"><summary>Canceladas (${canc.length})</summary><div class="res-grid">${canc.map(card).join('')}</div></details>` : ''}`, ['Reservas']);
+  el('resNew').onclick = () => reservaNueva(data);
+  if (el('resCfg')) el('resCfg').onclick = () => reservasConfig();
+  $$('[data-res]').forEach(c => c.onclick = () => reservaDetalle(+c.dataset.res, data));
+  const q = new URLSearchParams((location.hash.split('?')[1]) || ''); if (q.get('id')) reservaDetalle(+q.get('id'), data);
+}
+function waShare(link) { return 'https://wa.me/?text=' + encodeURIComponent('¡Hola! 🎉 Aquí tenéis el enlace para completar la reserva de vuestra boda con Conecta So. Solo os llevará 2 minutos:\n' + link); }
+function reservaNueva(data) {
+  const cat = data.extrasCatalog || [];
+  const bg = modal('Nueva venta', `<form id="rnForm">
+    <div class="field"><label>Pack</label><div class="res-packs">${(data.packs || []).map((p, i) => `<label class="res-pack"><input type="radio" name="pack" value="${p}" ${i === 0 ? 'checked' : ''}><span>${p}</span><small>${p === 'Tinglado' ? '100' : '50'} € + IVA</small></label>`).join('')}</div></div>
+    <div class="field"><label>Extras del catálogo <span class="hint">(+50 € + IVA cada uno)</span></label>
+      <input class="control" id="rnSearch" placeholder="Buscar extra…" autocomplete="off">
+      <div class="res-extras" id="rnExtras">${cat.map(x => `<label class="res-ex" data-n="${esc(String(x.name || '').toLowerCase())}"><input type="checkbox" value="${x.id}"> ${esc(x.name)}</label>`).join('')}</div></div>
+    <div class="field"><label>Otros extras <span class="hint">(si no está en el catálogo, escríbelo)</span></label><div id="rnOtros"></div>
+      <button type="button" class="btn btn--sm" id="rnAddOtro">+ Añadir otro extra</button></div>
+    <div class="field"><label>Observaciones internas <span class="hint">(no las ven los novios; pasan a "Observaciones ocultas" de la boda)</span></label>${ta('obs', '', 'Ej.: Bodorrio con cambio de fotomatón por pistolas CO2')}</div>
+    <div class="res-total" id="rnTotal"></div></form>`, { okText: 'Generar enlace', onOk: async () => {
+    const pack = (bg.querySelector('[name=pack]:checked') || {}).value;
+    const extras = $$('#rnExtras input:checked', bg).map(i => +i.value);
+    const otros = $$('[data-otro]', bg).map(r => ({ name: r.querySelector('input[type=text]').value.trim(), suma: r.dataset.suma === '1' })).filter(o => o.name);
+    if ($$('[data-otro]', bg).some(r => r.querySelector('input[type=text]').value.trim() && r.dataset.suma === '')) { toast('Indica en cada extra escrito a mano si suma 50 € o no', 'err'); return true; }
+    try {
+      const r = await api('reservas', { method: 'POST', body: { pack, extras, otros, obs: bg.querySelector('[name=obs]').value } });
+      reservaLink(r.reserva); reservasPage();
+    } catch (e) { toast(e.message, 'err'); return true; }
+  } });
+  bg.querySelector('.modal').classList.add('modal--wide');
+  const total = () => {
+    const pack = (bg.querySelector('[name=pack]:checked') || {}).value;
+    const nEx = $$('#rnExtras input:checked', bg).length + $$('[data-otro]', bg).filter(r => r.dataset.suma === '1' && r.querySelector('input[type=text]').value.trim()).length;
+    const base = (pack === 'Tinglado' ? 100 : 50) + 50 * nEx;
+    el('rnTotal').innerHTML = `Importe de la reserva: <b>${resEur(base)} + 10 % IVA = ${resEur(base * 1.1)}</b>`;
+  };
+  const addOtro = () => {
+    const d = document.createElement('div'); d.className = 'res-otro'; d.setAttribute('data-otro', ''); d.dataset.suma = '';
+    d.innerHTML = `<input type="text" class="control" placeholder="Ej.: Bengalas en la entrada"><div class="res-otro__q">⚠️ No está en el catálogo. ¿Suma <b>50 €</b> a la reserva? <button type="button" class="btn btn--sm" data-s="1">Sí, sumar 50 €</button> <button type="button" class="btn btn--sm" data-s="0">No</button> <button type="button" class="btn btn--sm btn--ghost" data-x-otro>✕</button></div>`;
+    el('rnOtros').appendChild(d);
+    d.addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (b) { d.dataset.suma = b.dataset.s; $$('[data-s]', d).forEach(x => x.classList.toggle('btn--dark', x === b)); total(); } if (e.target.closest('[data-x-otro]')) { d.remove(); total(); } });
+    d.querySelector('input').addEventListener('input', total);
+  };
+  el('rnAddOtro').onclick = addOtro;
+  bg.addEventListener('change', total);
+  el('rnSearch').addEventListener('input', e => { const q = e.target.value.toLowerCase().trim(); $$('.res-ex', bg).forEach(l => { l.style.display = !q || l.dataset.n.includes(q) || l.querySelector('input').checked ? '' : 'none'; }); });
+  total();
+}
+function reservaLink(r) {
+  modal('Enlace listo para enviar', `<p>Envíaselo a los novios por WhatsApp. Al abrirlo verán su pack y rellenarán sus datos.</p>
+    <div class="res-link"><input class="control" readonly value="${esc(r.link)}" id="rlInp"></div>
+    <div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn--primary" id="rlCopy">📋 Copiar enlace</button><a class="btn" target="_blank" rel="noopener" href="${esc(waShare(r.link))}">💬 Enviar por WhatsApp</a></div>
+    <p class="hint" style="margin-top:10px">Importe de la reserva: <b>${resEur(r.importe.base)} + IVA = ${resEur(r.importe.total)}</b></p>`);
+  el('rlCopy').onclick = () => copyText(r.link);
+}
+async function reservaDetalle(id, data) {
+  let r; try { r = (await api('reservas/' + id)).reserva; } catch (e) { toast(e.message, 'err'); return; }
+  const adm = isAdmin(); const n = r.novios || {}; const s1 = n.s1 || {}, s2 = n.s2 || {};
+  const st = RES_ST[r.status] || [r.status, ''];
+  const locs = (S.meta.locations || []);
+  const locSel = `<select class="control" id="rdLoc"><option value="0">Otros (escribir nombre)</option>${locs.map(l => `<option value="${l.id}" ${r.loc && +r.loc.lugar === +l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>`;
+  const inv = r.invoice || {};
+  const chk = (r.checks || []).map(c => `<label class="res-chk${c.at ? ' on' : ''}"><input type="checkbox" data-chk="${c.key}" ${c.at ? 'checked' : ''} ${(['pago', 'factura_emitida'].includes(c.key) && !adm) ? 'disabled' : ''}> <span>${esc(c.label)}</span>${c.at ? `<small>${esc(c.by || '')} · ${new Date(c.at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small>` : ''}</label>`).join('');
+  const sp = (t, o) => `<div><h5>${t}</h5><div>${esc(o.name || '—')}</div><div class="hint">DNI ${esc(o.dni || '—')} · ${esc(o.mobile || '—')}<br>${esc(o.email || '—')}</div></div>`;
+  const canCreate = adm && !r.eventId && !r.cancelled && r.submittedAt && (inv.paid || (r.checklist && r.checklist.pago));
+  const bg = modal(`Reserva ${r.code} · Pack ${r.pack}`, `
+    <div class="res-head"><span class="tag ${st[1]}">${esc(st[0])}</span> <span class="res-seller" style="--seller:${esc(r.sellerColor || '#999')}">${esc(r.sellerName)}</span> <span class="hint">creada ${new Date(r.createdAt).toLocaleDateString('es-ES')}</span></div>
+    <div class="res-link"><input class="control" readonly value="${esc(r.link)}"> <button type="button" class="btn btn--sm" id="rdCopy">📋 Copiar</button> <a class="btn btn--sm" target="_blank" rel="noopener" href="${esc(waShare(r.link))}">💬 WhatsApp</a></div>
+    <h4 class="form-sub">Venta</h4>
+    <p><b>Pack ${esc(r.pack)}</b>${(r.extras || []).map(e => ' + ' + esc(e.name)).join('')}${(r.otros || []).map(o => ` + ${esc(o.name)} <span class="hint">(no catalogado${o.suma ? ', suma 50 €' : ', no suma'})</span>`).join('')}</p>
+    <p>Importe reserva: <b>${resEur(r.importe.base)} + 10 % IVA = ${resEur(r.importe.total)}</b></p>
+    <div class="field"><label>Observaciones internas <span class="hint">(no las ven los novios)</span></label><textarea class="control" id="rdObs" rows="3">${esc(r.obs || '')}</textarea>
+      <button type="button" class="btn btn--sm" id="rdObsSave" style="margin-top:6px">Guardar observaciones</button></div>
+    <h4 class="form-sub">Datos de los novios</h4>
+    ${r.submittedAt ? `<div class="grid-2">${sp('Primer cónyuge', s1)}${sp('Segundo cónyuge', s2)}</div>
+      <p style="margin-top:8px">📅 <b>${esc(resFecha(n.fecha))}</b> · 📍 Escribieron: <b>${esc(n.lugar)}</b></p>
+      ${adm ? `<div class="field"><label>Finca vinculada <span class="hint">(la intranet la ha buscado por el nombre; corrígela si no es)</span></label>${locSel}
+        <input class="control" id="rdLocOtro" style="margin-top:6px;${r.loc && +r.loc.lugar ? 'display:none' : ''}" value="${esc((r.loc && r.loc.lugarOtro) || n.lugar || '')}" placeholder="Nombre de la finca"><button type="button" class="btn btn--sm" id="rdLocSave" style="margin-top:6px">Guardar finca</button></div>` : `<p>Finca vinculada: <b>${esc(r.concepto.lugar)}</b></p>`}
+      ${n.wp ? `<p>👰 Wedding planner: <b>${esc(n.wp.name)}</b> <span class="hint">${esc([n.wp.email, n.wp.phone].filter(Boolean).join(' · '))}</span></p>` : ''}
+      ${n.comentario ? `<p>💬 Comentario de los novios: <i>${esc(n.comentario)}</i></p>` : ''}` : '<p class="hint">Los novios aún no han rellenado el enlace.</p>'}
+    <h4 class="form-sub">Factura de reserva (Holded)</h4>
+    <div class="res-fact"><div><span class="hint">Concepto (una sola línea)</span><b id="rdConcept">${esc(r.concepto.linea)}</b></div><button type="button" class="btn btn--sm" id="rdCopyC">📋</button></div>
+    <div class="res-fact"><div><span class="hint">Observaciones</span><b id="rdObsF">${esc(r.concepto.obs)}</b></div><button type="button" class="btn btn--sm" id="rdCopyO">📋</button></div>
+    <p class="hint">Base ${resEur(r.importe.base)} · IVA 10 % ${resEur(r.importe.iva)} · <b>Total ${resEur(r.importe.total)}</b></p>
+    ${adm ? `<div class="field"><label>Nº de factura en Holded</label><div class="res-link"><input class="control" id="rdInv" value="${esc(inv.number || '')}" placeholder="Ej.: F260123"> <button type="button" class="btn btn--sm" id="rdInvSave">Guardar</button></div></div>` : (inv.number ? `<p>Factura: <b>${esc(inv.number)}</b></p>` : '')}
+    ${inv.number ? `<p>${inv.paid ? '<span class="tag tag--green">✓ Pagada en Holded</span>' : (inv.found ? '<span class="tag tag--blue">Pendiente de pago</span>' : '')} ${inv.error ? `<span class="tag tag--red">${esc(inv.error)}</span>` : ''}
+      <button type="button" class="btn btn--sm" id="rdHold">🔄 Comprobar pago</button> ${inv.holdedId ? `<a class="btn btn--sm" target="_blank" href="/api/reservas/${r.id}/factura">📄 Ver factura</a>` : ''}
+      ${inv.checkedAt ? `<span class="hint">Última comprobación ${new Date(inv.checkedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>` : ''}</p>` : ''}
+    <h4 class="form-sub">Checklist</h4><div class="res-chks">${chk}</div>
+    <h4 class="form-sub">Mensaje de bienvenida (WhatsApp)</h4>
+    ${r.welcome ? `<div class="readbox" id="rdWel">${esc(r.welcome)}</div><button type="button" class="btn btn--sm" id="rdWelCopy" style="margin-top:6px">📋 Copiar mensaje</button>` : `<p class="hint">Texto de bienvenida para el pack ${esc(r.pack)} <b>pendiente</b>. Se escribe en Reservas → ⚙ Configuración.</p>`}
+    ${r.eventId ? `<p style="margin-top:14px"><a class="btn btn--primary" href="#/eventos/${r.eventId}">Abrir la boda #${r.eventId}</a></p>` : ''}
+    ${canCreate ? `<p style="margin-top:14px"><button type="button" class="btn btn--primary" id="rdCreate">🎉 Crear boda</button></p>` : (adm && !r.eventId && r.submittedAt && !r.cancelled ? '<p class="hint" style="margin-top:12px">El botón <b>Crear boda</b> aparece cuando la factura está pagada en Holded (o marcas "Pago recibido").</p>' : '')}
+    ${adm && !r.eventId ? `<p style="margin-top:14px"><button type="button" class="btn btn--sm btn--ghost" id="rdCancel">${r.cancelled ? 'Reactivar reserva' : 'Cancelar reserva'}</button></p>` : ''}`);
+  bg.querySelector('.modal').classList.add('modal--wide');
+  const refresh = () => { bg.remove(); reservaDetalle(id, data); reservasPageQuiet(); };
+  const q = (sel) => bg.querySelector(sel);
+  q('#rdCopy').onclick = () => copyText(r.link);
+  q('#rdCopyC').onclick = () => copyText(r.concepto.linea);
+  q('#rdCopyO').onclick = () => copyText(r.concepto.obs);
+  if (q('#rdWelCopy')) q('#rdWelCopy').onclick = () => copyText(r.welcome);
+  q('#rdObsSave').onclick = async () => { try { await api('reservas/' + id, { method: 'PUT', body: { obs: q('#rdObs').value } }); toast('Observaciones guardadas ✓', 'ok'); } catch (e) { toast(e.message, 'err'); } };
+  if (q('#rdLoc')) { q('#rdLoc').onchange = () => { q('#rdLocOtro').style.display = +q('#rdLoc').value ? 'none' : ''; };
+    q('#rdLocSave').onclick = async () => { try { await api('reservas/' + id, { method: 'PUT', body: { loc: { lugar: +q('#rdLoc').value, lugarOtro: q('#rdLocOtro').value } } }); toast('Finca guardada ✓', 'ok'); refresh(); } catch (e) { toast(e.message, 'err'); } }; }
+  if (q('#rdInvSave')) q('#rdInvSave').onclick = async () => { const b = q('#rdInvSave'); b.disabled = true; b.textContent = 'Comprobando en Holded…'; try { await api('reservas/' + id, { method: 'PUT', body: { invoiceNumber: q('#rdInv').value } }); toast('Factura guardada ✓', 'ok'); refresh(); } catch (e) { toast(e.message, 'err'); b.disabled = false; b.textContent = 'Guardar'; } };
+  if (q('#rdHold')) q('#rdHold').onclick = async () => { const b = q('#rdHold'); b.disabled = true; b.textContent = 'Comprobando…'; try { await api('reservas/' + id + '/holded', { method: 'POST', body: {} }); refresh(); } catch (e) { toast(e.message, 'err'); b.disabled = false; } };
+  $$('[data-chk]', bg).forEach(c => c.onchange = async () => { try { await api('reservas/' + id + '/check', { method: 'POST', body: { key: c.dataset.chk, on: c.checked } }); refresh(); } catch (e) { toast(e.message, 'err'); c.checked = !c.checked; } });
+  if (q('#rdCancel')) q('#rdCancel').onclick = () => modal(r.cancelled ? 'Reactivar reserva' : 'Cancelar reserva', `<p>${r.cancelled ? 'La reserva vuelve a estar activa y el enlace vuelve a funcionar.' : 'La reserva pasa a "Canceladas" y el enlace de los novios deja de funcionar.'}</p>`, { okText: r.cancelled ? 'Reactivar' : 'Cancelar reserva', danger: true, onOk: async () => { try { await api('reservas/' + id, { method: 'PUT', body: { cancelled: !r.cancelled } }); refresh(); } catch (e) { toast(e.message, 'err'); } } });
+  if (q('#rdCreate')) q('#rdCreate').onclick = () => reservaCrearBoda(r, () => { bg.remove(); reservasPage(); });
+}
+async function reservasPageQuiet() { if (/^#\/reservas/.test(location.hash)) { const y = window.scrollY; await reservasPage(); window.scrollTo(0, y); } }
+async function reservaCrearBoda(r, after) {
+  let t = null; try { t = await api('reservas/' + r.id + '/tarifa'); } catch (e) {}
+  const lugarTxt = r.loc && +r.loc.lugar ? ((S.meta.locations || []).find(l => +l.id === +r.loc.lugar) || {}).name : ('Otros (' + ((r.loc && r.loc.lugarOtro) || (r.novios || {}).lugar || '') + ')');
+  const bg = modal('Crear boda', `<p>Se creará la boda <b>Pack ${esc(r.pack)}</b> del <b>${esc(resFecha((r.novios || {}).fecha))}</b> en <b>${esc(lugarTxt)}</b>, el usuario de los novios (<b>${esc(((r.novios || {}).s1 || {}).email || '')}</b>) y se les enviará el <b>email de acceso</b>.</p>
+    <div class="field"><label><input type="checkbox" id="cbTar"> Aplicar precio de tarifa</label>
+      <div id="cbTarBox" class="hint" style="display:none;margin-top:6px">${t ? t.lines.map(l => `${esc(l.name)}: ${l.price == null ? '<b style="color:var(--red)">sin precio</b>' : resEur(l.price)}`).join('<br>') + `<br>Base ${resEur(t.base)} + 10 % IVA = <b>${resEur(t.total)}</b>${t.missing.length ? '<br>⚠️ Hay conceptos sin precio de tarifa: revisa el importe.' : ''}` : 'No se pudo calcular la tarifa.'}</div></div>
+    <div class="field"><label>Pago cliente / novios (€, con IVA)</label><input class="control" id="cbPago" type="number" step="0.01" value="0"></div>
+    <p class="hint">Como pagado se apunta la reserva: <b>${resEur(r.importe.total)}</b>. Las observaciones de la venta pasan a <b>Observaciones ocultas</b>.</p>`, { okText: 'Crear boda', onOk: async () => {
+    try {
+      const res = await api('reservas/' + r.id + '/crear-boda', { method: 'POST', body: { lugar: r.loc ? +r.loc.lugar : 0, lugarOtro: r.loc ? r.loc.lugarOtro : '', pagoCliente: +el('cbPago').value || 0 } });
+      const iv = res.invite || {};
+      toast(`🎉 Boda #${res.event.id} creada${iv.sent ? ' · email de acceso enviado' : (iv.reason === 'allowlist' || iv.reason === 'disabled' ? ' · email NO enviado (correo a clientes bloqueado)' : '')}`, 'ok');
+      after(); location.hash = '#/eventos/' + res.event.id;
+    } catch (e) { toast(e.message, 'err'); return true; }
+  } });
+  bg.querySelector('#cbTar').onchange = e => { bg.querySelector('#cbTarBox').style.display = e.target.checked ? '' : 'none'; bg.querySelector('#cbPago').value = e.target.checked && t ? t.total : 0; };
+}
+async function reservasConfig() {
+  let c; try { c = await api('reservas/config'); } catch (e) { toast(e.message, 'err'); return; }
+  const cat = (c.extrasCatalog || []).slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'es'));
+  const bg = modal('Configuración de reservas', `
+    <h4 class="form-sub">Textos de bienvenida (WhatsApp)</h4>
+    <p class="hint">Puedes usar <b>{novios}</b>, <b>{fecha}</b>, <b>{lugar}</b> y <b>{pack}</b>: se rellenan solos en cada reserva.</p>
+    ${['Fiesta', 'Bodorrio', 'Tinglado'].map(p => `<div class="field"><label>Pack ${p}</label><textarea class="control" rows="4" data-wel="${p}" placeholder="Texto pendiente">${esc(c.welcome[p] || '')}</textarea></div>`).join('')}
+    <h4 class="form-sub">Precios de tarifa (sin IVA) <span class="hint">solo se usan al marcar "Aplicar precio de tarifa"</span></h4>
+    <div class="grid-3">${['Fiesta', 'Bodorrio', 'Tinglado'].map(p => `<div class="field"><label>Pack ${p}</label><input class="control" type="number" data-tp="${p}" value="${esc(c.tarifa.packs[p] != null ? c.tarifa.packs[p] : '')}"></div>`).join('')}</div>
+    <div class="res-tar">${cat.map(x => `<label>${esc(x.name)}<input class="control" type="number" data-te="${x.id}" value="${esc(c.tarifa.extras[x.id] != null ? c.tarifa.extras[x.id] : '')}" placeholder="—"></label>`).join('')}</div>`,
+  { okText: 'Guardar', onOk: async () => {
+    const welcome = {}; $$('[data-wel]', bg).forEach(t => welcome[t.dataset.wel] = t.value);
+    const packs = {}; $$('[data-tp]', bg).forEach(i => { if (i.value !== '') packs[i.dataset.tp] = +i.value; });
+    const extras = {}; $$('[data-te]', bg).forEach(i => { if (i.value !== '') extras[i.dataset.te] = +i.value; });
+    try { await api('reservas/config', { method: 'PUT', body: { welcome, tarifa: { packs, extras } } }); toast('Configuración guardada ✓', 'ok'); } catch (e) { toast(e.message, 'err'); return true; }
+  } });
+  bg.querySelector('.modal').classList.add('modal--wide');
+}
 on(/^#\/papelera$/, () => papeleraEventos());
 async function papeleraEventos() {
   if (!requireAdmin()) return;
@@ -332,7 +496,8 @@ function userForm(u, all) {
     <div id="workerBox" style="display:${['dj', 'admin'].includes(u.role) ? 'block' : 'none'}">
       <div class="grid-2"><div class="field"><label>Tipo de trabajador</label>${sel('worker_type', [[0, 'Selecciona'], [1, 'Trabajador'], [2, 'Autónomo'], [3, 'Otros']], u.worker_type || 0)}</div>
       <div class="field"><label><input type="checkbox" name="vehicle_allowed" ${u.vehicle_allowed ? 'checked' : ''}> Puede coger vehículo</label>
-        <label style="margin-top:6px"><input type="checkbox" name="time_tracking" ${u.time_tracking ? 'checked' : ''}> Tiene control horario (fichaje)</label></div></div>
+        <label style="margin-top:6px"><input type="checkbox" name="time_tracking" ${u.time_tracking ? 'checked' : ''}> Tiene control horario (fichaje)</label>
+        <label style="margin-top:6px" title="Puede generar enlaces de venta y ver la pestaña Reservas"><input type="checkbox" name="comercial" ${u.comercial ? 'checked' : ''}> Comercial (genera enlaces de venta)</label></div></div>
       <h4 class="form-sub">Tarifas base por tipo de evento</h4>
       <div class="grid-2"><div class="field"><label>Recomendado</label>${inp('recomendado', p.recomendado, { ph: '€' })}</div>
       <div class="field"><label>Fiesta</label>${inp('fiesta', p.fiesta, { ph: '€' })}</div></div>
@@ -357,7 +522,7 @@ function userForm(u, all) {
       ['recomendado', 'fiesta', 'bodorrio', 'tinglado', 'fiesta_precio_extra', 'bodorrio_precio_extra', 'tinglado_precio_extra'].forEach(k => { if (d[k] !== undefined && d[k] !== '') prices[k] = d[k]; else delete prices[k]; });
       const djFincas = []; $$('[data-finca]', bg).forEach(r => { const g = k => r.querySelector('[data-f="' + k + '"]').value; const l = g('l'); if (!l) return; djFincas.push({ l: +l, b: g('b'), e: g('e'), h: g('h'), d: g('d'), c: g('c') }); });
       const djServices = []; $$('[data-svc]', bg).forEach(r => { const g = k => r.querySelector('[data-s="' + k + '"]').value; const s = g('s'), pp = g('p'); if (!s || pp === '') return; djServices.push({ s: +s, p: pp, h: g('h') || undefined }); });
-      const data = { color: d.color, worker_type: +d.worker_type || 0, vehicle_allowed: d.vehicle_allowed, time_tracking: d.time_tracking, prices, djFincas, djServices };
+      const data = { color: d.color, worker_type: +d.worker_type || 0, vehicle_allowed: d.vehicle_allowed, time_tracking: d.time_tracking, comercial: !!d.comercial, prices, djFincas, djServices };
       // ¿han cambiado las tarifas (condiciones por finca o tarifas base)? Para ofrecer aplicarlas a bodas realizadas.
       const nrm = v => (v == null || v === '') ? '' : String(v);
       const packKeys = ['recomendado', 'fiesta', 'bodorrio', 'tinglado', 'fiesta_precio_extra', 'bodorrio_precio_extra', 'tinglado_precio_extra'];

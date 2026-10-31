@@ -596,6 +596,7 @@ function navFor(role) {
     return [
       { s: 'Mi trabajo' }, { t: 'Inicio', i: 'home', h: '#/' }, { t: 'Mis eventos', i: 'events', h: '#/eventos' },
       { t: 'Realizados', i: 'events', h: '#/eventos/realizados' },
+      ...((S.user && S.user.comercial) ? [{ s: 'Ventas' }, { t: 'Reservas', i: 'events', h: '#/reservas' }] : []),
       ...(tt ? [{ s: 'Tiempo' }, { t: 'Mi control horario', i: 'clock', h: '#/horario' }, { t: 'Mis vacaciones', i: 'plane', h: '#/vacaciones' }] : []),
       ...((tt || [723, 292].includes(S.user && S.user.id)) ? [{ s: 'Nóminas' }, { t: 'Mis nóminas', i: 'doc', h: '#/nominas' }] : []),
       { s: 'Otros' }, { t: 'Mis horas extra', i: 'clock', h: '#/mis-horas' }, { t: 'Mis pagos', i: 'euro', h: '#/mis-pagos' },

@@ -360,6 +360,9 @@ async function api(req, res, url) {
     return fail(res, 404, 'Ruta no encontrada');
   }
 
+  // Reservas: formulario PÚBLICO de los novios (sin sesión), por código del enlace /r/XXXXXX
+  if (seg[0] === 'public' && seg[1] === 'r' && seg[2]) return R().publicApi(req, res, seg, method);
+
   if (!user) return fail(res, 401, 'Necesitas iniciar sesión');
 
   // Modo mantenimiento: durante una actualización, los usuarios bloqueados (todos, o todos menos
@@ -536,6 +539,7 @@ async function api(req, res, url) {
 
   // --- eventos ---
   if (seg[0] === 'events') return events(req, res, user, seg, method, url);
+  if (seg[0] === 'reservas') return R().handle(req, res, user, seg, method, url);
 
   // --- Ajustes MANUALES de tarifas de DJ (overrides) que sobreviven al volcado ---
   // Se guardan en el setting 'djRatesManual' y se re-aplican sobre djRates tras cada import/build.
@@ -1807,6 +1811,7 @@ function meView(u) {
   out.tycNotNeeded = u.role === 'user' && !out.tycSigned && !tycNeeded(u);
   out.hasPasskey = waHasPasskey(u.id);
   if (isSuperadmin(u)) out.superadmin = true;
+  if (u.role === 'admin' || u.comercial) out.comercial = true;
   return out;
 }
 
@@ -2492,6 +2497,10 @@ const slashDate = f => { const p = String(f || '').slice(0, 10).split('-'); retu
 // (por un novio o wedding planner), avisa por email a facturación. Si el SMTP está apagado no envía nada.
 // Dirección del superadmin / administración a la que llegan los avisos internos.
 const SUPERADMIN_EMAIL = 'infoconectaso@gmail.com';
+
+/* ---------- RESERVAS (venta directa) — ver server/reservas.js ---------- */
+let _reservas = null;
+const R = () => _reservas || (_reservas = require('./reservas')({ store, users, mail, holded: require('./holded'), ok, fail, readBody, send, APP_URL, makeInvite }));
 
 /* ---------- HISTÓRICO DE GUARDADOS DE CADA EVENTO (solo SUPERADMIN) ----------
    Cada vez que alguien guarda un evento se guarda una FOTO completa de cómo queda, con quién lo
@@ -3565,6 +3574,7 @@ const server = http.createServer(async (req, res) => {
       if (u) auth.setSessionCookie(res, url.searchParams.get('pdftoken'));
     }
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
+    { const m = /^\/r\/([A-Za-z0-9]{4,10})\/?$/.exec(url.pathname); if (m && req.method === 'GET') return R().publicPage(res, m[1]); }
     if (url.pathname.startsWith('/uploads/')) return fail(res, 403, 'Prohibido'); // los archivos van por /api/files
     return serveStatic(req, res, url.pathname);
   } catch (e) {
@@ -3574,6 +3584,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 server.listen(PORT, HOST, () => {
+  try { R(); } catch (e) { console.error("[reservas] init:", e.message); }
   console.log(`Gestor Conecta So escuchando en http://${HOST}:${PORT}`);
   if (!mail.enabled()) console.log('Aviso: SMTP no configurado — los enlaces de invitación se mostrarán en pantalla al administrador.');
   try { require('./reminders').startReminders(); } catch (e) { console.error('[recordatorios] no se pudo iniciar:', e.message); }
