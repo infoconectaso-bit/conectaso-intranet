@@ -1562,3 +1562,12 @@ html.night-dim .res-total,html.night-dim .res-fact{background:#182340}
 .res-imp{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:8px}
 .res-imp label{width:100%;font-weight:700;font-size:13px}
 .res-imp .control{width:130px}
+/* Reservas: progreso del checklist (rojo = falta algo, verde = todo hecho) */
+.res-card__tags{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.res-prog{display:inline-flex;align-items:center;justify-content:center;min-width:42px;padding:3px 8px;font-size:12px;font-weight:800;color:#fff;border:2px solid var(--onyx);border-radius:999px}
+.res-prog--no{background:#D50000}.res-prog--ok{background:#0B8043}
+.res-card--no{border-top-color:#D50000;border-right-color:#D50000;border-bottom-color:#D50000}.res-card--ok{border-top-color:#0B8043;border-right-color:#0B8043;border-bottom-color:#0B8043}
+.res-no-txt{color:#D50000;font-weight:700}.res-ok-txt{color:#0B8043;font-weight:700}
+.res-bar{height:5px;background:#f3d4d4;margin:4px -14px -12px;overflow:hidden}
+.res-bar span{display:block;height:100%;background:#D50000}
+.res-card--ok .res-bar{background:#cfe9d9}.res-card--ok .res-bar span{background:#0B8043}

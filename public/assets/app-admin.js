@@ -42,21 +42,27 @@ async function reservasPage() {
   loading(['Reservas']);
   let data; try { data = await api('reservas'); } catch (e) { shell(`<div class="empty">${esc(e.message)}</div>`, ['Reservas']); return; }
   const list = data.reservas || [];
-  const act = list.filter(r => r.status !== 'cancelada' && r.status !== 'creada'), done = list.filter(r => r.status === 'creada'), canc = list.filter(r => r.status === 'cancelada');
+  // Una reserva solo está "completada" cuando la boda está creada Y todo el checklist marcado.
+  const allDone = r => (r.checks || []).length > 0 && (r.checks || []).every(c => c.at);
+  const act = list.filter(r => r.status !== 'cancelada' && !(r.status === 'creada' && allDone(r))), done = list.filter(r => r.status === 'creada' && allDone(r)), canc = list.filter(r => r.status === 'cancelada');
   const card = r => {
     const n = r.novios || {}; const nov = [n.s1 && n.s1.name, n.s2 && n.s2.name].filter(Boolean).join(' y ');
     const st = RES_ST[r.status] || [r.status, ''];
-    const nChk = (r.checks || []).filter(c => c.at).length;
-    return `<div class="res-card" data-res="${r.id}" style="--seller:${esc(r.sellerColor || '#999')}">
-      <div class="res-card__top"><span class="res-seller">${esc(r.sellerName)}</span><span class="tag ${st[1]}">${esc(st[0])}</span></div>
+    const nChk = (r.checks || []).filter(c => c.at).length, nTot = (r.checks || []).length;
+    const ok = nTot && nChk === nTot, cancel = r.status === 'cancelada';
+    const falta = (r.checks || []).filter(c => !c.at).map(c => '• ' + c.label).join('\n');
+    const prog = cancel ? '' : `<span class="res-prog ${ok ? 'res-prog--ok' : 'res-prog--no'}" title="${esc(ok ? 'Todo hecho' : 'Falta:\n' + falta)}">${ok ? '✓ ' : ''}${nChk}/${nTot}</span>`;
+    return `<div class="res-card${cancel ? '' : (ok ? ' res-card--ok' : ' res-card--no')}" data-res="${r.id}" style="--seller:${esc(r.sellerColor || '#999')}">
+      <div class="res-card__top"><span class="res-seller">${esc(r.sellerName)}</span><span class="res-card__tags"><span class="tag ${st[1]}">${esc(st[0])}</span>${prog}</span></div>
       <div class="res-card__pack">Pack ${esc(r.pack)}${(r.extras || []).length + (r.otros || []).length ? ` <span class="muted">+ ${esc([...(r.extras || []).map(e => e.name), ...(r.otros || []).map(o => o.name)].join(' + '))}</span>` : ''}</div>
       <div class="res-card__who">${nov ? esc(nov) : '<span class="muted">Esperando a que los novios rellenen el enlace</span>'}</div>
       <div class="res-card__meta">${n.fecha ? '📅 ' + esc(resFecha(n.fecha)) : ''}${r.concepto && r.concepto.lugar ? ' · 📍 ' + esc(r.concepto.lugar) : ''}</div>
-      <div class="res-card__foot"><span>${esc(r.code)} · ${resEur(r.importe.total)}</span><span class="muted">Checklist ${nChk}/${(r.checks || []).length}</span></div></div>`;
+      <div class="res-card__foot"><span>${esc(r.code)} · ${resEur(r.importe.total)}</span><span class="${ok ? 'res-ok-txt' : 'res-no-txt'}">${cancel ? '' : (ok ? 'Todo hecho' : `Faltan ${nTot - nChk} pasos`)}</span></div>
+      ${cancel ? '' : `<div class="res-bar"><span style="width:${nTot ? Math.round(nChk / nTot * 100) : 0}%"></span></div>`}</div>`;
   };
   shell(`${pageHead('Reservas', 'Ventas directas: genera el enlace para los novios y sigue cada reserva hasta crear la boda.', `<button class="btn btn--primary" id="resNew">+ Nueva venta</button>${data.isAdmin ? ' <button class="btn" id="resCfg">⚙ Configuración</button>' : ''}`)}
     ${act.length ? `<div class="res-grid">${act.map(card).join('')}</div>` : '<div class="panel"><div class="panel__body"><p class="hint">No hay reservas en curso. Pulsa <b>+ Nueva venta</b> para generar un enlace.</p></div></div>'}
-    ${done.length ? `<details class="res-more" open><summary>Bodas ya creadas (${done.length})</summary><div class="res-grid">${done.map(card).join('')}</div></details>` : ''}
+    ${done.length ? `<details class="res-more"><summary>Completadas: boda creada y todo el checklist hecho (${done.length})</summary><div class="res-grid">${done.map(card).join('')}</div></details>` : ''}
     ${canc.length ? `<details class="res-more"><summary>Canceladas (${canc.length})</summary><div class="res-grid">${canc.map(card).join('')}</div></details>` : ''}`, ['Reservas']);
   el('resNew').onclick = () => reservaNueva(data);
   if (el('resCfg')) el('resCfg').onclick = () => reservasConfig();
