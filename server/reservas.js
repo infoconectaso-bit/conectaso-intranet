@@ -383,7 +383,8 @@ module.exports = function makeReservas(deps) {
       const n = { s1: sp(b.s1), s2: sp(b.s2), fecha: S(b.fecha, 10), lugar: S(b.lugar, 160), comentario: S(b.comentario, 1500) };
       if (b.wp && b.wp.has && S(b.wp.name)) n.wp = { name: S(b.wp.name), email: S(b.wp.email).toLowerCase() };
       const miss = [];
-      if (!n.s1.name) miss.push('nombre y apellidos'); if (!n.s1.dni) miss.push('DNI / NIE');
+      if (!n.s1.name) miss.push('nombre y los dos apellidos');
+      else if (n.s1.name.split(/\s+/).filter(Boolean).length < 3) miss.push('el nombre completo con los DOS apellidos (lo necesitamos para la factura)'); if (!n.s1.dni) miss.push('DNI / NIE');
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(n.s1.email)) miss.push('email válido'); if (!n.s1.mobile) miss.push('móvil');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(n.fecha)) miss.push('fecha de la boda'); if (!n.lugar) miss.push('lugar de la boda');
       if (!b.consent) miss.push('aceptar el tratamiento de datos');
@@ -408,7 +409,7 @@ module.exports = function makeReservas(deps) {
 <title>${escH(title)}</title><meta name="robots" content="noindex,nofollow">
 <meta property="og:type" content="website"><meta property="og:title" content="${escH(title)}"><meta property="og:description" content="${escH(desc)}">
 <meta property="og:image" content="${escH(base)}/assets/brand/og-reserva.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#130F17"><link rel="icon" href="/assets/brand/favicon-32.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#0A101D"><link rel="icon" href="/assets/brand/favicon-32.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap">
 <style>${PAGE_CSS}</style></head><body>
 <header class="top"><img src="/assets/brand/logo-principal-blanco.svg" alt="Conecta So" class="logo"><div class="kick">Reserva de vuestra boda</div></header>
@@ -424,42 +425,46 @@ module.exports = function makeReservas(deps) {
 
 /* ---------------- estilos y lógica de la página pública ---------------- */
 const PAGE_CSS = `
-@font-face{font-family:'Outer Sans';src:url('/assets/fonts/outer-sans-black.woff2') format('woff2');font-weight:900;font-display:swap}
 @font-face{font-family:'Evolve Sans';src:url('/assets/fonts/evolve-sans.woff2') format('woff2');font-weight:400;font-display:swap}
-:root{--ink:#130F17;--cream:#F9F5E1;--pink:#E82C88;--blue:#31B9CB;--yellow:#F0E85A;--muted:#6a6472;--line:#e3ddd0}
+/* Azul noche + dorado (mismos tonos que el tema elegante de la intranet) */
+:root{--bg:#0C1322;--bg2:#0A101D;--card:#131C30;--card2:#182340;--line:#2B3A5C;--text:#ECEFF6;--muted:#9AA6BF;--gold:#C9A96A;--gold2:#E3C68C;--blue:#6F8FC2;--red:#E07A7A;color-scheme:dark}
 *{box-sizing:border-box}html,body{margin:0}
-body{font-family:'Evolve Sans',-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--cream);color:var(--ink);font-size:15px;line-height:1.5}
-.top{background:var(--ink);padding:34px 16px 30px;text-align:center;position:relative;overflow:hidden}
-.top:after{content:"";position:absolute;left:0;right:0;bottom:0;height:6px;background:linear-gradient(90deg,var(--pink),var(--blue),var(--yellow))}
+body{font-family:'Evolve Sans',-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;
+ background-image:radial-gradient(circle at 10% 0%,rgba(201,169,106,.10),transparent 40%),radial-gradient(circle at 100% 30%,rgba(111,143,194,.12),transparent 45%);background-attachment:fixed}
+.top{background:var(--bg2);padding:36px 16px 30px;text-align:center;position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+.top:after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
 .logo{width:220px;max-width:70%;height:auto}
-.kick{margin-top:12px;color:var(--yellow);font-family:'Archivo Black','Outer Sans',Arial Black,sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+.kick{margin-top:14px;color:var(--gold);font-family:'Archivo Black',Arial Black,sans-serif;font-size:12.5px;letter-spacing:.22em;text-transform:uppercase}
 main{max-width:620px;margin:0 auto;padding:22px 16px 30px}
-.card{background:#fff;border:2px solid var(--ink);padding:18px 18px;margin-bottom:16px}
-h2{font-family:'Archivo Black','Outer Sans',Arial Black,sans-serif;font-size:19px;margin:0 0 12px;letter-spacing:-.01em}
-h3{font-size:14px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
-.pack{font-family:'Archivo Black','Outer Sans',Arial Black,sans-serif;font-size:24px;color:var(--pink)}
-.ex{margin:8px 0 0;padding:0;list-style:none}.ex li{padding:4px 0;border-top:1px dashed var(--line)}.ex li:before{content:"+ ";color:var(--pink);font-weight:700}
-.amount{display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;padding-top:12px;border-top:2px solid var(--ink)}
-.amount b{font-size:22px}
+.card{background:var(--card);border:1px solid var(--line);border-top:2px solid var(--gold);padding:20px 18px;margin-bottom:16px;box-shadow:0 18px 40px rgba(0,0,0,.35)}
+h2{font-family:'Archivo Black',Arial Black,sans-serif;font-size:18px;margin:0 0 12px;letter-spacing:.01em;color:var(--text)}
+h3{font-size:12.5px;margin:20px 0 8px;text-transform:uppercase;letter-spacing:.16em;color:var(--gold)}
+.pack{font-family:'Archivo Black',Arial Black,sans-serif;font-size:26px;color:var(--gold);letter-spacing:.01em}
+.ex{margin:8px 0 0;padding:0;list-style:none}.ex li{padding:6px 0;border-top:1px solid var(--line)}.ex li:before{content:"+ ";color:var(--gold);font-weight:700}
+.amount{display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;padding-top:12px;border-top:1px solid var(--gold)}
+.amount b{font-size:24px;color:var(--gold2)}
 .muted{color:var(--muted)}.small{font-size:12.5px}
-label{display:block;font-weight:700;font-size:13px;margin:12px 0 4px}
-input:not([type=checkbox]),textarea{width:100%;font:inherit;padding:11px 12px;border:2px solid var(--ink);background:#fff;border-radius:0;-webkit-appearance:none}
-input[type=checkbox]{accent-color:var(--pink)}
-input:not([type=checkbox]):focus,textarea:focus{outline:3px solid var(--blue);outline-offset:0}
+label{display:block;font-weight:700;font-size:13px;margin:12px 0 5px;color:var(--text)}
+input:not([type=checkbox]),textarea{width:100%;font:inherit;padding:12px 13px;border:1px solid var(--line);background:#0F172B;color:var(--text);border-radius:0;-webkit-appearance:none}
+input::placeholder,textarea::placeholder{color:#5f6c88}
+input[type=checkbox]{accent-color:var(--gold)}
+input:not([type=checkbox]):focus,textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,169,106,.22)}
+input[type=date]{min-height:48px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}@media(max-width:520px){.grid{grid-template-columns:1fr}}
 .chk{display:flex;gap:10px;align-items:flex-start;font-weight:400;font-size:13.5px}.chk input{width:20px;height:20px;flex:none;margin-top:1px}
-.btn{display:block;width:100%;padding:15px;border:2px solid var(--ink);background:var(--pink);color:#fff;font-family:'Archivo Black','Outer Sans',Arial Black,sans-serif;font-size:15px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;box-shadow:4px 4px 0 var(--ink);margin-top:18px;text-align:center;text-decoration:none}
-.btn:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
-.btn--ghost{background:#fff;color:var(--ink)}
-.err{background:#fde7e9;border:2px solid #c62828;color:#8b1a1a;padding:10px 12px;margin-top:12px;font-weight:700}
+.btn{display:block;width:100%;padding:16px;border:0;background:linear-gradient(135deg,var(--gold2),var(--gold));color:#0C1322;font-family:'Archivo Black',Arial Black,sans-serif;font-size:14.5px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;box-shadow:0 10px 26px rgba(201,169,106,.28);margin-top:18px;text-align:center;text-decoration:none}
+.btn:active{transform:translateY(1px);box-shadow:0 4px 12px rgba(201,169,106,.25)}
+.btn:disabled{opacity:.7}
+.btn--ghost{background:transparent;color:var(--text);border:1px solid var(--line);box-shadow:none}
+.err{background:rgba(224,122,122,.12);border:1px solid var(--red);border-left:3px solid var(--red);color:#F2B3B3;padding:10px 12px;margin-top:12px;font-weight:700}
 .ok{text-align:center}.ok .big{font-size:46px}
-.ovl{position:fixed;inset:0;background:rgba(19,15,23,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:9}
+.ovl{position:fixed;inset:0;background:rgba(5,8,15,.8);display:flex;align-items:center;justify-content:center;padding:16px;z-index:9;backdrop-filter:blur(3px)}
 .ovl .card{max-width:480px;width:100%;margin:0}
-.conf div{padding:9px 0;border-bottom:1px dashed var(--line);font-size:16px}.conf span{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.conf .date{font-size:20px;font-weight:800;color:var(--pink)}
-.warn{background:#fff8cc;border:2px solid var(--ink);padding:10px 12px;margin-top:10px;font-weight:700}
+.conf div{padding:10px 0;border-bottom:1px solid var(--line);font-size:16px}.conf span{display:block;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
+.conf .date{font-size:21px;font-weight:800;color:var(--gold2)}
+.warn{background:rgba(201,169,106,.12);border:1px solid var(--gold);padding:10px 12px;margin-top:10px;font-weight:700;color:var(--gold2)}
 .row2{display:flex;gap:10px}.row2 .btn{margin-top:14px}
-.note{background:#eaf7f9;border:2px solid var(--ink);padding:10px 12px;margin:16px 0 4px;font-size:13.5px}
+.note{background:var(--card2);border:1px solid var(--line);border-left:3px solid var(--gold);padding:11px 13px;margin:16px 0 4px;font-size:13.5px;color:var(--text)}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .foot{text-align:center;color:var(--muted);font-size:12px;padding:10px 16px 30px}.foot a{color:var(--muted)}
 `;
@@ -486,7 +491,7 @@ function done(d){
 }
 function form(d,err){
  app.innerHTML=packCard(d)+'<form class="card" id="f" novalidate><h2>Vuestros datos</h2><p class="muted small">Los necesitamos para la factura de reserva y para crear vuestra intranet privada.</p>'+
- '<h3>Datos de uno de los dos</h3><label>Nombre y apellidos</label><input name="s1n" autocomplete="name" required><div class="grid"><div><label>DNI / NIE</label><input name="s1d" required></div><div><label>Móvil</label><input name="s1m" type="tel" autocomplete="tel" required></div></div><label>Email</label><input name="s1e" type="email" autocomplete="email" required>'+
+ '<h3>Datos de uno de los dos</h3><label>Nombre y los dos apellidos</label><input name="s1n" autocomplete="name" placeholder="Ej.: Laura Pérez Gil" required><div class="grid"><div><label>DNI / NIE</label><input name="s1d" required></div><div><label>Móvil</label><input name="s1m" type="tel" autocomplete="tel" required></div></div><label>Email</label><input name="s1e" type="email" autocomplete="email" required>'+
  '<p class="note">💡 Con los datos de uno de los dos es suficiente. Los datos del otro cónyuge los podréis introducir más adelante dentro de vuestra propia intranet.</p>'+
  '<h3>La boda</h3><label>Fecha de la boda</label><input name="fecha" type="date" required><label>Lugar de la celebración (nombre de la finca)</label><input name="lugar" placeholder="Ej.: Mas la Boella" required>'+
  '<label class="chk" style="margin-top:16px"><input type="checkbox" name="wph" id="wph"> Tenemos wedding planner</label><div id="wpb" hidden><label>Nombre de la wedding planner</label><input name="wpn"><label>Email de la wedding planner <span class="muted">(opcional)</span></label><input name="wpe" type="email"></div>'+
@@ -497,7 +502,7 @@ function form(d,err){
  var f=document.getElementById('f');document.getElementById('wph').onchange=function(){document.getElementById('wpb').hidden=!this.checked};
  if(window.__last){Object.keys(window.__last).forEach(function(k){var e=f.elements[k];if(!e)return;if(e.type==='checkbox')e.checked=!!window.__last[k];else e.value=window.__last[k]});document.getElementById('wpb').hidden=!f.elements.wph.checked}
  f.onsubmit=function(ev){ev.preventDefault();var v={};Array.prototype.forEach.call(f.elements,function(e){if(e.name)v[e.name]=e.type==='checkbox'?e.checked:e.value.trim()});window.__last=v;
-  var miss=[];if(!v.s1n)miss.push('nombre y apellidos');if(!v.s1d)miss.push('DNI / NIE');if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(v.s1e))miss.push('email válido');if(!v.s1m)miss.push('móvil');if(!v.fecha)miss.push('fecha');if(!v.lugar)miss.push('lugar');if(!v.consent)miss.push('aceptar el tratamiento de datos');
+  var miss=[];if(!v.s1n)miss.push('nombre y los dos apellidos');else if(v.s1n.split(/\\s+/).filter(Boolean).length<3)miss.push('el nombre completo con los DOS apellidos (lo necesitamos para la factura)');if(!v.s1d)miss.push('DNI / NIE');if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(v.s1e))miss.push('email válido');if(!v.s1m)miss.push('móvil');if(!v.fecha)miss.push('fecha');if(!v.lugar)miss.push('lugar');if(!v.consent)miss.push('aceptar el tratamiento de datos');
   if(miss.length){form(d,'Falta: '+miss.join(', ')+'.');return}
   confirmBox(d,v)}
 }

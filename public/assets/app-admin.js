@@ -42,6 +42,7 @@ async function reservasPage() {
   loading(['Reservas']);
   let data; try { data = await api('reservas'); } catch (e) { shell(`<div class="empty">${esc(e.message)}</div>`, ['Reservas']); return; }
   const list = data.reservas || [];
+  try { CS.setBadgeCount('reservas', list.filter(x => x.submittedAt && x.status !== 'cancelada' && (x.checks || []).some(c => !c.at)).length); } catch (e) {}
   // Una reserva solo está "completada" cuando la boda está creada Y todo el checklist marcado.
   const allDone = r => (r.checks || []).length > 0 && (r.checks || []).every(c => c.at);
   const act = list.filter(r => r.status !== 'cancelada' && !(r.status === 'creada' && allDone(r))), done = list.filter(r => r.status === 'creada' && allDone(r)), canc = list.filter(r => r.status === 'cancelada');
@@ -60,10 +61,10 @@ async function reservasPage() {
       <div class="res-card__foot"><span>${esc(r.code)} · ${resEur(r.importe.total)}</span><span class="${ok ? 'res-ok-txt' : 'res-no-txt'}">${cancel ? '' : (ok ? 'Todo hecho' : `Faltan ${nTot - nChk} pasos`)}</span></div>
       ${cancel ? '' : `<div class="res-bar"><span style="width:${nTot ? Math.round(nChk / nTot * 100) : 0}%"></span></div>`}</div>`;
   };
-  shell(`${pageHead('Reservas', 'Ventas directas: genera el enlace para los novios y sigue cada reserva hasta crear la boda.', `<button class="btn btn--primary" id="resNew">+ Nueva venta</button>${data.isAdmin ? ' <button class="btn" id="resCfg">⚙ Configuración</button>' : ''}`)}
+  shell(`<div class="res-scope">${pageHead('Reservas', 'Ventas directas: genera el enlace para los novios y sigue cada reserva hasta crear la boda.', `<button class="btn btn--primary" id="resNew">+ Nueva venta</button>${data.isAdmin ? ' <button class="btn" id="resCfg">⚙ Configuración</button>' : ''}`)}
     ${act.length ? `<div class="res-grid">${act.map(card).join('')}</div>` : '<div class="panel"><div class="panel__body"><p class="hint">No hay reservas en curso. Pulsa <b>+ Nueva venta</b> para generar un enlace.</p></div></div>'}
     ${done.length ? `<details class="res-more"><summary>Completadas: boda creada y todo el checklist hecho (${done.length})</summary><div class="res-grid">${done.map(card).join('')}</div></details>` : ''}
-    ${canc.length ? `<details class="res-more"><summary>Canceladas (${canc.length})</summary><div class="res-grid">${canc.map(card).join('')}</div></details>` : ''}`, ['Reservas']);
+    ${canc.length ? `<details class="res-more"><summary>Canceladas (${canc.length})</summary><div class="res-grid">${canc.map(card).join('')}</div></details>` : ''}</div>`, ['Reservas']);
   el('resNew').onclick = () => reservaNueva(data);
   if (el('resCfg')) el('resCfg').onclick = () => reservasConfig();
   $$('[data-res]').forEach(c => c.onclick = () => reservaDetalle(+c.dataset.res, data));
@@ -96,7 +97,7 @@ function reservaNueva(data, cur) {   // cur = reserva existente → modo EDITAR 
       reservaLink(r.reserva); reservasPage();
     } catch (e) { toast(e.message, 'err'); return true; }
   } });
-  bg.querySelector('.modal').classList.add('modal--wide');
+  bg.querySelector('.modal').classList.add('modal--wide', 'res-modal');
   const total = () => {
     const pack = (bg.querySelector('[name=pack]:checked') || {}).value;
     const nEx = $$('#rnExtras input:checked', bg).length + $$('[data-otro]', bg).filter(r => r.dataset.suma === '1' && r.querySelector('input[type=text]').value.trim()).length;
@@ -125,10 +126,11 @@ function reservaNueva(data, cur) {   // cur = reserva existente → modo EDITAR 
   total();
 }
 function reservaLink(r) {
-  modal('Enlace listo para enviar', `<p>Envíaselo a los novios por WhatsApp. Al abrirlo verán su pack y rellenarán sus datos.</p>
+  const lbg = modal('Enlace listo para enviar', `<p>Envíaselo a los novios por WhatsApp. Al abrirlo verán su pack y rellenarán sus datos.</p>
     <div class="res-link"><input class="control" readonly value="${esc(r.link)}" id="rlInp"></div>
     <div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn--primary" id="rlCopy">📋 Copiar enlace</button><a class="btn" target="_blank" rel="noopener" href="${esc(waShare(r.link))}">💬 Enviar por WhatsApp</a></div>
     <p class="hint" style="margin-top:10px">Importe de la reserva: <b>${resEur(r.importe.base)} + IVA = ${resEur(r.importe.total)}</b></p>`);
+  lbg.querySelector('.modal').classList.add('res-modal');
   el('rlCopy').onclick = () => copyText(r.link);
 }
 async function reservaDetalle(id, data) {
@@ -172,7 +174,7 @@ async function reservaDetalle(id, data) {
     ${r.eventId ? `<p style="margin-top:14px"><a class="btn btn--primary" href="#/eventos/${r.eventId}">Abrir la boda #${r.eventId}</a></p>` : ''}
     ${canCreate ? `<p style="margin-top:14px"><button type="button" class="btn btn--primary" id="rdCreate">🎉 Crear boda</button></p>` : (adm && !r.eventId && r.submittedAt && !r.cancelled ? '<p class="hint" style="margin-top:12px">El botón <b>Crear boda</b> aparece cuando la factura está pagada en Holded (o marcas "Pago recibido").</p>' : '')}
     ${adm && !r.eventId ? `<p style="margin-top:14px"><button type="button" class="btn btn--sm btn--ghost" id="rdCancel">${r.cancelled ? 'Reactivar reserva' : 'Cancelar reserva'}</button></p>` : ''}`);
-  bg.querySelector('.modal').classList.add('modal--wide');
+  bg.querySelector('.modal').classList.add('modal--wide', 'res-modal');
   const refresh = () => { bg.remove(); reservaDetalle(id, data); reservasPageQuiet(); };
   const q = (sel) => bg.querySelector(sel);
   q('#rdCopy').onclick = () => copyText(r.link);
@@ -206,6 +208,7 @@ async function reservaCrearBoda(r, after) {
       after(); location.hash = '#/eventos/' + res.event.id;
     } catch (e) { toast(e.message, 'err'); return true; }
   } });
+  bg.querySelector('.modal').classList.add('res-modal');
   bg.querySelector('#cbTar').onchange = e => { bg.querySelector('#cbTarBox').style.display = e.target.checked ? '' : 'none'; bg.querySelector('#cbPago').value = e.target.checked && t ? t.total : 0; };
 }
 async function reservasConfig() {
@@ -227,7 +230,7 @@ async function reservasConfig() {
     const hiddenExtras = $$('[data-hide]', bg).filter(i => i.checked).map(i => +i.dataset.hide);
     try { await api('reservas/config', { method: 'PUT', body: { welcome, tarifa: { packs, extras }, hiddenExtras } }); toast('Configuración guardada ✓', 'ok'); } catch (e) { toast(e.message, 'err'); return true; }
   } });
-  bg.querySelector('.modal').classList.add('modal--wide');
+  bg.querySelector('.modal').classList.add('modal--wide', 'res-modal');
 }
 on(/^#\/papelera$/, () => papeleraEventos());
 async function papeleraEventos() {

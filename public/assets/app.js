@@ -582,7 +582,7 @@ function navFor(role) {
     { s: 'Principal' }, { t: 'Inicio', i: 'home', h: '#/' },
     { s: 'Eventos' }, { t: 'Bodas pendientes', i: 'events', h: '#/eventos' }, { t: 'Bodas realizadas', i: 'events', h: '#/eventos/realizados' },
     { t: 'Servicios extras', i: 'extras', h: '#/extras' },
-    { t: 'Reservas', i: 'events', h: '#/reservas' },
+    { t: 'Reservas', i: 'events', h: '#/reservas', badge: 'reservas' },
     { t: 'Fotomatón', i: 'camera', h: '#/fotomaton' },
     { s: 'Equipo' }, { t: 'Usuarios', i: 'users', h: '#/usuarios' }, { t: 'Localizaciones', i: 'loc', h: '#/localizaciones' },
     { t: 'Control horario', i: 'clock', h: '#/horario', badge: 'horario' }, { t: 'Vacaciones', i: 'plane', h: '#/vacaciones', badge: 'vacaciones' },
@@ -596,7 +596,7 @@ function navFor(role) {
     return [
       { s: 'Mi trabajo' }, { t: 'Inicio', i: 'home', h: '#/' }, { t: 'Mis eventos', i: 'events', h: '#/eventos' },
       { t: 'Realizados', i: 'events', h: '#/eventos/realizados' },
-      ...((S.user && S.user.comercial) ? [{ s: 'Ventas' }, { t: 'Reservas', i: 'events', h: '#/reservas' }] : []),
+      ...((S.user && S.user.comercial) ? [{ s: 'Ventas' }, { t: 'Reservas', i: 'events', h: '#/reservas', badge: 'reservas' }] : []),
       ...(tt ? [{ s: 'Tiempo' }, { t: 'Mi control horario', i: 'clock', h: '#/horario' }, { t: 'Mis vacaciones', i: 'plane', h: '#/vacaciones' }] : []),
       ...((tt || [723, 292].includes(S.user && S.user.id)) ? [{ s: 'Nóminas' }, { t: 'Mis nóminas', i: 'doc', h: '#/nominas' }] : []),
       { s: 'Otros' }, { t: 'Mis horas extra', i: 'clock', h: '#/mis-horas' }, { t: 'Mis pagos', i: 'euro', h: '#/mis-pagos' },
@@ -791,6 +791,8 @@ function markActive() {
 // --- Badges tipo "notificación" (nº de descuadres / impagos) en el menú y en las pestañas ---
 const _badgeCache = { descuadres: { t: 0, n: null, p: null }, impagos: { t: 0, n: null, p: null } };
 const _badgeFetch = {
+  // Reservas con datos ya recibidos de los novios y algo pendiente en el checklist (no canceladas)
+  reservas: () => api('reservas').then(r => ((r && r.reservas) || []).filter(x => x.submittedAt && x.status !== 'cancelada' && (x.checks || []).some(c => !c.at)).length),
   descuadres: () => api('holded-descuadres').then(r => (!r || r.enabled === false) ? 0
     : ((r.sinVincularN || (r.sinVincular || []).length || 0) + ((r.payMismatches || []).length) + ((r.serviceWarnings || []).length))),
   impagos: () => api('holded-unpaid').then(r => (!r || r.enabled === false) ? 0 : ((r.invoices || []).length)),
