@@ -1170,7 +1170,6 @@ async function dashboardSimple() {
   shell(`<div class="cli-welcome">
       <div class="cli-welcome__hero">
         <img class="cli-welcome__logo" src="assets/brand/logo-principal-azul.svg" alt="Conecta So">
-        ${list.length ? neonHead(list[0], true) : ''}
         <h1>${T('¡Hola, ' + first + '!', 'Hola, ' + first + '!', 'Hi ' + first + '!', 'Bonjour ' + first + ' !')}</h1>
         <p class="cli-welcome__lead">${T(
           'Bienvenido/a a vuestro espacio de Conecta So. Aquí preparáis toda la música y los detalles de vuestra boda: ceremonia, aperitivo, banquete y fiesta. Rellenadlo con calma, se guarda automáticamente y podéis volver siempre que queráis.',

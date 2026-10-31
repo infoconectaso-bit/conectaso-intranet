@@ -482,7 +482,7 @@ function eventViewRole(ev) {
       <div class="cli-prog__row"><span>Música completada</span><b id="progPct">${prog}%</b></div>
       <div class="progress progress--green progress--mini"><div id="progBar" style="width:${prog}%"></div></div></div>` : '';
   const headHtml = (role === 'user')
-    ? `<div class="ev-cli-head"><h1 class="sr-only">${esc(ev.conyuges || 'Mi boda')}</h1>${CS.neonHead(ev, false)}</div>`
+    ? `<div class="ev-cli-head"><h1>${esc(ev.conyuges || 'Mi boda')}</h1><div class="ev-cli-sub">${dmy(ev.fecha)}${ev.hora ? ' · ' + ev.hora : ''}</div></div>`
     : pageHead((ev.conyuges || ev.tipo || 'Evento') + ' · #' + ev.id, dmy(ev.fecha) + (ev.hora ? ' · ' + ev.hora : ''));
   shell(`${headHtml}
     <div class="btn-row" style="margin-bottom:10px"><button type="button" class="btn btn--sm" onclick="history.back()">← Atrás</button> <a class="btn btn--sm" href="#/eventos/${ev.id}/pdf">Resumen PDF</a></div>
