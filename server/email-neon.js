@@ -29,7 +29,7 @@ function neonInvoiceEmail({ first, pack, extras = [], fecha, lugar, total, base,
   <tr><td align="center" style="padding:30px 24px 6px">${logoUrl ? `<img src="${esc(logoUrl)}" width="150" alt="Conecta So" style="display:block;border:0;max-width:150px;height:auto">` : `<span style="color:#F9F5E1;font-size:24px;font-weight:700;${F}">CONECTA SO</span>`}</td></tr>
   <tr><td align="center" style="padding:22px 24px 4px">
     <div style="color:#7FE7F4;font-size:16px;${F};text-shadow:0 0 6px rgba(127,231,244,.9),0 0 18px rgba(49,185,203,.7)">vuestra factura de reserva</div>
-    <div style="font-family:'Yellowtail','Brush Script MT',cursive;font-size:76px;line-height:1.1;color:#FFE3F1;padding:6px 0 10px;text-shadow:0 0 4px #ffffff,0 0 12px #FF5FB0,0 0 28px #E82C88,0 0 56px #E82C88">${esc(pack)}</div>
+    <div style="font-family:'Yellowtail','Brush Script MT',cursive;font-size:66px;line-height:1.1;color:#FFE3F1;padding:6px 0 10px;text-shadow:0 0 4px #ffffff,0 0 12px #FF5FB0,0 0 28px #E82C88,0 0 56px #E82C88">${esc(/^pack\b/i.test(String(pack || '')) ? pack : 'Pack ' + pack)}</div>
     ${chips ? `<div style="padding:0 0 6px">${chips}</div>` : ''}
   </td></tr>
   <tr><td style="padding:22px 34px 4px;color:#E9E1EC;font-size:16px;line-height:1.6;${F}">
