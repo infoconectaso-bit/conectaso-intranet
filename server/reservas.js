@@ -367,11 +367,10 @@ module.exports = function makeReservas(deps) {
       const S = (v, max = 160) => String(v == null ? '' : v).trim().slice(0, max);
       const sp = o => ({ name: S(o && o.name), dni: S(o && o.dni, 20).toUpperCase(), email: S(o && o.email).toLowerCase(), mobile: S(o && o.mobile, 30) });
       const n = { s1: sp(b.s1), s2: sp(b.s2), fecha: S(b.fecha, 10), lugar: S(b.lugar, 160), comentario: S(b.comentario, 1500) };
-      if (b.wp && b.wp.has) n.wp = { name: S(b.wp.name), email: S(b.wp.email).toLowerCase(), phone: S(b.wp.phone, 30) };
+      if (b.wp && b.wp.has && S(b.wp.name)) n.wp = { name: S(b.wp.name), email: S(b.wp.email).toLowerCase() };
       const miss = [];
-      if (!n.s1.name) miss.push('nombre del primer cónyuge'); if (!n.s1.dni) miss.push('DNI del primer cónyuge');
+      if (!n.s1.name) miss.push('nombre y apellidos'); if (!n.s1.dni) miss.push('DNI / NIE');
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(n.s1.email)) miss.push('email válido'); if (!n.s1.mobile) miss.push('móvil');
-      if (!n.s2.name) miss.push('nombre del segundo cónyuge'); if (!n.s2.dni) miss.push('DNI del segundo cónyuge');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(n.fecha)) miss.push('fecha de la boda'); if (!n.lugar) miss.push('lugar de la boda');
       if (!b.consent) miss.push('aceptar el tratamiento de datos');
       if (miss.length) return fail(res, 400, 'Falta: ' + miss.join(', ') + '.');
@@ -430,8 +429,9 @@ h3{font-size:14px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.06e
 .amount b{font-size:22px}
 .muted{color:var(--muted)}.small{font-size:12.5px}
 label{display:block;font-weight:700;font-size:13px;margin:12px 0 4px}
-input,textarea{width:100%;font:inherit;padding:11px 12px;border:2px solid var(--ink);background:#fff;border-radius:0;-webkit-appearance:none}
-input:focus,textarea:focus{outline:3px solid var(--blue);outline-offset:0}
+input:not([type=checkbox]),textarea{width:100%;font:inherit;padding:11px 12px;border:2px solid var(--ink);background:#fff;border-radius:0;-webkit-appearance:none}
+input[type=checkbox]{accent-color:var(--pink)}
+input:not([type=checkbox]):focus,textarea:focus{outline:3px solid var(--blue);outline-offset:0}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}@media(max-width:520px){.grid{grid-template-columns:1fr}}
 .chk{display:flex;gap:10px;align-items:flex-start;font-weight:400;font-size:13.5px}.chk input{width:20px;height:20px;flex:none;margin-top:1px}
 .btn{display:block;width:100%;padding:15px;border:2px solid var(--ink);background:var(--pink);color:#fff;font-family:'Archivo Black','Outer Sans',Arial Black,sans-serif;font-size:15px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;box-shadow:4px 4px 0 var(--ink);margin-top:18px;text-align:center;text-decoration:none}
@@ -445,6 +445,7 @@ input:focus,textarea:focus{outline:3px solid var(--blue);outline-offset:0}
 .conf .date{font-size:20px;font-weight:800;color:var(--pink)}
 .warn{background:#fff8cc;border:2px solid var(--ink);padding:10px 12px;margin-top:10px;font-weight:700}
 .row2{display:flex;gap:10px}.row2 .btn{margin-top:14px}
+.note{background:#eaf7f9;border:2px solid var(--ink);padding:10px 12px;margin:16px 0 4px;font-size:13.5px}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .foot{text-align:center;color:var(--muted);font-size:12px;padding:10px 16px 30px}.foot a{color:var(--muted)}
 `;
@@ -467,11 +468,11 @@ function done(d){
  app.innerHTML=h+'</div>';
 }
 function form(d,err){
- app.innerHTML=packCard(d)+'<form class="card" id="f" novalidate><h2>Vuestros datos</h2><p class="muted small">Los necesitamos para la factura de reserva y para crear vuestro espacio privado.</p>'+
- '<h3>Primer cónyuge</h3><label>Nombre y apellidos</label><input name="s1n" autocomplete="name" required><div class="grid"><div><label>DNI / NIE</label><input name="s1d" required></div><div><label>Móvil</label><input name="s1m" type="tel" autocomplete="tel" required></div></div><label>Email</label><input name="s1e" type="email" autocomplete="email" required>'+
- '<h3>Segundo cónyuge</h3><label>Nombre y apellidos</label><input name="s2n" required><div class="grid"><div><label>DNI / NIE</label><input name="s2d" required></div><div><label>Móvil <span class="muted">(opcional)</span></label><input name="s2m" type="tel"></div></div><label>Email <span class="muted">(opcional)</span></label><input name="s2e" type="email">'+
+ app.innerHTML=packCard(d)+'<form class="card" id="f" novalidate><h2>Vuestros datos</h2><p class="muted small">Los necesitamos para la factura de reserva y para crear vuestra intranet privada.</p>'+
+ '<h3>Datos de uno de los dos</h3><label>Nombre y apellidos</label><input name="s1n" autocomplete="name" required><div class="grid"><div><label>DNI / NIE</label><input name="s1d" required></div><div><label>Móvil</label><input name="s1m" type="tel" autocomplete="tel" required></div></div><label>Email</label><input name="s1e" type="email" autocomplete="email" required>'+
+ '<p class="note">💡 Con los datos de uno de los dos es suficiente. Los datos del otro cónyuge los podréis introducir más adelante dentro de vuestra propia intranet.</p>'+
  '<h3>La boda</h3><label>Fecha de la boda</label><input name="fecha" type="date" required><label>Lugar de la celebración (nombre de la finca)</label><input name="lugar" placeholder="Ej.: Mas la Boella" required>'+
- '<label class="chk" style="margin-top:16px"><input type="checkbox" name="wph" id="wph"> Tenemos wedding planner</label><div id="wpb" hidden><label>Nombre de la wedding planner</label><input name="wpn"><div class="grid"><div><label>Email</label><input name="wpe" type="email"></div><div><label>Teléfono</label><input name="wpp" type="tel"></div></div></div>'+
+ '<label class="chk" style="margin-top:16px"><input type="checkbox" name="wph" id="wph"> Tenemos wedding planner</label><div id="wpb" hidden><label>Nombre de la wedding planner</label><input name="wpn"><label>Email de la wedding planner <span class="muted">(opcional)</span></label><input name="wpe" type="email"></div>'+
  '<label>¿Algo que queráis comentarnos? <span class="muted">(opcional)</span></label><textarea name="com" rows="3"></textarea>'+
  '<div class="hp"><label>Web</label><input name="website" tabindex="-1" autocomplete="off"></div>'+
  '<label class="chk" style="margin-top:18px"><input type="checkbox" name="consent"> <span>Acepto que Conecta So trate estos datos para gestionar la reserva, emitir la factura y preparar nuestra boda.</span></label>'+
@@ -479,7 +480,7 @@ function form(d,err){
  var f=document.getElementById('f');document.getElementById('wph').onchange=function(){document.getElementById('wpb').hidden=!this.checked};
  if(window.__last){Object.keys(window.__last).forEach(function(k){var e=f.elements[k];if(!e)return;if(e.type==='checkbox')e.checked=!!window.__last[k];else e.value=window.__last[k]});document.getElementById('wpb').hidden=!f.elements.wph.checked}
  f.onsubmit=function(ev){ev.preventDefault();var v={};Array.prototype.forEach.call(f.elements,function(e){if(e.name)v[e.name]=e.type==='checkbox'?e.checked:e.value.trim()});window.__last=v;
-  var miss=[];if(!v.s1n)miss.push('nombre del primer cónyuge');if(!v.s1d)miss.push('DNI del primer cónyuge');if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(v.s1e))miss.push('email válido');if(!v.s1m)miss.push('móvil');if(!v.s2n)miss.push('nombre del segundo cónyuge');if(!v.s2d)miss.push('DNI del segundo cónyuge');if(!v.fecha)miss.push('fecha');if(!v.lugar)miss.push('lugar');if(!v.consent)miss.push('aceptar el tratamiento de datos');
+  var miss=[];if(!v.s1n)miss.push('nombre y apellidos');if(!v.s1d)miss.push('DNI / NIE');if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(v.s1e))miss.push('email válido');if(!v.s1m)miss.push('móvil');if(!v.fecha)miss.push('fecha');if(!v.lugar)miss.push('lugar');if(!v.consent)miss.push('aceptar el tratamiento de datos');
   if(miss.length){form(d,'Falta: '+miss.join(', ')+'.');return}
   confirmBox(d,v)}
 }
@@ -487,12 +488,12 @@ function confirmBox(d,v){
  var today=new Date().toISOString().slice(0,10),yrs=(+v.fecha.slice(0,4))-new Date().getFullYear(),w='';
  if(v.fecha<today)w='⚠️ Esta fecha ya ha pasado. ¿Seguro que es correcta?';else if(yrs>3)w='⚠️ Esta fecha es dentro de más de 3 años. Revisad el año.';
  var o=document.createElement('div');o.className='ovl';o.innerHTML='<div class="card"><h2>¿Está todo bien?</h2><p class="muted small">Revisad sobre todo la fecha y el lugar antes de enviar.</p><div class="conf">'+
- '<div><span>Fecha de la boda</span><b class="date">'+esc(larga(v.fecha))+'</b></div><div><span>Lugar</span><b>'+esc(v.lugar)+'</b></div><div><span>Pack</span><b>'+esc(d.pack)+(d.extras.length?' + '+esc(d.extras.join(' + ')):'')+'</b></div><div><span>Novios</span><b>'+esc(v.s1n)+' y '+esc(v.s2n)+'</b></div></div>'+
+ '<div><span>Fecha de la boda</span><b class="date">'+esc(larga(v.fecha))+'</b></div><div><span>Lugar</span><b>'+esc(v.lugar)+'</b></div><div><span>Pack</span><b>'+esc(d.pack)+(d.extras.length?' + '+esc(d.extras.join(' + ')):'')+'</b></div><div><span>A nombre de</span><b>'+esc(v.s1n)+'</b></div></div>'+
  (w?'<div class="warn">'+w+'</div>':'')+'<div class="row2"><button class="btn btn--ghost" id="back" type="button">← Corregir</button><button class="btn" id="go" type="button">✓ Sí, es correcto</button></div></div>';
  document.body.appendChild(o);
  o.querySelector('#back').onclick=function(){o.remove()};
  o.querySelector('#go').onclick=function(){var b=this;b.disabled=true;b.textContent='Enviando…';
-  api('POST',{s1:{name:v.s1n,dni:v.s1d,email:v.s1e,mobile:v.s1m},s2:{name:v.s2n,dni:v.s2d,email:v.s2e,mobile:v.s2m},fecha:v.fecha,lugar:v.lugar,wp:{has:v.wph,name:v.wpn,email:v.wpe,phone:v.wpp},comentario:v.com,consent:v.consent,website:v.website})
+  api('POST',{s1:{name:v.s1n,dni:v.s1d,email:v.s1e,mobile:v.s1m},fecha:v.fecha,lugar:v.lugar,wp:{has:v.wph,name:v.wpn,email:v.wpe},comentario:v.com,consent:v.consent,website:v.website})
   .then(function(r){o.remove();data=r;done(r);window.scrollTo(0,0)}).catch(function(e){o.remove();form(d,e.message)})}
 }
 api('GET').then(function(d){data=d;if(d.submitted)done(d);else form(d)}).catch(function(e){app.innerHTML='<div class="card"><h2>Enlace no válido</h2><p>'+esc(e.message)+'</p></div>'});

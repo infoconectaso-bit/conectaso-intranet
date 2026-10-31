@@ -138,11 +138,11 @@ async function reservaDetalle(id, data) {
     <div class="field"><label>Observaciones internas <span class="hint">(no las ven los novios)</span></label><textarea class="control" id="rdObs" rows="3">${esc(r.obs || '')}</textarea>
       <button type="button" class="btn btn--sm" id="rdObsSave" style="margin-top:6px">Guardar observaciones</button></div>
     <h4 class="form-sub">Datos de los novios</h4>
-    ${r.submittedAt ? `<div class="grid-2">${sp('Primer cónyuge', s1)}${sp('Segundo cónyuge', s2)}</div>
+    ${r.submittedAt ? `<div class="grid-2">${sp('Titular (datos para la factura)', s1)}${s2.name ? sp('Segundo cónyuge', s2) : '<div class="hint">El otro cónyuge rellenará sus datos dentro de la intranet.</div>'}</div>
       <p style="margin-top:8px">📅 <b>${esc(resFecha(n.fecha))}</b> · 📍 Escribieron: <b>${esc(n.lugar)}</b></p>
       ${adm ? `<div class="field"><label>Finca vinculada <span class="hint">(la intranet la ha buscado por el nombre; corrígela si no es)</span></label>${locSel}
         <input class="control" id="rdLocOtro" style="margin-top:6px;${r.loc && +r.loc.lugar ? 'display:none' : ''}" value="${esc((r.loc && r.loc.lugarOtro) || n.lugar || '')}" placeholder="Nombre de la finca"><button type="button" class="btn btn--sm" id="rdLocSave" style="margin-top:6px">Guardar finca</button></div>` : `<p>Finca vinculada: <b>${esc(r.concepto.lugar)}</b></p>`}
-      ${n.wp ? `<p>👰 Wedding planner: <b>${esc(n.wp.name)}</b> <span class="hint">${esc([n.wp.email, n.wp.phone].filter(Boolean).join(' · '))}</span></p>` : ''}
+      ${n.wp ? `<p>👰 Wedding planner: <b>${esc(n.wp.name)}</b> <span class="hint">${esc(n.wp.email || '')}</span></p>` : ''}
       ${n.comentario ? `<p>💬 Comentario de los novios: <i>${esc(n.comentario)}</i></p>` : ''}` : '<p class="hint">Los novios aún no han rellenado el enlace.</p>'}
     <h4 class="form-sub">Factura de reserva (Holded)</h4>
     <div class="res-fact"><div><span class="hint">Concepto (una sola línea)</span><b id="rdConcept">${esc(r.concepto.linea)}</b></div><button type="button" class="btn btn--sm" id="rdCopyC">📋</button></div>
