@@ -70,14 +70,26 @@ async function ensureContact({ name, nif, email, mobile }) {
  * Devuelve { id, number, type }. El número lo pone Holded (siguiente de la serie). */
 async function createReservaDoc(type, { contactId, date, concept, lineDesc, notes, base }) {
   const path = type === 'invoice' ? '/invoices' : '/estimates';
+  // API v2: las líneas van en "items"; el documento nace en BORRADOR (modo borrador obligatorio en España).
   const body = { contact_id: contactId, date, description: concept, notes,
-    lines: [{ name: concept, description: lineDesc, units: 1, price: base, taxes: ['s_iva_10'] }] };
+    items: [{ name: concept, description: lineDesc, units: 1, price: base, taxes: ['s_iva_10'] }] };
   const r = await apiRequest('POST', path, body);
   if (!r.ok) throw new Error('Holded no deja crear el ' + (type === 'invoice' ? 'documento de factura' : 'presupuesto') + ': ' + errMsg(r) + (r.status === 403 ? ' (la clave de API no tiene permiso de escritura)' : ''));
   const id = r.data && (r.data.id || (r.data.data && r.data.data.id));
-  let number = r.data && (r.data.document_number || r.data.docNumber);
-  if (id && !number) { const g = await apiRequest('GET', path + '/' + encodeURIComponent(id)); number = g.ok && g.data && g.data.document_number; }
-  return { id, number: number || '', type };
+  if (!id) throw new Error('Holded creó el documento pero no devolvió su id.');
+  // FACTURA: se aprueba para que Holded le ponga el número (la siguiente de la serie).
+  // PRESUPUESTO de pruebas: se deja en borrador (sin número) para no gastar numeración.
+  if (type === 'invoice') {
+    const ap = await apiRequest('POST', path + '/' + encodeURIComponent(id) + '/approve', {});
+    if (!ap.ok) throw new Error('La factura se creó en borrador pero Holded no dejó aprobarla: ' + errMsg(ap));
+  }
+  let number = '', draft = true;
+  for (let k = 0; k < 3 && !number; k++) {
+    const g = await apiRequest('GET', path + '/' + encodeURIComponent(id));
+    if (g.ok && g.data) { number = g.data.document_number || ''; draft = !!g.data.draft; }
+    if (!number && type === 'invoice') await new Promise(z => setTimeout(z, 1500)); else break;
+  }
+  return { id, number, draft, type };
 }
 /** PDF de un presupuesto o factura. */
 async function getDocPdf(type, id) {

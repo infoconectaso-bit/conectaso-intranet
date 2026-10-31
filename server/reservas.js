@@ -334,7 +334,7 @@ module.exports = function makeReservas(deps) {
         const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' });
         const lineDesc = [c.lugar, fechaCorta(n.fecha)].filter(Boolean).join(' ');
         const doc = await holded.createReservaDoc(type, { contactId: ct.id, date: today, concept: c.conceptoFactura, lineDesc, notes: c.obs, base: importe(r).base });
-        r.invoice = { number: doc.number, holdedId: doc.id, docType: type, contactId: ct.id, createdAt: new Date().toISOString(), paid: false };
+        r.invoice = { number: doc.number || ('Borrador ' + String(doc.id).slice(-6).toUpperCase()), draft: !doc.number, holdedId: doc.id, docType: type, contactId: ct.id, createdAt: new Date().toISOString(), paid: false };
         r.checklist = r.checklist || {}; if (!r.checklist.factura_emitida) r.checklist.factura_emitida = { at: new Date().toISOString(), by: sellerLabel(me) };
         store.put('reservas', r); store.audit(user.id, 'reserva-emitir-' + type, 'reservas', r.id);
         return ok(res, { reserva: view(r, user), doc });
